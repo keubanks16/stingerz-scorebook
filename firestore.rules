@@ -1,0 +1,73 @@
+rules_version = '2';
+
+// GS Baseball Scorebook security rules.
+// Paste into Firebase console -> Firestore Database -> Rules, then Publish.
+//
+// Roles
+//   Owner   the first account to claim config/setup; always an admin.
+//   Coach   members/{uid} with role 'admin' and status 'approved'; can change everything.
+//   Family  members/{uid} with role 'parent' and status 'approved'; view only.
+// Who can watch
+//   config/access.publicView == true   anyone with the link can view, no sign-in.
+//   otherwise                          only approved families and coaches can view.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function docPath(col, id) { return /databases/$(database)/documents/$(col)/$(id); }
+    function isOwner() {
+      return signedIn() && exists(docPath('config', 'setup'))
+        && get(docPath('config', 'setup')).data.owner == request.auth.uid;
+    }
+    function myMember() { return get(docPath('members', request.auth.uid)).data; }
+    function isApproved() {
+      return signedIn() && exists(docPath('members', request.auth.uid)) && myMember().status == 'approved';
+    }
+    function isAdmin() { return isOwner() || (isApproved() && myMember().role == 'admin'); }
+    function publicView() {
+      return exists(docPath('config', 'access')) && get(docPath('config', 'access')).data.publicView == true;
+    }
+    function canView() { return publicView() || isApproved() || isAdmin(); }
+
+    // Who owns this scorebook. Claimable once, by the first signed-in account; never changed after.
+    match /config/setup {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.owner == request.auth.uid
+        && request.resource.data.keys().hasOnly(['owner', 'createdAt']);
+    }
+
+    // The "who can watch" switch. Everyone may read it so the page knows whether to ask for a sign-in.
+    match /config/access {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['publicView'])
+        && request.resource.data.publicView is bool;
+    }
+
+    // Accounts. A person may only ask for family access for themselves; coaches decide everything else.
+    match /members/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.role == 'parent'
+        && request.resource.data.status == 'pending'
+        && request.resource.data.keys().hasOnly(['name', 'email', 'note', 'role', 'status', 'createdAt']);
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Team data: roster and settings, games, opponent rosters.
+    match /team/{id} {
+      allow read: if canView();
+      allow write: if isAdmin();
+    }
+    match /games/{id} {
+      allow read: if canView();
+      allow write: if isAdmin();
+    }
+    match /opponents/{id} {
+      allow read: if canView();
+      allow write: if isAdmin();
+    }
+  }
+}
