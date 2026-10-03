@@ -1134,7 +1134,7 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
   function renderChat() {
     if (!chatAllowed()) return `<div class="card empty"><img src="${LOGO}" alt=""><h3>Team chat</h3><p>Sign in with an approved account to see the team chat.</p>${Access.user ? '' : '<button class="btn primary" data-act="authOpen" data-mode="signin">Sign in</button>'}</div>`;
     if (!Chat.loaded) return '<div class="loading"><div>Loading the team chat…</div></div>';
-    if (!Chat.list.length) return `<div class="card empty"><h3>Team chat</h3><p>One conversation for coaches, players' families and camera crew. Say hi to the team.</p></div>`;
+    if (!Chat.list.length) return `<div class="card empty"><h3>Team chat</h3><p>One conversation for coaches and players' families. Say hi to the team.</p></div>`;
     const me = Access.user.uid;
     let h = '<div class="chat">', lastDay = '', prev = null;
     for (const m of Chat.list) {
