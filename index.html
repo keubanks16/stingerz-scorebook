@@ -99,6 +99,8 @@ button { cursor: pointer; }
 .pill[data-s="error"]::before { background: #FF8A7A; }
 .pill[data-s="local"]::before { background: #9EBBE2; }
 .pill[data-s="follow"]::before { background: #FF6B5B; animation: pulse 1.6s infinite; }
+.pill[data-s="offline"] { background: rgba(242, 201, 76, .18); color: #FCE7A6; cursor: pointer; }
+.pill[data-s="offline"]::before { background: #F2C94C; }
 @keyframes pulse { 50% { opacity: .35; } }
 
 /* ---------- page column ---------- */
@@ -1554,11 +1556,27 @@ body.viewer-on { overflow: hidden; }
     }
   };
 
+  // Every game or roster change is also copied to this phone right away, and the copy is cleared
+  // once the server has that version. With no signal, writes wait inside the app until service
+  // returns; if the app is closed or restarted before then, the copy is put back on next open
+  // (restoreUnsynced), so no pitch is lost.
+  const UNSYNCED = 'gs-hub-unsynced';
+  const Unsynced = {
+    on: (path) => Backend.kind === 'fb' && /^(games|opponents)\//.test(path),
+    all() { try { return JSON.parse(localStorage.getItem(UNSYNCED) || '{}') || {}; } catch (e) { return {}; } },
+    save(m) { try { if (Object.keys(m).length) localStorage.setItem(UNSYNCED, JSON.stringify(m)); else localStorage.removeItem(UNSYNCED); } catch (e) { /* storage full: the in-app queue still holds it */ } },
+    put(path, data) { if (!this.on(path)) return; const m = this.all(); m[path] = { data, at: Date.now() }; this.save(m); },
+    drop(path) { const m = this.all(); if (m[path]) { delete m[path]; this.save(m); } }
+  };
+
   // One write at a time per document; bursts of taps collapse into one save.
   const Saver = {
     q: new Map(), deleting: new Set(), err: null,
     busy(path) { return this.q.has(path); },
+    since: 0, wasOffline: false,
     put(path, data) {
+      if (!this.q.size) this.since = Date.now();
+      Unsynced.put(path, data);
       let e = this.q.get(path);
       if (!e) { e = { inflight: false, dirty: false, t: 0 }; this.q.set(path, e); }
       e.data = data; e.dirty = true;
@@ -1575,6 +1593,8 @@ body.viewer-on { overflow: hidden; }
       e.inflight = false;
       if (e.dirty) return this.flush(path);
       this.q.delete(path);
+      if (!this.err) Unsynced.drop(path);
+      if (!this.q.size && this.wasOffline && !this.err) { this.wasOffline = false; toast('Back online. Everything is synced.'); }
       syncPill();
     },
     async fail(err, path, body) {
@@ -1584,6 +1604,8 @@ body.viewer-on { overflow: hidden; }
       }
       this.err = err;
       const code = err && err.code;
+      // Writes the server will never take shouldn't come back on the next open.
+      if (['permission_denied', 'invalid_argument', 'revoked', 'quota_exceeded'].includes(code)) Unsynced.drop(path);
       if (code === 'permission_denied') {
         if (Access.isAdmin) toast('The database refused the save. Check that the security rules are published in Firebase.');
         else { UI.readOnly = true; toast('Only coaches can make changes.'); render(); }
@@ -1618,6 +1640,7 @@ body.viewer-on { overflow: hidden; }
     const e = Saver.q.get(path);
     if (e) clearTimeout(e.t);
     Saver.q.delete(path);
+    Unsynced.drop(path);
     Saver.deleting.add(path);
     try { await Backend.remove(path); } catch (err) { toast('Could not delete that ' + what + '.'); }
     Saver.deleting.delete(path);
@@ -1691,8 +1714,16 @@ body.viewer-on { overflow: hidden; }
     if (!UI.ready) { el.hidden = true; return; }
     el.hidden = false;
     let s, t;
-    if (UI.readOnly) { s = 'follow'; t = 'Following'; }
-    else if (Saver.q.size || Saver.deleting.size) { s = 'saving'; t = 'Saving…'; }
+    const offline = navigator.onLine === false;
+    const pending = Saver.q.size || Saver.deleting.size;
+    // No signal, or a save that's been waiting a while: it's safe on this phone and will sync.
+    const waiting = pending && Backend.kind === 'fb' && (offline || Date.now() - Saver.since > 6000);
+    if (waiting) Saver.wasOffline = true;
+    el.dataset.act = waiting || offline ? 'pillInfo' : '';
+    if (UI.readOnly) { s = offline ? 'offline' : 'follow'; t = offline ? 'Offline' : 'Following'; }
+    else if (waiting) { s = 'offline'; t = 'Saved on phone'; }
+    else if (pending) { s = 'saving'; t = 'Saving…'; }
+    else if (offline && Backend.kind === 'fb') { s = 'offline'; t = 'Offline'; }
     else if (Saver.err) { s = 'error'; t = 'Not saved'; }
     else if (Backend.kind === 'local') { s = 'local'; t = 'This device'; }
     else { s = 'saved'; t = 'Synced'; }
@@ -3590,6 +3621,11 @@ body.viewer-on { overflow: hidden; }
       const who = d.who === 'us' || (!d.key && !d.who && UI.tab === 'stats') ? 'us' : 'opp';
       openSheet({ type: 'spray', who, name, fixed: !!d.key, step: 'pick', busy: null, err: '', read: null });
     },
+    pillInfo() {
+      toast(navigator.onLine === false
+        ? (UI.readOnly ? 'No signal. The score updates again when service comes back.' : 'No signal. Every change is saved on this phone and syncs on its own when service comes back. Keep scoring.')
+        : 'Waiting for a better signal. Every change is saved on this phone and syncs on its own. Keep scoring.');
+    },
     sprayFor(d) { const sh = UI.sheet; if (!sh || sh.busy) return; sh.who = d.v === 'us' ? 'us' : 'opp'; sh.err = ''; renderSheet(); },
     teamSpray(d) { UI.teamSpray = d.k; render(); },
     teamSprayRemove() {
@@ -3684,7 +3720,7 @@ body.viewer-on { overflow: hidden; }
       if (perm !== 'granted') { render(); toast(perm === 'denied' ? 'Notifications are blocked. Turn them on in your phone\u2019s Settings.' : 'Notifications weren\u2019t turned on.'); return; }
       Push.busy = true; render();
       try {
-        const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        const reg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
         const m = await pushMessaging();
         const token = await Push.M.getToken(m, { vapidKey: FB.cfg.vapidKey, serviceWorkerRegistration: reg });
         if (!token) throw new Error('no token');
@@ -4493,6 +4529,11 @@ body.viewer-on { overflow: hidden; }
     reader.readAsText(file);
   }
 
+  // ---------- signal ----------
+  window.addEventListener('online', () => { syncPill(); pingNotify(); });
+  window.addEventListener('offline', () => syncPill());
+  setInterval(() => { if (Saver.q.size || navigator.onLine === false) syncPill(); }, 3000);
+
   // ---------- events ----------
   document.addEventListener('click', (ev) => {
     const el = ev.target.closest('[data-act]');
@@ -4560,8 +4601,30 @@ body.viewer-on { overflow: hidden; }
     } else if (err && err.code === 'revoked') toast('Access to this team changed. Reload to continue.');
     else toast('Live updates paused. Reload the page to reconnect.');
   }
+  // Puts back changes made on this phone that never reached the server (the app was closed or
+  // restarted with no signal). A copy only wins if it's newer than what the server has.
+  function restoreUnsynced() {
+    const m = Unsynced.all();
+    const paths = Object.keys(m);
+    if (!paths.length) return;
+    if (!Access.isAdmin) { Unsynced.save({}); return; }
+    let n = 0;
+    for (const path of paths) {
+      const x = m[path] || {};
+      const [col, id] = path.split('/');
+      const data = x.data;
+      if (!data || !id || (col !== 'games' && col !== 'opponents')) { Unsynced.drop(path); continue; }
+      const cur = col === 'games' ? Data.games[id] : Data.opponents[id];
+      const newer = cur ? (Number(data.updatedAt) || 0) > (Number(cur.updatedAt) || 0) : Date.now() - (x.at || 0) < 86400000;
+      if (!newer) { Unsynced.drop(path); continue; }
+      if (col === 'games') { Data.games[id] = normGame(data); Saver.put(path, Data.games[id]); } else { Data.opponents[id] = normRoster(data); Saver.put(path, Data.opponents[id]); }
+      n++;
+    }
+    if (n) { scheduleRender(); toast(n === 1 ? 'Picked up a change that hadn\u2019t synced yet.' : 'Picked up ' + n + ' changes that hadn\u2019t synced yet.'); }
+  }
   function maybeReady() {
     if (Data.loaded.team && Data.loaded.games && Data.loaded.opps) UI.ready = true;
+    if (UI.ready && Backend.kind === 'fb' && Access.evaluated && !restoreUnsynced.done) { restoreUnsynced.done = true; restoreUnsynced(); }
     scheduleRender();
     if (UI.sheet && UI.sheet.type === 'playerCard') renderSheet();
   }
@@ -4572,6 +4635,8 @@ body.viewer-on { overflow: hidden; }
       UI.standalone = true;
       const cfg = loadAiCfg();
       if (cfg) Caps.sample = makeWorkerAI(cfg);
+      // Keeps a copy of the Hub on this phone so it opens with no signal (also handles notifications).
+      if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('firebase-messaging-sw.js').catch(() => {});
       const fbCfg = window.GS_FIREBASE;
       if (fbCfg && fbCfg.apiKey && fbCfg.projectId) { await bootFirebase(fbCfg); return; }
       Backend.loadLocal();

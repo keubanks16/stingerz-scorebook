@@ -35,6 +35,16 @@ Long charts are read one piece at a time, so a big team reads as well as a small
 
 Imported balls add to scouting; they never replace the games you score. The spray chart, direction split, contact mix (grounders, liners, pop ups) and the tips use both. The batting line (hits, walks, strikeouts) and outfield distances still come only from games you score, because spray charts don't include them. Importing again replaces the earlier import for the same hitters. Imported balls never change batting stats. To remove an opponent's import, open their roster and tap **Remove** in the Spray chart box; for your team, tap **Remove** under the Stats tab's spray chart.
 
+## Scoring with no signal
+
+The scoring phone keeps working when the field has no service:
+
+- **Keep scoring.** Every pitch and play is saved on the phone the moment you tap it. The status at the top turns yellow and says **Saved on phone**; tap it for a reminder of what's happening.
+- **It syncs on its own.** When service comes back, everything goes up in order and the status turns green (**Synced**). Families' Live screens jump to the current score and notifications go out then.
+- **Closing the app is safe.** If the Hub gets closed or the phone restarts with no signal, open GS Hub again: it opens from the copy saved on the phone, picks up the unsynced plays, and you keep scoring.
+- **Before game day,** open the Hub once with signal on each scoring phone (after any update) so the phone has its saved copy. Viewing works offline too, but families see the last score that reached them.
+- Live video, chat photos, roster scanning and scouting reports need signal.
+
 ## Team chat
 
 The **Chat** tab is one group conversation for everyone with an approved account: coaches, families and camera operators. People watching through "Anyone with the link" without signing in don't see it. Coaches' messages show a **Coach** tag. To delete a message, tap it and then tap **Delete message**. Anyone can delete their own messages; coaches can delete any message. A hint under the latest message says so until you've deleted one. A red dot on the Chat tab means there are new messages. The chat keeps the latest 300 messages on screen.
@@ -168,7 +178,7 @@ To create the Worker from scratch: in [Cloudflare](https://dash.cloudflare.com),
 | `index.html` | The whole app in one page, including the Firebase settings |
 | `firestore.rules` | Database security rules: owner, coaches, families, who can watch |
 | `worker.js` | Cloudflare Worker: holds the API key, opens private Cloudflare streams for the camera phone, stores and shows chat photos, and sends notifications |
-| `firebase-messaging-sw.js` | Shows notifications when the Hub is closed. Must stay at the top level of the site |
+| `firebase-messaging-sw.js` | Keeps a copy of the Hub on the phone so it opens and scores with no signal, and shows notifications when the app is closed |
 | `CNAME` | Tells GitHub Pages to serve this at scorebook.stingerz-baseball.com |
 | `icons/`, `manifest.webmanifest` | Home-screen icon and app settings |
 
