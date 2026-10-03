@@ -254,6 +254,13 @@ table.st tr:last-child td { border-bottom: 0; }
 .legend .lh { background: var(--hit); }
 .legend .lo { border: 1.5px solid var(--ink-2); }
 .legend .lr { background: #F2C94C; }
+.legend .li { background: var(--navy); border: 1.5px solid var(--carolina); }
+.field .dot-imp { fill: var(--navy); stroke: #FFFFFF; stroke-width: .5; }
+.sp-key { font-size: 13px; color: var(--ink-2); text-align: center; line-height: 1.5; }
+.sp-key b { font-weight: 700; }
+.sp-key .k-pu { color: #1B9A5A; }
+.sp-key .k-gb { color: var(--bad); }
+.sp-key .k-ld { color: #C08A0A; }
 
 /* imported spray charts */
 .sp-opp { font-family: var(--font-display); font-size: 19px; line-height: 1.15; color: var(--ink); }
@@ -1715,10 +1722,10 @@ body.viewer-on { overflow: hidden; }
     } else if (o.points) {
       for (const p of o.points) {
         // Imported chart balls carry res (h/o/e) instead of a scored result code.
-        const m = p.res ? {} : E.RESULTS[p.r] || {};
+        const m = p.res || p.imp ? {} : E.RESULTS[p.r] || {};
         const hit = p.res ? p.res === 'h' : !!m.hit;
-        const cls = p.res ? SPRAY_RES[p.res].cls : m.hit ? 'dot-hit' : p.r === 'E' || p.r === 'FC' ? 'dot-reach' : 'dot-out';
-        marks += `<circle class="${cls}" cx="${p.loc[0]}" cy="${p.loc[1]}" r="${((hit ? 1.7 : 1.45) * (o.dot || 1)).toFixed(2)}"${o.dot ? ` style="stroke-width:${((cls === 'dot-out' ? 0.7 : 0.5) * o.dot).toFixed(2)}"` : ''}><title>${esc(p.title || (m.n || p.r) + (p.label ? ' · ' + p.label : ''))}</title></circle>`;
+        const cls = p.res ? SPRAY_RES[p.res].cls : p.imp ? 'dot-imp' : m.hit ? 'dot-hit' : p.r === 'E' || p.r === 'FC' ? 'dot-reach' : 'dot-out';
+        marks += `<circle class="${cls}" cx="${p.loc[0]}" cy="${p.loc[1]}" r="${((hit ? 1.7 : p.imp && !p.res ? 1.55 : 1.45) * (o.dot || 1)).toFixed(2)}"${o.dot ? ` style="stroke-width:${((cls === 'dot-out' ? 0.7 : 0.5) * o.dot).toFixed(2)}"` : ''}><title>${esc(p.title || (m.n || p.r) + (p.label ? ' · ' + p.label : ''))}</title></circle>`;
       }
     }
     if (o.marker) marks += `<circle class="marker-ring" cx="${o.marker[0]}" cy="${o.marker[1]}" r="3.4"/><circle class="marker" cx="${o.marker[0]}" cy="${o.marker[1]}" r="1.9"/>`;
@@ -1738,7 +1745,7 @@ body.viewer-on { overflow: hidden; }
       ${marks}
     </svg>`;
   }
-  const legend = () => '<div class="legend"><span><i class="lh"></i>Hit</span><span><i class="lo"></i>Out</span><span><i class="lr"></i>Error / fielder\'s choice</span></div>';
+  const legend = (imp, scored) => '<div class="legend">' + (scored === false ? '' : '<span><i class="lh"></i>Hit</span><span><i class="lo"></i>Out</span><span><i class="lr"></i>Error / fielder\'s choice</span>') + (imp ? '<span><i class="li"></i>Imported chart</span>' : '') + '</div>';
 
   function diamondSVG(s, g) {
     const pos = { 1: [98, 54], 2: [60, 16], 3: [22, 54] };
@@ -1763,10 +1770,12 @@ body.viewer-on { overflow: hidden; }
     const t = { n: fair.length, all: pas.length, L: 0, C: 0, R: 0, G: 0, Ln: 0, F: 0, P: 0, of: 0, ofFt: 0, cn: 0, imp: 0 };
     for (const p of fair) {
       t[p.imp ? p.dir : E.third(p.loc)]++;
-      if (p.imp) { t.imp++; continue; }
+      if (p.imp) t.imp++;
+      if (p.imp && !p.bt) continue;
       t.cn++;
       const bt = p.bt || 'G';
       if (bt === 'G') t.G++; else if (bt === 'L') t.Ln++; else if (bt === 'F') t.F++; else t.P++;
+      if (p.imp) continue; // imported charts have no distances
       const gg = E.geo(p.loc);
       if (!gg.infield) { t.of++; t.ofFt += gg.ft; }
     }
@@ -1787,8 +1796,10 @@ body.viewer-on { overflow: hidden; }
     else tips.push(`Sprays the ball around (${pct(t.L, t.n)}% left, ${pct(t.C, t.n)}% center, ${pct(t.R, t.n)}% right). Play straight up.`);
     if (t.cn >= 4) {
       const gb = pct(t.G, t.cn), air = pct(t.Ln + t.F, t.cn);
+      const pu = pct(t.P, t.cn);
       if (gb >= 55) tips.push(`Ground-ball hitter (${gb}%). Keep the middle infielders at double-play depth with a runner on first.`);
       else if (air >= 60) tips.push(`Gets the ball in the air (${air}% liners and flies). Play the outfield a few steps deeper.`);
+      else if (pu >= 45) tips.push(`Pops the ball up a lot (${pu}%). Have fielders ready to call for it and make the catch.`);
     }
     if (t.of >= 3) {
       const avg = Math.round(t.ofFt / t.of);
@@ -1809,7 +1820,7 @@ body.viewer-on { overflow: hidden; }
     const from = t.imp ? ` (${t.imp === t.n ? 'all' : t.imp} from an imported spray chart)` : '';
     return `<div class="tend">
       <div class="tend-row"><span class="lbl">Direction</span>${stackbar([['L', t.L], ['C', t.C], ['R', t.R]])}</div>
-      <div class="tend-row"><span class="lbl">Contact</span>${t.cn ? stackbar([['GB', t.G], ['LD', t.Ln], ['FB', t.F], ['PU', t.P]]) : '<span class="small muted">Not in imported charts. It fills in from games you score.</span>'}</div>
+      <div class="tend-row"><span class="lbl">Contact</span>${t.cn ? stackbar([['GB', t.G], ['LD', t.Ln], ['FB', t.F], ['PU', t.P]]) : '<span class="small muted">No contact types yet. They fill in from games you score.</span>'}</div>
       <div class="small muted">${t.n} ${t.imp ? '' : 'charted '}ball${t.n === 1 ? '' : 's'} in play${from}${t.bats ? ' · bats ' + esc(t.bats) : ''}. L/C/R from the catcher's view.</div>
     </div>`;
   }
@@ -2313,10 +2324,12 @@ body.viewer-on { overflow: hidden; }
         if (!O.hitters.has(hk)) O.hitters.set(hk, { key: hk, num, name, bats: (rp && rp.bats) || '', pas: [], slot: 99 });
         const H = O.hitters.get(hk);
         if (!H.name) H.name = name;
-        for (const d of sp1.dots || []) {
+        for (const d0 of sp1.dots || []) {
+          const d = sprayDotNow(d0, !sp.v);
           const z = SPRAY_ZONES[d.z];
-          if (!z || !SPRAY_RES[d.r]) continue;
-          for (let i = 0; i < Math.min(99, d.n || 0); i++) H.pas.push({ imp: 1, zone: d.z, dir: z.dir, res: d.r, loc: z.at, date });
+          if (!z) continue;
+          const bt = BT_NAME[d.bt] ? d.bt : '', res = SPRAY_RES[d.r] ? d.r : '';
+          for (let i = 0; i < Math.min(99, d.n || 0); i++) H.pas.push({ imp: 1, zone: d.z, dir: z.dir, bt, res, loc: z.at, date });
         }
       }
     }
@@ -2335,6 +2348,7 @@ body.viewer-on { overflow: hidden; }
     RF: { at: [70, 41.36], dir: 'R', name: 'right field' }
   };
   const SPRAY_RES = { h: { cls: 'dot-hit', n: 'Hit' }, o: { cls: 'dot-out', n: 'Out' }, e: { cls: 'dot-reach', n: 'Reached on error' } };
+  const BT_NAME = { G: 'Ground ball', L: 'Line drive', F: 'Fly ball', P: 'Pop up' };
   // Dots for the field drawing. Imported balls at the same spot fan out in a tight spiral around it.
   function sprayPoints(pas, spread) {
     const out = [], groups = {};
@@ -2343,11 +2357,12 @@ body.viewer-on { overflow: hidden; }
       else if (p.loc) out.push({ loc: p.loc, r: p.r });
     }
     for (const z in groups) {
-      const g = groups[z].slice().sort((a, b) => 'eoh'.indexOf(a.res) - 'eoh'.indexOf(b.res));
+      const g = groups[z].slice().sort((a, b) => 'GLFP'.indexOf(a.bt) - 'GLFP'.indexOf(b.bt) || 'eoh'.indexOf(a.res) - 'eoh'.indexOf(b.res));
       const c = SPRAY_ZONES[z].at, step = (spread || 1) * Math.min(2, 7.5 / Math.sqrt(g.length));
       g.forEach((p, i) => {
         const r = step * Math.sqrt(i), a = i * 2.39996;
-        out.push({ loc: [+(c[0] + r * Math.cos(a)).toFixed(2), +(c[1] + r * Math.sin(a)).toFixed(2)], res: p.res, title: SPRAY_RES[p.res].n + ' to ' + SPRAY_ZONES[z].name + ' (imported chart)' });
+        const what = [BT_NAME[p.bt], SPRAY_RES[p.res] && SPRAY_RES[p.res].n].filter(Boolean).join(', ') || 'Ball in play';
+        out.push({ loc: [+(c[0] + r * Math.cos(a)).toFixed(2), +(c[1] + r * Math.sin(a)).toFixed(2)], imp: 1, res: SPRAY_RES[p.res] ? p.res : '', title: what + ' to ' + SPRAY_ZONES[z].name + ' (imported chart)' });
       });
     }
     return out;
@@ -2384,7 +2399,7 @@ body.viewer-on { overflow: hidden; }
       <div class="row"><div class="grow"><div class="mu-name" style="font-size:21px">${esc(title)}</div><div class="mu-sub">${parts.join(' · ')}</div></div>
       <div class="seg">${[['dots', 'Dots'], ['heat', 'Heat']].map(([k, l]) => `<button data-act="sprayMode" data-k="${k}" aria-pressed="${UI.sprayMode === k}">${l}</button>`).join('')}</div></div>
       ${fieldSVG({ points: pts, heat: UI.sprayMode === 'heat', label: 'Spray chart for ' + title })}
-      ${UI.sprayMode === 'heat' ? '<div class="legend"><span>Darker = more balls hit there</span></div>' : legend()}
+      ${UI.sprayMode === 'heat' ? '<div class="legend"><span>Darker = more balls hit there</span></div>' : legend(pts.some((p) => p.imp && !p.res), pts.some((p) => !p.imp || p.res) || !pts.length)}
       ${tendHTML(t)}
       <div class="tip">${tipsFor(t).map((x) => `<p>${esc(x)}</p>`).join('')}</div>
       ${aiBlock(sel, O, pas, t)}
@@ -2609,16 +2624,18 @@ body.viewer-on { overflow: hidden; }
       const total = ps.reduce((t, p) => t + sprayTotal(p.dots), 0);
       const off = ps.filter((p) => p.bip != null && p.bip !== sprayTotal(p.dots)).length;
       h += `<div class="sp-top"><div class="grow" style="min-width:0"><div class="sp-opp">${esc(sh.name)}</div>${sh.read.title ? `<div class="small muted">${esc(sh.read.title)}</div>` : ''}</div><div class="sp-count"><b>${ps.length}</b><span>hitters</span></div><div class="sp-count"><b>${total}</b><span>balls in play</span></div></div>
-        <div class="legend"><span><i class="lh"></i>Hit${sh.read.legend ? '' : ' (green)'}</span><span><i class="lo"></i>Out${sh.read.legend ? '' : ' (red)'}</span><span><i class="lr"></i>Error${sh.read.legend ? '' : ' (gold)'}</span></div>
+        <div class="sp-key">${sh.read.legend ? 'Colors read from the chart\u2019s own key.' : 'Colors read as <b class="k-pu">green = pop up</b> · <b class="k-gb">red = ground ball</b> · <b class="k-ld">gold = line drive</b>'}</div>
         ${off ? `<div class="warn-text">${off} hitter${off === 1 ? '’s' : 's’'} dots don’t add up to the chart’s total. Check ${off === 1 ? 'it' : 'them'} against the screenshot below.</div>` : `<div class="small" style="color:var(--good);font-weight:600">Every hitter’s dots add up to the chart’s totals.</div>`}
         <div class="sp-list">${ps.map((p, i) => {
           const n = sprayTotal(p.dots), d = sprayDirs(p.dots);
           const bad = p.bip != null && p.bip !== n;
-          const pts = sprayPoints(p.dots.flatMap((x) => Array.from({ length: x.n }, () => ({ imp: 1, zone: x.z, res: x.r }))), 1.7);
+          const pts = sprayPoints(p.dots.flatMap((x) => Array.from({ length: x.n }, () => ({ imp: 1, zone: x.z, bt: x.bt || '', res: x.r || '' }))), 1.7);
+          const ct = sprayContact(p.dots);
           return `<div class="sp-row${p.match === 'skip' ? ' skip' : ''}">${fieldSVG({ points: pts, dot: 1.8, label: 'Spray chart for ' + p.name })}
             <div class="sp-info"><div class="sp-name">${esc(p.name)}</div>
             <div class="sp-sum"><b>${n}</b> in play${p.bip != null && !bad ? ' <span class="sp-ok" title="Matches the chart">\u2713</span>' : ''}</div>
             ${stackbar([['L', d.L], ['C', d.C], ['R', d.R]])}
+            ${ct.G + ct.L + ct.F + ct.P ? stackbar([['GB', ct.G], ['LD', ct.L], ['FB', ct.F], ['PU', ct.P]]) : ''}
             ${bad ? `<div class="warn-text small">Chart says ${p.bip}, read ${n}.</div>` : ''}
             <label class="sp-match"><span class="field-lbl">Roster</span>${sel(`read.players.${i}.match`, p.match, opts, 'aria-label="Roster player for ' + esc(p.name) + '"')}</label></div></div>`;
         }).join('')}</div>
@@ -2815,14 +2832,17 @@ body.viewer-on { overflow: hidden; }
     + '- Use one entry per dot and keep the panels in order. Never invent a dot, a number or a hitter you cannot read.\n'
     + 'Example: {"title":"2026 Fall 8U Tigers","legend":{},"players":[{"name":"Sam C","bip":4,"dots":[{"z":"LF","n":1,"c":"green"},{"z":"SS","n":3,"c":"red"}]}]}';
   const SPRAY_ALIAS = { P: 'P', PITCHER: 'P', C: 'C', CATCHER: 'C', '1B': '1B', FIRST: '1B', FIRSTBASE: '1B', '2B': '2B', SECOND: '2B', SECONDBASE: '2B', SS: 'SS', SHORTSTOP: 'SS', '3B': '3B', THIRD: '3B', THIRDBASE: '3B', LF: 'LF', LEFTFIELD: 'LF', LCF: 'LF', CF: 'CF', CENTERFIELD: 'CF', RF: 'RF', RIGHTFIELD: 'RF', RCF: 'RF' };
+  // Dot colors mean contact type on GS Baseball's charts: green = pop up, red = ground ball,
+  // gold = line drive. A chart with its own color key can say otherwise, including hit/out/error.
   function sprayColorMap(legend) {
-    const map = { green: 'h', red: 'o', gold: 'e', yellow: 'e', orange: 'e' };
+    const map = { green: { bt: 'P' }, red: { bt: 'G' }, gold: { bt: 'L' }, yellow: { bt: 'L' }, orange: { bt: 'L' } };
     let used = false;
     if (legend && typeof legend === 'object') {
       for (const [c, m] of Object.entries(legend)) {
         const t = String(m || '').toLowerCase(), col = String(c || '').toLowerCase().trim();
-        const r = /error|fielder|\bfc\b|reach/.test(t) ? 'e' : /\bout\b|outs/.test(t) ? 'o' : /hit|safe|single|double|triple|home run/.test(t) ? 'h' : '';
-        if (r && col) { map[col] = r; used = true; }
+        const v = /ground/.test(t) ? { bt: 'G' } : /line/.test(t) ? { bt: 'L' } : /pop/.test(t) ? { bt: 'P' } : /fly/.test(t) ? { bt: 'F' }
+          : /error|fielder|\bfc\b|reach/.test(t) ? { r: 'e' } : /\bouts?\b/.test(t) ? { r: 'o' } : /hit|safe|single|double|triple|home run/.test(t) ? { r: 'h' } : null;
+        if (v && col) { map[col] = v; used = true; }
       }
     }
     return { map, used };
@@ -2840,10 +2860,14 @@ body.viewer-on { overflow: hidden; }
         if (!d || typeof d !== 'object') continue;
         const z = SPRAY_ALIAS[String(d.z || '').toUpperCase().replace(/[^A-Z0-9]/g, '')];
         const n = Math.round(Number(d.n == null || d.n === '' ? 1 : d.n));
-        const r = map[String(d.c || '').toLowerCase().trim()] || 'o';
+        const v = map[String(d.c || '').toLowerCase().trim()] || {};
         if (!z || !(n >= 1 && n <= 99)) continue;
-        const same = dots.find((q) => q.z === z && q.r === r);
-        if (same) same.n = Math.min(99, same.n + n); else dots.push({ z, n, r });
+        const same = dots.find((q) => q.z === z && (q.bt || '') === (v.bt || '') && (q.r || '') === (v.r || ''));
+        if (same) { same.n = Math.min(99, same.n + n); continue; }
+        const dot = { z, n };
+        if (v.bt) dot.bt = v.bt;
+        if (v.r) dot.r = v.r;
+        dots.push(dot);
       }
       if (!dots.length) continue;
       const b = x.bip == null || x.bip === '' ? NaN : Math.round(Number(x.bip));
@@ -2851,6 +2875,14 @@ body.viewer-on { overflow: hidden; }
     }
     return { title: String((raw && raw.title) || '').replace(/\s+/g, ' ').trim().slice(0, 80), players: out, legend: used };
   }
+  // Charts imported before contact types were known stored the dot color as a result (h/o/e).
+  // Those colors were green, red and gold, so they convert straight back to contact types.
+  function sprayDotNow(d, legacy) {
+    if (!legacy || d.bt) return d;
+    const bt = { h: 'P', o: 'G', e: 'L' }[d.r];
+    return bt ? { z: d.z, n: d.n, bt } : d;
+  }
+  function sprayContact(dots) { const t = { G: 0, L: 0, F: 0, P: 0 }; for (const d of dots) if (d.bt) t[d.bt] += d.n; return t; }
   const sprayTotal = (dots) => dots.reduce((t, d) => t + d.n, 0);
   function sprayDirs(dots) { const t = { L: 0, C: 0, R: 0 }; for (const d of dots) t[SPRAY_ZONES[d.z].dir] += d.n; return t; }
   const sprayNorm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -3404,11 +3436,14 @@ body.viewer-on { overflow: hidden; }
           doc.players.push(np);
           id = np.id;
         }
-        keep.set(id, { id, name: p.name, bip: p.bip, dots: p.dots.map((x) => ({ z: x.z, n: x.n, r: x.r })) });
+        keep.set(id, { id, name: p.name, bip: p.bip, dots: p.dots.map((x) => { const o = { z: x.z, n: x.n }; if (x.bt) o.bt = x.bt; if (x.r) o.r = x.r; return o; }) });
         n++;
       }
       if (!n) { sh.err = 'Pick at least one hitter to import.'; renderSheet(); return; }
-      doc.spray = { src: sh.read.title || '', at: Date.now(), players: [...keep.values()] };
+      // v2: dots carry contact type (bt). Hitters kept from an older import are converted on the way.
+      const legacy = !(doc.spray && doc.spray.v);
+      const players = [...keep.values()].map((p) => (legacy ? Object.assign({}, p, { dots: (p.dots || []).map((x) => sprayDotNow(x, true)) }) : p));
+      doc.spray = { v: 2, src: sh.read.title || '', at: Date.now(), players };
       saveRoster(doc);
       closeSheet();
       const O = [...scoutData().values()].find((x) => oppKey(x.name) === k);
@@ -3662,9 +3697,9 @@ body.viewer-on { overflow: hidden; }
       const other = pas.filter((p) => !p.loc && !p.imp).map((p) => (E.RESULTS[p.r] || {}).n || p.r).join(', ');
       // Imported chart balls, summarized as counts per spot (they have no contact type or distance).
       const impCounts = {};
-      for (const p of pas) if (p.imp) { const k = SPRAY_ZONES[p.zone].name + ', ' + SPRAY_RES[p.res].n.toLowerCase(); impCounts[k] = (impCounts[k] || 0) + 1; }
+      for (const p of pas) if (p.imp) { const k = [SPRAY_ZONES[p.zone].name, BT_NAME[p.bt] && BT_NAME[p.bt].toLowerCase(), SPRAY_RES[p.res] && SPRAY_RES[p.res].n.toLowerCase()].filter(Boolean).join(', '); impCounts[k] = (impCounts[k] || 0) + 1; }
       const imp = Object.entries(impCounts).sort((x, y) => y[1] - x[1]).map(([k, n]) => `- ${k}: ${n}`).join('\n');
-      const prompt = `You are a baseball scouting assistant helping a high school coach. Using only the data below, write a short scouting report on ${sel ? 'this opposing hitter' : 'this opposing lineup as a whole'}: where to position the infield and the outfield, and one pitching note if the data supports it. Use 3 to 5 bullet points that start with "- ". Plain text, no headings, no preamble. If the sample is small, say so in the first bullet.\n\nOpponent: ${O.name}\n${sel ? 'Hitter: ' + hitterLabel(sel) + (sel.bats ? ', bats ' + sel.bats : '') : 'Whole lineup'}\nPlate appearances: ${line.PA}; ${line.H} hits in ${line.AB} at-bats; ${line.BB} walks or HBP; ${line.K} strikeouts.\nBalls in play from games we scored (field zone from the catcher's view, contact type, result, distance):\n${bip || '(none charted)'}\n${other ? 'Plate appearances without a charted location: ' + other + '\n' : ''}${imp ? 'Balls in play from an imported season spray chart (spot, result: count):\n' + imp + '\n' : ''}Direction split: left ${pct(t.L, t.n)}%, center ${pct(t.C, t.n)}%, right ${pct(t.R, t.n)}% of ${t.n} balls in play.`;
+      const prompt = `You are a baseball scouting assistant helping a high school coach. Using only the data below, write a short scouting report on ${sel ? 'this opposing hitter' : 'this opposing lineup as a whole'}: where to position the infield and the outfield, and one pitching note if the data supports it. Use 3 to 5 bullet points that start with "- ". Plain text, no headings, no preamble. If the sample is small, say so in the first bullet.\n\nOpponent: ${O.name}\n${sel ? 'Hitter: ' + hitterLabel(sel) + (sel.bats ? ', bats ' + sel.bats : '') : 'Whole lineup'}\nPlate appearances: ${line.PA}; ${line.H} hits in ${line.AB} at-bats; ${line.BB} walks or HBP; ${line.K} strikeouts.\nBalls in play from games we scored (field zone from the catcher's view, contact type, result, distance):\n${bip || '(none charted)'}\n${other ? 'Plate appearances without a charted location: ' + other + '\n' : ''}${imp ? 'Balls in play from an imported season spray chart (spot, contact type: count; results are not on the chart):\n' + imp + '\n' : ''}Direction split: left ${pct(t.L, t.n)}%, center ${pct(t.C, t.n)}%, right ${pct(t.R, t.n)}% of ${t.n} balls in play.`;
       const ctl = new AbortController();
       UI.ai[key] = { busy: true, text: '', ctl };
       render();
