@@ -30,6 +30,7 @@
   --accent: #245FA8;
   --accent-ink: #FFFFFF;
   --accent-soft: #DCE8F6;
+  --says-ink: #8A5A00; --paid-ink: #136B40; --due-ink: #B12E23;
   --board: #0B2753;
   --board-2: #12336A;
   --board-ink: #FFFFFF;
@@ -57,7 +58,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --ground: #04122D; --surface: #0A1D40; --surface-2: #0E2550; --ink: #E7EEF9; --ink-2: #A6B7D3; --ink-3: #7487A8; --line: #1B3364;
-    --accent: #7FB0E6; --accent-ink: #04122D; --accent-soft: #15315F;
+    --accent: #7FB0E6; --accent-ink: #04122D; --accent-soft: #15315F; --says-ink: #F2C94C; --paid-ink: #7FD3A4; --due-ink: #FF9C93;
     --board: #020A1C; --board-2: #0B1D42; --board-ink: #FFFFFF; --board-dim: #6F8BB8;
     --ball: #3DBE7C; --strike: #F06A5C; --warn: #E8B04A; --good: #3DBE7C; --bad: #F06A5C;
     --grass: #2F6B3B; --grass-2: #275A31; --dirt: #9E7452; --chalk: #F2F5FA; --hit: #8FBDF0; --heat: #FF7A4D;
@@ -69,7 +70,7 @@
 }
 :root[data-theme="dark"] {
   --ground: #04122D; --surface: #0A1D40; --surface-2: #0E2550; --ink: #E7EEF9; --ink-2: #A6B7D3; --ink-3: #7487A8; --line: #1B3364;
-  --accent: #7FB0E6; --accent-ink: #04122D; --accent-soft: #15315F;
+  --accent: #7FB0E6; --accent-ink: #04122D; --accent-soft: #15315F; --says-ink: #F2C94C; --paid-ink: #7FD3A4; --due-ink: #FF9C93;
   --board: #020A1C; --board-2: #0B1D42; --board-ink: #FFFFFF; --board-dim: #6F8BB8;
   --ball: #3DBE7C; --strike: #F06A5C; --warn: #E8B04A; --good: #3DBE7C; --bad: #F06A5C;
   --grass: #2F6B3B; --grass-2: #275A31; --dirt: #9E7452; --chalk: #F2F5FA; --hit: #8FBDF0; --heat: #FF7A4D;
@@ -265,6 +266,54 @@ table.st tr:last-child td { border-bottom: 0; }
 .sp-key .k-gb { color: var(--bad); }
 .sp-key .k-ld { color: #C08A0A; }
 
+/* tournament fees */
+.fee { padding: 14px; display: grid; gap: 10px; }
+.fee-top { display: flex; align-items: flex-start; gap: 8px; }
+.fee-top b { font-size: 19px; color: var(--ink); display: block; }
+.fee-top .small { color: var(--ink-2); display: block; }
+.due { font-size: 13px; font-weight: 700; padding: 4px 9px; border-radius: 99px; background: rgba(242, 201, 76, .2); color: var(--says-ink); white-space: nowrap; }
+.amt { display: flex; align-items: baseline; gap: 8px; }
+.amt b { font-family: var(--font-display); font-size: 38px; line-height: 1; color: var(--ink); font-weight: 400; }
+.amt span { color: var(--ink-2); font-size: 16px; }
+.btn.full { width: 100%; min-height: 48px; font-size: 17px; text-decoration: none; }
+.btn.paybtn { background: var(--surface-2); }
+.hr { height: 1px; background: var(--line); }
+.fee-chip { font-size: 13px; font-weight: 700; padding: 4px 9px; border-radius: 99px; white-space: nowrap; }
+.st-paid { background: rgba(24, 131, 79, .16); color: var(--paid-ink); }
+.st-says { background: rgba(242, 201, 76, .2); color: var(--says-ink); }
+.st-due { background: rgba(195, 57, 45, .14); color: var(--due-ink); }
+.sum { padding: 14px; display: grid; gap: 8px; }
+.fee-sum { width: 100%; text-align: left; color: inherit; font: inherit; cursor: pointer; padding: 14px; display: grid; gap: 8px; }
+.fee-sum:hover { border-color: var(--accent); }
+.fee-go { font-size: 26px; line-height: 1; color: var(--ink-3); }
+.sum-nums { display: flex; gap: 22px; flex-wrap: wrap; }
+.sum-nums div b { font-family: var(--font-display); font-size: 24px; color: var(--ink); font-weight: 400; display: block; line-height: 1.1; }
+.sum-nums div span { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.fee-bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; display: flex; }
+.fee-bar i { display: block; height: 100%; }
+.rows { padding: 2px 12px; }
+.prow { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 16px; }
+.prow:first-child { border-top: 0; }
+.prow[data-act] { cursor: pointer; }
+.prow .nm { flex: 1; min-width: 0; color: var(--ink); font-weight: 600; }
+.prow .nm small { display: block; font-size: 13px; font-weight: 500; color: var(--ink-3); }
+.prow .btn.sm { min-height: 32px; padding: 4px 10px; font-size: 14px; border-radius: 8px; clip-path: none; }
+.fee-done { padding: 2px 14px; }
+.fee-set b { color: var(--ink); }
+.fee-banner { background: rgba(242, 201, 76, .16); }
+.pick-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pick { border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: 99px; padding: 6px 12px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.pick.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.who { display: flex; align-items: center; gap: 10px; padding: 10px 0; border: 0; border-top: 1px solid var(--line); background: none; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.who:first-child { border-top: 0; cursor: default; }
+.who .nm { flex: 1; min-width: 0; }
+.who .nm b { display: block; font-size: 16px; color: var(--ink); }
+.who .nm span { font-size: 13px; color: var(--ink-3); }
+.tg { width: 46px; height: 28px; border-radius: 14px; background: var(--line); position: relative; flex: none; transition: background .15s; }
+.tg i { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); transition: left .15s; }
+.tg.on { background: #34C759; }
+.tg.on i { left: 21px; }
+.tg.lock { opacity: .5; }
 /* baseball instincts */
 .iq-hero { background: var(--navy); color: #FFFFFF; border-radius: var(--radius); padding: 18px 16px; display: flex; gap: 14px; align-items: center; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%); }
 .iq-hero img { width: 64px; height: auto; flex: none; }
@@ -1105,12 +1154,14 @@ body.viewer-on { overflow: hidden; }
       }, () => { X.worker = null; });
     } else if (!(X.isAdmin || X.isCamera) && WorkerSub) { WorkerSub(); WorkerSub = null; X.worker = null; }
     if (chatAllowed() && !Chat.sub) chatSubscribe();
+    feesSync();
     if (chatAllowed() && pushLocal() && !Push.listening && 'Notification' in window && Notification.permission === 'granted') pushMessaging().catch(() => {});
     else if (!chatAllowed() && Chat.sub) { Chat.sub(); Chat.sub = null; Chat.list = []; Chat.loaded = false; }
     if (X.isAdmin && !MembersSub) {
       MembersSub = FB.F.onSnapshot(FB.F.collection(FB.fs, 'members'), (q) => {
         X.members = q.docs.map((d) => Object.assign({ uid: d.id }, d.data()));
         scheduleRender();
+        if (UI.sheet && ['member', 'feeWho', 'feeDetail'].includes(UI.sheet.type)) renderSheet();
       }, () => { X.members = []; });
     } else if (!X.isAdmin && MembersSub) { MembersSub(); MembersSub = null; X.members = []; }
     scheduleRender();
@@ -1233,6 +1284,208 @@ body.viewer-on { overflow: hidden; }
     if (pending.length) h += `<h2 class="sec">Waiting for approval (${pending.length})</h2><div class="card roster">${pending.map((m) => `<div class="player" style="cursor:default"><span class="no" style="font-size:14px">NEW</span><span style="min-width:0"><span class="nm">${esc(memberLabel(m))}</span><span class="meta">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}</span></span><span class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm primary" data-act="memberSet" data-uid="${esc(m.uid)}" data-status="approved">Approve</button><button class="btn sm" data-act="memberSet" data-uid="${esc(m.uid)}" data-status="denied">Deny</button></span></div>`).join('')}</div>`;
     if (others.length) h += `<div class="card roster">${others.map((m) => { const own = m.uid === X.owner; const chip = own ? 'Owner' : m.status === 'denied' ? 'Declined' : m.role === 'admin' ? 'Coach' : m.role === 'camera' ? 'Camera' : 'Family'; return `<button class="player" data-act="member" data-uid="${esc(m.uid)}"><span class="no" style="font-size:14px">${{ Family: 'FAM', Declined: '—', Camera: 'CAM' }[chip] || 'CO'}</span><span style="min-width:0"><span class="nm">${esc(memberLabel(m))}</span><span class="meta">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}</span></span><span class="chip">${chip}</span></button>`; }).join('')}</div>`;
     return h;
+  }
+
+  // ---------- Tournament fees ----------
+  // fees/{id}: a tournament fee (amount in cents, who owes it). fees/{id}/pay/{playerId}: that
+  // player's payment: 'claimed' (the family says they paid with Venmo or Cash App, a coach
+  // confirms) or 'paid'. Card payments are recorded by the Worker after Stripe confirms them.
+  // The owner, and anyone the owner turns on, sees everything; a family sees only their own player.
+  const Fees = { list: {}, pays: {}, cfg: null, subs: null, paySubs: new Map(), mode: '', loaded: false, pending: null, busy: '', status: null, returnSession: '', verifying: false };
+  const PAY_NAME = { venmo: 'Venmo', cashapp: 'Cash App', card: 'Card' };
+  function feesAllowed() { return Backend.kind === 'fb' && !!Access.user && (Access.isApproved || Access.isOwner); }
+  function feeAccess() { return feesAllowed() && (Access.isOwner || (Access.isApproved && !!Access.member && Access.member.fees === true)); }
+  function myPlayers() { return Access.isApproved && Access.member && Array.isArray(Access.member.players) ? Access.member.players : []; }
+  const fmtMoney = (c) => '$' + (c % 100 ? (c / 100).toFixed(2) : String(Math.round(c / 100)));
+  const fmtDue = (d) => (/^\d{4}-\d{2}-\d{2}$/.test(String(d || '')) ? parseDate(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
+  const feeSort = (a, b) => String(a.due || '9999').localeCompare(String(b.due || '9999')) || String(a.name || '').localeCompare(String(b.name || ''));
+  const playerName = (pid) => { const p = playerById(pid); return p ? p.name : 'Former player'; };
+  const feeName = (n) => { const t = String(n || '').trim().split(/\s+/); return t.length > 1 ? t[0] + ' ' + t[t.length - 1][0] + '.' : t[0] || ''; };
+  function payOf(feeId, pid) { return (Fees.pays[feeId] || {})[pid] || null; }
+  function feeSummary(f) {
+    let paid = 0, claimed = 0, got = 0, cardN = 0, cardAmt = 0;
+    for (const pid of f.players || []) {
+      const p = payOf(f.id, pid);
+      if (p && p.status === 'paid') { paid++; got += Number(p.amount) || f.amount; if (p.method === 'card') { cardN++; cardAmt += Number(p.amount) || f.amount; } }
+      else if (p && p.status === 'claimed') claimed++;
+    }
+    const n = (f.players || []).length;
+    // Stripe's standard US price: 2.9% + 30¢ per card payment.
+    const cardFee = Math.round(cardAmt * 0.029) + cardN * 30;
+    return { n, paid, claimed, got, due: n * f.amount, cardN, cardFee };
+  }
+  // Keeps the fee data in sync with who's signed in and what they're allowed to see.
+  function feesSync() {
+    if (!feesAllowed()) {
+      if (Fees.subs) { Fees.subs.forEach((u) => u()); Fees.subs = null; }
+      for (const u of Fees.paySubs.values()) u();
+      Fees.paySubs.clear(); Fees.list = {}; Fees.pays = {}; Fees.cfg = null; Fees.loaded = false; Fees.mode = '';
+      return;
+    }
+    if (!Fees.subs) {
+      Fees.subs = [
+        FB.F.onSnapshot(FB.F.collection(FB.fs, 'fees'), (q) => {
+          const next = {};
+          for (const d of q.docs) { const x = d.data() || {}; next[d.id] = { id: d.id, name: String(x.name || 'Tournament'), when: String(x.when || ''), where: String(x.where || ''), amount: Math.round(Number(x.amount) || 0), due: String(x.due || ''), players: Array.isArray(x.players) ? x.players : [], createdAt: Number(x.createdAt) || 0 }; }
+          Fees.list = next; Fees.loaded = true;
+          paySync(); scheduleRender();
+        }, () => { Fees.loaded = true; scheduleRender(); }),
+        FB.F.onSnapshot(FB.F.doc(FB.fs, 'config', 'pay'), (s) => { const x = s.exists() ? s.data() : null; Fees.cfg = x ? { venmo: String(x.venmo || ''), cashapp: String(x.cashapp || ''), card: x.card === true } : { venmo: '', cashapp: '', card: false }; scheduleRender(); }, () => { Fees.cfg = { venmo: '', cashapp: '', card: false }; })
+      ];
+    }
+    paySync();
+    if (Fees.returnSession && !Fees.verifying) payVerify();
+  }
+  // Fee managers watch every fee's payments; a family watches only their own players' docs.
+  function paySync() {
+    const mode = feeAccess() ? 'all' : 'mine:' + myPlayers().join(',');
+    if (mode !== Fees.mode) { for (const u of Fees.paySubs.values()) u(); Fees.paySubs.clear(); Fees.pays = {}; Fees.mode = mode; }
+    const want = new Map();
+    for (const f of Object.values(Fees.list)) {
+      if (mode === 'all') want.set(f.id, () => FB.F.onSnapshot(FB.F.collection(FB.fs, 'fees', f.id, 'pay'), (q) => { const m = {}; for (const d of q.docs) m[d.id] = d.data(); Fees.pays[f.id] = m; scheduleRender(); }, () => {}));
+      else for (const pid of myPlayers()) if (f.players.includes(pid)) want.set(f.id + '/' + pid, () => FB.F.onSnapshot(FB.F.doc(FB.fs, 'fees', f.id, 'pay', pid), (s) => { const m = Fees.pays[f.id] || (Fees.pays[f.id] = {}); if (s.exists()) m[pid] = s.data(); else delete m[pid]; scheduleRender(); }, () => {}));
+    }
+    for (const [k, u] of Fees.paySubs) if (!want.has(k)) { u(); Fees.paySubs.delete(k); }
+    for (const [k, mk] of want) if (!Fees.paySubs.has(k)) Fees.paySubs.set(k, mk());
+  }
+  function venmoLink(f, pid) {
+    const u = String(Fees.cfg.venmo || '').replace(/^@/, '').trim();
+    return 'https://venmo.com/' + encodeURIComponent(u) + '?txn=pay&amount=' + (f.amount / 100).toFixed(2) + '&note=' + encodeURIComponent(f.name + ' · ' + feeName(playerName(pid)));
+  }
+  function cashLink(f) {
+    const t = String(Fees.cfg.cashapp || '').replace(/^\$/, '').trim();
+    return 'https://cash.app/$' + encodeURIComponent(t) + '/' + (f.amount % 100 ? (f.amount / 100).toFixed(2) : String(f.amount / 100));
+  }
+  // What a family owes: one entry per fee and linked player.
+  function myFees() {
+    const out = [];
+    for (const f of Object.values(Fees.list).sort(feeSort)) for (const pid of myPlayers()) if (f.players.includes(pid)) out.push({ f, pid, pay: payOf(f.id, pid) });
+    return out;
+  }
+  function yourFeesHTML() {
+    if (!feesAllowed() || !myPlayers().length) return '';
+    const all = myFees();
+    if (!all.length) return '';
+    const cfg = Fees.cfg || {};
+    const open = all.filter((x) => !(x.pay && x.pay.status === 'paid'));
+    const done = all.filter((x) => x.pay && x.pay.status === 'paid');
+    let h = `<h2 class="sec" id="your-fees">Your fees</h2>`;
+    for (const { f, pid, pay } of open) {
+      const key = f.id + '/' + pid;
+      const due = fmtDue(f.due);
+      let body;
+      if (pay && pay.status === 'claimed') {
+        body = `<div class="row"><span class="fee-chip st-says">You said you paid · ${esc(PAY_NAME[pay.method] || '')}</span><span class="grow"></span><button class="btn ghost sm" data-act="payUnclaim" data-fee="${esc(f.id)}" data-pid="${esc(pid)}">Undo</button></div><div class="small muted">A coach will confirm it shortly.</div>`;
+      } else {
+        const btns = [];
+        if (cfg.venmo) btns.push(`<a class="btn primary full" href="${esc(venmoLink(f, pid))}" target="_blank" rel="noopener" data-paylink="venmo" data-fee="${esc(f.id)}" data-pid="${esc(pid)}">Pay with Venmo</a>`);
+        if (cfg.cashapp) btns.push(`<a class="btn full ${btns.length ? 'paybtn' : 'primary'}" href="${esc(cashLink(f))}" target="_blank" rel="noopener" data-paylink="cashapp" data-fee="${esc(f.id)}" data-pid="${esc(pid)}">Pay with Cash App</a>`);
+        if (cfg.card && workerUrl()) btns.push(`<button class="btn full ${btns.length ? 'paybtn' : 'primary'}" data-act="payCard" data-fee="${esc(f.id)}" data-pid="${esc(pid)}" ${Fees.busy === key ? 'disabled' : ''}>${Fees.busy === key ? 'Opening checkout…' : 'Pay ' + fmtMoney(f.amount) + ' with card or Apple Pay'}</button>`);
+        const note = esc(f.name + ' · ' + feeName(playerName(pid)));
+        body = btns.length ? btns.join('') + `<div class="small muted">${cfg.venmo ? 'Venmo opens with the amount and note filled in. ' : ''}${cfg.cashapp ? 'In Cash App, type “' + note + '” in the note.' : ''}</div>` + (cfg.venmo || cfg.cashapp ? `<div class="hr"></div><div class="row"><span class="grow small">Already paid with ${cfg.venmo && cfg.cashapp ? 'Venmo or Cash App' : cfg.venmo ? 'Venmo' : 'Cash App'}?</span><button class="btn sm" data-act="payClaim" data-fee="${esc(f.id)}" data-pid="${esc(pid)}">I paid</button></div>` : '')
+          : '<div class="small muted">Your coach hasn’t set up payments yet.</div>';
+      }
+      h += `<section class="card fee"><div class="fee-top"><div class="grow"><b>${esc(f.name)}</b><span class="small">${esc([f.when, f.where].filter(Boolean).join(' · '))}</span></div>${due ? `<span class="due">Due ${esc(due)}</span>` : ''}</div>
+        <div class="amt"><b>${esc(fmtMoney(f.amount))}</b><span>for ${esc(playerName(pid))}</span></div>${body}</section>`;
+    }
+    if (done.length) h += `<section class="card fee-done">${done.map(({ f, pid, pay }) => `<div class="prow"><span class="nm">${esc(f.name)}<small>${esc(feeName(playerName(pid)))} · ${esc(fmtMoney(Number(pay.amount) || f.amount))}</small></span><span class="fee-chip st-paid">Paid ✓ · ${esc(PAY_NAME[pay.method] || '')}</span></div>`).join('')}</section>`;
+    return h + `<p class="small muted" style="margin:2px 4px 0">Only you and the coaches handling fees see this.</p>`;
+  }
+  // A short note on the Games tab when something is due.
+  function feeBanner() {
+    if (!feesAllowed()) return '';
+    const open = myFees().filter((x) => !x.pay);
+    if (!open.length) return '';
+    const x = open[0];
+    const due = fmtDue(x.f.due);
+    return `<div class="banner fee-banner"><span class="grow"><b>${esc(x.f.name)} fee:</b> ${esc(fmtMoney(x.f.amount))} for ${esc(feeName(playerName(x.pid)))}${due ? ' is due ' + esc(due) : ''}${open.length > 1 ? ` (+${open.length - 1} more)` : ''}.</span><button class="btn sm primary" data-act="goFees">Pay</button></div>`;
+  }
+  function feeCardHTML(f) {
+    const s = feeSummary(f);
+    const due = fmtDue(f.due);
+    return `<button class="card fee-sum" data-act="feeOpen" data-id="${esc(f.id)}"><div class="fee-top"><div class="grow"><b>${esc(f.name)}</b><span class="small">${esc(fmtMoney(f.amount))} per player${due ? ' · due ' + esc(due) : ''}${f.when ? ' · ' + esc(f.when) : ''}</span></div><span class="fee-go">›</span></div>
+      <div class="sum-nums"><div><b>${s.paid} of ${s.n}</b><span>paid</span></div><div><b>${esc(fmtMoney(s.got))} of ${esc(fmtMoney(s.due))}</b><span>collected</span></div></div>
+      ${feeBar(s)}${s.claimed ? `<div class="small" style="color:#C08A0A;font-weight:700">${s.claimed} say${s.claimed === 1 ? 's' : ''} they paid. Tap to confirm.</div>` : ''}</button>`;
+  }
+  const feeBar = (s) => `<div class="fee-bar"><i style="width:${s.n ? (s.paid * 100 / s.n).toFixed(1) : 0}%;background:var(--good)"></i><i style="width:${s.n ? (s.claimed * 100 / s.n).toFixed(1) : 0}%;background:#F2C94C"></i></div>`;
+  function feesHTML() {
+    if (!feeAccess()) return '';
+    const fees = Object.values(Fees.list).sort(feeSort);
+    let h = `<h2 class="sec" id="fees">Fees <button class="btn ghost sm" data-act="feeEdit">+ Tournament</button></h2>`;
+    if (!Fees.loaded) h += '<div class="card empty" style="padding:18px"><p>Loading fees…</p></div>';
+    else if (!fees.length) h += `<div class="card empty" style="padding:20px"><p>Add a tournament fee, and families can pay it from the app. You’ll see who has paid.</p><button class="btn primary" data-act="feeEdit">+ Tournament fee</button></div>`;
+    else h += `<div class="stack" style="gap:10px">${fees.map(feeCardHTML).join('')}</div>`;
+    if (Access.isOwner) {
+      const c = Fees.cfg || {};
+      const ways = [c.venmo ? 'Venmo @' + c.venmo.replace(/^@/, '') : '', c.cashapp ? 'Cash App $' + c.cashapp.replace(/^\$/, '') : '', c.card ? 'Card & Apple Pay' : ''].filter(Boolean);
+      const who = Access.members.filter((m) => m.status === 'approved' && m.fees === true && m.uid !== Access.owner).map(memberLabel);
+      h += `<section class="card stack fee-set" style="padding:14px">
+        <div class="row"><div class="grow"><b>How families pay</b><div class="small muted">${ways.length ? esc(ways.join(' · ')) : 'Not set up yet. Add your Venmo or Cash App, or turn on card payments.'}</div></div><button class="btn sm${ways.length ? '' : ' primary'}" data-act="paySetup">${ways.length ? 'Change' : 'Set up'}</button></div>
+        <div class="hr"></div>
+        <div class="row"><div class="grow"><b>Who can see fees</b><div class="small muted">${esc(['You'].concat(who).join(', '))}</div></div><button class="btn sm" data-act="feeWho">Change</button></div></section>`;
+    }
+    return h;
+  }
+  function feeDetailHTML(f) {
+    const s = feeSummary(f);
+    const due = fmtDue(f.due);
+    const linked = (pid) => Access.isAdmin ? Access.members.some((m) => m.status === 'approved' && Array.isArray(m.players) && m.players.includes(pid)) : true;
+    const rows = f.players.map((pid) => ({ pid, p: playerById(pid), pay: payOf(f.id, pid) }))
+      .sort((a, b) => ((a.pay ? (a.pay.status === 'paid' ? 2 : 0) : 1) - (b.pay ? (b.pay.status === 'paid' ? 2 : 0) : 1)) || String(a.p ? a.p.name : '').localeCompare(String(b.p ? b.p.name : '')));
+    let h = `<div class="row" style="margin-bottom:4px"><button class="btn ghost sm" data-act="feeBack">‹ Fees</button><span class="grow"></span><button class="btn sm" data-act="feeEdit" data-id="${esc(f.id)}">Edit</button></div>
+      <section class="card sum"><div class="fee-top"><div class="grow"><b style="font-size:22px">${esc(f.name)}</b><span class="small">${esc(fmtMoney(f.amount))} per player${due ? ' · due ' + esc(due) : ''}${f.when || f.where ? ' · ' + esc([f.when, f.where].filter(Boolean).join(' · ')) : ''}</span></div></div>
+      <div class="sum-nums"><div><b>${s.paid} of ${s.n}</b><span>paid</span></div><div><b>${esc(fmtMoney(s.got))} of ${esc(fmtMoney(s.due))}</b><span>collected</span></div></div>${feeBar(s)}
+      ${s.cardN ? `<div class="small muted">Card fees about ${esc(fmtMoney(s.cardFee))} · about <b style="color:var(--ink)">${esc(fmtMoney(s.got - s.cardFee))}</b> after fees</div>` : ''}
+      ${s.claimed ? `<div class="small" style="color:#C08A0A;font-weight:700">${s.claimed} say${s.claimed === 1 ? 's' : ''} they paid. Check your ${Fees.cfg && Fees.cfg.venmo && Fees.cfg.cashapp ? 'Venmo or Cash App' : Fees.cfg && Fees.cfg.cashapp ? 'Cash App' : 'Venmo'}, then tap Confirm.</div>` : ''}
+      ${s.n - s.paid - s.claimed > 0 && workerUrl() ? `<div><button class="btn sm" data-act="feeRemind" data-id="${esc(f.id)}" ${Fees.busy === 'remind' ? 'disabled' : ''}>${Fees.busy === 'remind' ? 'Sending…' : 'Remind everyone who hasn’t paid'}</button></div>` : ''}</section>
+      <section class="card rows">${rows.map(({ pid, p, pay }) => {
+        const st = !pay ? '<span class="fee-chip st-due">Not paid</span>' : pay.status === 'paid' ? `<span class="fee-chip st-paid">Paid · ${esc(PAY_NAME[pay.method] || '')}</span>` : `<span class="fee-chip st-says">Says paid · ${esc(PAY_NAME[pay.method] || '')}</span>`;
+        const quick = pay && pay.status === 'claimed' ? `<button class="btn sm primary" data-act="payConfirm" data-fee="${esc(f.id)}" data-pid="${esc(pid)}">Confirm</button>` : '';
+        return `<div class="prow" data-act="payRow" data-fee="${esc(f.id)}" data-pid="${esc(pid)}"><span class="nm">${p && p.num ? `<span class="muted">#${esc(p.num)}</span> ` : ''}${esc(p ? p.name : 'Former player')}${!pay && !linked(pid) ? '<small>No family account linked</small>' : ''}</span>${st}${quick}</div>`;
+      }).join('') || '<p class="muted small" style="margin:10px 0">Nobody owes this fee. Tap Edit to choose players.</p>'}</section>
+      <p class="small muted" style="margin:2px 4px">Tap a player to mark them paid, confirm, or send a reminder.${Access.isAdmin ? ' Link families to players by tapping their account under Team, Families & coaches.' : ''}</p>`;
+    return h;
+  }
+  // Coming back from Stripe checkout: ask the Worker to check the payment and record it.
+  async function payVerify() {
+    const sid = Fees.returnSession;
+    if (!sid || Fees.verifying || !workerUrl() || !Access.user) return;
+    Fees.verifying = true;
+    try {
+      const r = await workerPost({ task: 'pay-verify', session: sid });
+      Fees.returnSession = '';
+      if (r.ok && r.d.paid) toast('Payment received. Thank you!');
+      else if (r.ok) toast('Your card payment is still processing. It will show as paid once it goes through.');
+      else toast('We couldn’t check your card payment yet. It will show as paid once Stripe confirms it.');
+    } catch (e) { toast('We couldn’t check your card payment yet. It will show as paid once Stripe confirms it.'); }
+    Fees.verifying = false;
+    UI.tab = 'team';
+    render();
+  }
+  // Coming back from Venmo or Cash App: ask whether they finished paying.
+  document.addEventListener('visibilitychange', () => {
+    const p = Fees.pending;
+    if (document.visibilityState !== 'visible' || !p || Date.now() - p.at > 30 * 60 * 1000 || UI.sheet) return;
+    Fees.pending = null;
+    if (payOf(p.fee, p.pid)) return;
+    setTimeout(() => openSheet({ type: 'payClaim', fee: p.fee, pid: p.pid, method: p.method, back: true }), 400);
+  });
+  async function feeWrite(fn, okMsg) {
+    try { await fn(); if (okMsg) toast(okMsg); return true; }
+    catch (e) { toast(e && e.code === 'permission-denied' ? 'Not allowed. Check that the latest security rules are published in Firebase.' : 'Couldn’t save. Check your connection and try again.'); return false; }
+  }
+  const payDoc = (feeId, pid) => FB.F.doc(FB.fs, 'fees', feeId, 'pay', pid);
+  async function sendFeeReminder(feeId, players) {
+    if (Fees.busy) return;
+    Fees.busy = 'remind'; render();
+    try {
+      const r = await workerPost({ task: 'fee-remind', fee: feeId, players: players || undefined, back: location.origin + location.pathname });
+      if (r.ok) {
+        const n = r.d.reminded || 0, miss = r.d.noApp || [];
+        toast((n ? `Reminder sent to ${n} famil${n === 1 ? 'y' : 'ies'}.` : 'No reminders sent.') + (miss.length ? ` Couldn’t reach (no linked account or notifications off): ${miss.map(feeName).join(', ').replace(/\.$/, '')}.` : ''));
+      } else toast(r.d.error === 'not_configured' ? 'Your Worker needs FIREBASE_SERVICE_ACCOUNT to send reminders.' : r.d.error === 'not_allowed' ? 'Only people who can see fees can send reminders.' : 'Couldn’t send reminders. Paste the latest worker.js into Cloudflare and try again.');
+    } catch (e) { toast('Couldn’t send reminders. Check your connection.'); }
+    Fees.busy = ''; render();
   }
 
   // ---------- Team chat (one group conversation for everyone approved) ----------
@@ -1600,6 +1853,10 @@ body.viewer-on { overflow: hidden; }
   try { const t = localStorage.getItem('gs-baseball-tab'); if (t) UI.tab = t; } catch (e) { /* per-viewer convenience only */ }
   const hashTab = (location.hash || '').slice(1);
   if (['games', 'live', 'stats', 'scout', 'team', 'chat', 'iq'].includes(hashTab)) UI.tab = hashTab;
+  try {
+    const paidSession = new URLSearchParams(location.search).get('paid');
+    if (paidSession && /^cs_[A-Za-z0-9_]+$/.test(paidSession)) { Fees.returnSession = paidSession; UI.tab = 'team'; history.replaceState(null, '', location.pathname + '#team'); }
+  } catch (e) { /* not coming back from checkout */ }
 
   // ---------- storage backends ----------
   const LS_KEY = 'gs-baseball-v1';
@@ -1781,7 +2038,7 @@ body.viewer-on { overflow: hidden; }
     t.textContent = msg;
     t.hidden = false;
     clearTimeout(toastT);
-    toastT = setTimeout(() => { t.hidden = true; }, 2600);
+    toastT = setTimeout(() => { t.hidden = true; }, Math.min(8000, Math.max(2600, String(msg).length * 50)));
   }
   function syncPill() {
     const el = $('#sync');
@@ -2160,7 +2417,7 @@ body.viewer-on { overflow: hidden; }
     const finals = games.filter((g) => g.status === 'final').reverse();
     let w = 0, l = 0, t = 0, rf = 0, ra = 0;
     for (const g of finals) { const r = result(g); rf += r.us; ra += r.them; if (r.us > r.them) w++; else if (r.us < r.them) l++; else t++; }
-    let h = sampleBanner();
+    let h = sampleBanner() + feeBanner();
     const next = upcoming[0];
     h += `<section class="board season"><span class="lbl">Season record</span>
       <span class="rec num">${w}<small>–</small>${l}${t ? '<small>–</small>' + t : ''}</span>
@@ -2756,8 +3013,11 @@ body.viewer-on { overflow: hidden; }
   // ----- team -----
   function renderTeam() {
     const t = Data.team;
-    let h = sampleBanner();
+    if (UI.feeId && Fees.list[UI.feeId] && feeAccess()) return feeDetailHTML(Fees.list[UI.feeId]);
+    UI.feeId = null;
+    let h = sampleBanner() + yourFeesHTML();
     h += `<section class="card brand-card"><div class="logo-tile"><img src="${LOGO}" alt="GS logo"></div><div class="stack" style="gap:4px;min-width:0"><h3>${esc(t.name)}</h3><span class="muted small">${t.players.length} player${t.players.length === 1 ? '' : 's'} · ${t.innings}-inning games · ${t.pitchLimit ? t.pitchLimit + '-pitch limit' : 'no pitch limit'}</span>${canEdit() ? '<div><button class="btn sm" data-act="teamEdit">Edit team settings</button></div>' : ''}</div></section>`;
+    h += feesHTML();
     h += `<h2 class="sec">Roster ${canEdit() ? '<button class="btn ghost sm" data-act="player">+ Add player</button>' : ''}</h2>`;
     if (!t.players.length) h += `<div class="card empty"><h3>Add your players</h3><p>Numbers, positions, and which side they hit from. Lineups and stats use this roster.</p>${canEdit() ? '<button class="btn primary" data-act="player">+ Add player</button>' : ''}</div>`;
     else h += `<div class="card roster">${sortedRoster().map((p) => `<button class="player" data-act="${canEdit() ? 'player' : 'playerCard'}" data-id="${esc(p.id)}"><span class="no">${esc(p.num || '–')}</span><span style="min-width:0"><span class="nm">${esc(p.name)}</span> ${p.sample ? '<span class="chip sample">Sample</span>' : ''}<span class="meta">${esc(p.pos || 'Position not set')} · B/T ${esc(p.bats || '?')}/${esc(p.throws || '?')}</span></span><span class="meta">${canEdit() ? 'Edit' : ''}</span></button>`).join('')}</div>`;
@@ -2821,6 +3081,74 @@ body.viewer-on { overflow: hidden; }
   }
 
   const SHEETS = {
+    fee(sh) {
+      const roster = sortedRoster();
+      const on = new Set(sh.players);
+      return head(sh.id ? 'Edit tournament fee' : 'New tournament fee') + `
+        <label><span class="field-lbl">Tournament</span>${inp('f.name', sh.f.name, 'placeholder="Fall Classic" autocomplete="off"')}</label>
+        <div class="grid2"><label><span class="field-lbl">Amount per player</span>${inp('f.amount', sh.f.amount, 'inputmode="decimal" placeholder="45" autocomplete="off"')}</label>
+        <label><span class="field-lbl">Due</span>${inp('f.due', sh.f.due, 'type="date"')}</label></div>
+        <div class="grid2"><label><span class="field-lbl">Dates (optional)</span>${inp('f.when', sh.f.when, 'placeholder="Oct 18–19" autocomplete="off"')}</label>
+        <label><span class="field-lbl">Where (optional)</span>${inp('f.where', sh.f.where, 'placeholder="Cartersville" autocomplete="off"')}</label></div>
+        <div><div class="row" style="margin-bottom:6px"><span class="field-lbl grow" style="margin:0">Who owes it (${on.size} of ${roster.length})</span><button class="btn ghost sm" data-act="feeAll" data-v="${on.size === roster.length ? 'none' : 'all'}">${on.size === roster.length ? 'Clear all' : 'Select all'}</button></div>
+        ${roster.length ? `<div class="pick-chips">${roster.map((p) => `<button class="pick${on.has(p.id) ? ' on' : ''}" data-act="feePlayer" data-id="${esc(p.id)}" aria-pressed="${on.has(p.id)}">${p.num ? '#' + esc(p.num) + ' ' : ''}${esc(p.name)}</button>`).join('')}</div>` : '<p class="small muted" style="margin:0">Add players to the roster first.</p>'}</div>
+        ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
+        <div class="row"><button class="btn primary" data-act="feeSave">${sh.id ? 'Save' : 'Add fee'}</button>${sh.id ? '<button class="btn danger" data-act="feeDelete">Delete fee</button>' : '<button class="btn" data-act="close">Cancel</button>'}</div>`;
+    },
+    paySetup(sh) {
+      const st = sh.status;
+      const stTxt = !st ? '' : st.busy ? 'Checking…' : st.err ? st.err : !st.card ? 'Your Worker doesn’t have STRIPE_SECRET_KEY yet. Add it first (see the setup steps).' : `Card payments are ready${st.mode === 'test' ? ' in <b>test mode</b> (no real money moves)' : ''}.${st.webhook ? '' : ' Add the Stripe webhook too, so payments show up even if a family closes the page early.'}`;
+      return head('How families pay') + `
+        <p class="small muted" style="margin:0">Families see a button for each way you turn on here. Only your fee list shows who has paid.</p>
+        <label><span class="field-lbl">Venmo username</span>${inp('venmo', sh.venmo, 'placeholder="your-venmo-name" autocomplete="off" autocapitalize="off" spellcheck="false"')}</label>
+        <label><span class="field-lbl">Cash App $cashtag</span>${inp('cashapp', sh.cashapp, 'placeholder="$yourcashtag" autocomplete="off" autocapitalize="off" spellcheck="false"')}</label>
+        <div><span class="field-lbl">Card &amp; Apple Pay (Stripe)</span>${segB('paySetCard', sh.card ? 'on' : 'off', [['off', 'Off'], ['on', 'On']])}</div>
+        <div class="small muted">Stripe keeps 2.9% + 30¢ of each card payment and sends the rest to your bank. Card payments are marked paid automatically.</div>
+        ${workerUrl() ? `<div class="row"><button class="btn sm" data-act="payStatusCheck">Check card setup</button></div>` : '<div class="warn-text">Set up the Cloudflare Worker first (Team, Cloudflare Worker).</div>'}
+        ${stTxt ? `<div class="small" style="${st && st.card && !st.err ? 'color:var(--good);font-weight:600' : ''}">${stTxt}</div>` : ''}
+        ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
+        <div class="row"><button class="btn primary" data-act="paySetupSave">Save</button><button class="btn" data-act="close">Cancel</button></div>`;
+    },
+    feeWho() {
+      const list = Access.members.filter((m) => m.status === 'approved' && m.uid !== Access.owner).sort((a, b) => (a.role === b.role ? memberLabel(a).localeCompare(memberLabel(b)) : a.role === 'admin' ? -1 : 1));
+      return head('Who can see fees') + `<p class="small muted" style="margin:0">Only the people turned on here see the fee list and who has paid. Families who are off still see their own player’s fees so they can pay.</p>
+        <div class="card" style="padding:4px 14px;box-shadow:none"><div class="who"><span class="nm"><b>You</b><span>Owner · always</span></span><span class="tg on lock" aria-hidden="true"><i></i></span></div>
+        ${list.map((m) => `<button class="who" data-act="feeWhoToggle" data-uid="${esc(m.uid)}" aria-pressed="${m.fees === true}"><span class="nm"><b>${esc(memberLabel(m))}</b><span>${m.role === 'admin' ? 'Coach' : m.role === 'camera' ? 'Camera operator' : 'Family'}</span></span><span class="tg${m.fees === true ? ' on' : ''}" aria-hidden="true"><i></i></span></button>`).join('')}</div>
+        ${list.length ? '' : '<p class="small muted" style="margin:0">Approved coaches and families show up here.</p>'}
+        <div class="row"><button class="btn" data-act="close">Done</button></div>`;
+    },
+    payClaim(sh) {
+      const f = Fees.list[sh.fee];
+      if (!f) return head('Fee') + '<p class="muted">This fee was removed.</p>';
+      const c = Fees.cfg || {};
+      const ways = [['venmo', 'Venmo'], ['cashapp', 'Cash App']].filter(([k]) => c[k]);
+      return head(sh.back ? 'Did you finish paying?' : 'How did you pay?') + `<p style="margin:0">${esc(f.name)} · ${esc(fmtMoney(f.amount))} for ${esc(playerName(sh.pid))}</p>
+        <div class="stack">${ways.map(([k, l]) => `<button class="btn ${sh.method === k || ways.length === 1 ? 'primary' : ''} full" data-act="payClaimSave" data-m="${k}">Yes, I paid with ${l}</button>`).join('')}
+        <button class="btn full" data-act="close">${sh.back ? 'Not yet' : 'Cancel'}</button></div>
+        <p class="small muted" style="margin:0">A coach checks for your payment and confirms it.</p>`;
+    },
+    payRow(sh) {
+      const f = Fees.list[sh.fee];
+      if (!f) return head('Fee') + '<p class="muted">This fee was removed.</p>';
+      const pay = payOf(f.id, sh.pid);
+      const p = playerById(sh.pid);
+      const when = (x) => { const t = x && x.at && typeof x.at.toMillis === 'function' ? x.at.toMillis() : Number(x && x.at) || 0; return t ? new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''; };
+      let h = head(esc(p ? (p.num ? '#' + p.num + ' ' : '') + p.name : 'Former player')) + `<div class="small muted" style="margin-top:-8px">${esc(f.name)} · ${esc(fmtMoney(f.amount))}</div>`;
+      if (pay && pay.status === 'paid') {
+        h += `<p style="margin:0"><span class="fee-chip st-paid">Paid · ${esc(PAY_NAME[pay.method] || '')}</span> ${esc(when(pay))}${pay.note ? ' · ' + esc(pay.note) : ''}</p>`;
+        if (pay.method === 'card') h += Access.isOwner ? `<p class="small muted" style="margin:0">To give this money back, refund it in your Stripe dashboard first, then remove it here.</p><div class="row"><button class="btn danger" data-act="payUnmark">Remove card payment</button></div>` : '<p class="small muted" style="margin:0">Card payments are recorded by Stripe. Only the owner can remove one (after refunding it).</p>';
+        else h += `<div class="row"><button class="btn danger" data-act="payUnmark">Mark not paid</button></div>`;
+        return h + '<div class="row"><button class="btn" data-act="close">Close</button></div>';
+      }
+      if (pay && pay.status === 'claimed') h += `<p style="margin:0"><span class="fee-chip st-says">Says paid · ${esc(PAY_NAME[pay.method] || '')}</span> ${esc(when(pay))}</p><p class="small muted" style="margin:0">Check your ${esc(PAY_NAME[pay.method] || '')} for ${esc(fmtMoney(f.amount))}, then confirm.</p>
+        <div class="row"><button class="btn primary" data-act="payConfirm" data-fee="${esc(f.id)}" data-pid="${esc(sh.pid)}">Confirm paid</button><button class="btn" data-act="payUnmark">Not received</button></div>`;
+      else {
+        h += `<div><span class="field-lbl">Mark paid with</span>${segB('payMarkHow', sh.how || '', [['venmo', 'Venmo'], ['cashapp', 'Cash App']])}</div>
+          <label><span class="field-lbl">Note (optional)</span>${inp('note', sh.note || '', 'placeholder="Paid Oct 12" autocomplete="off"')}</label>
+          <div class="row"><button class="btn primary" data-act="payMark" ${sh.how ? '' : 'disabled'}>Mark paid</button>${workerUrl() ? `<button class="btn" data-act="feeRemindOne" ${Fees.busy === 'remind' ? 'disabled' : ''}>Send a reminder</button>` : ''}</div>`;
+      }
+      return h;
+    },
     confirm(sh) {
       return head(esc(sh.title)) + `<p style="margin:0">${esc(sh.text)}</p><div class="row"><button class="btn ${sh.danger ? 'danger' : 'primary'}" data-act="confirmYes">${esc(sh.yes || 'Confirm')}</button><button class="btn" data-act="close">Cancel</button></div>`;
     },
@@ -3011,7 +3339,9 @@ body.viewer-on { overflow: hidden; }
         if (m.role !== 'parent' && m.status === 'approved' && !me) acts += `<button class="btn" data-act="memberRole" data-uid="${esc(m.uid)}" data-role="parent">Change to family (view only)</button>`;
         if (!me) acts += `<button class="btn danger" data-act="memberRemove" data-uid="${esc(m.uid)}">Remove access</button>`;
       }
-      return head(esc(memberLabel(m))) + `<div class="small muted" style="margin-top:-8px">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}</div><div class="stack">${acts}</div>`;
+      const roster = sortedRoster(), linked = Array.isArray(m.players) ? m.players : [];
+      const link = m.status === 'approved' && roster.length ? `<div><span class="field-lbl">Their player${linked.length === 1 ? '' : 's'}</span><div class="pick-chips">${roster.map((p) => `<button class="pick${linked.includes(p.id) ? ' on' : ''}" data-act="memberPlayer" data-uid="${esc(m.uid)}" data-id="${esc(p.id)}" aria-pressed="${linked.includes(p.id)}">${p.num ? '#' + esc(p.num) + ' ' : ''}${esc(p.name)}</button>`).join('')}</div><p class="small muted" style="margin:6px 0 0">Linked accounts see and can pay their player’s fees.</p></div>` : '';
+      return head(esc(memberLabel(m))) + `<div class="small muted" style="margin-top:-8px">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}</div>${link}<div class="stack">${acts}</div>`;
     },
     ai(sh) {
       const t = sh.test;
@@ -3589,6 +3919,7 @@ body.viewer-on { overflow: hidden; }
   const A = {
     tab(d) {
       UI.tab = d.tab;
+      UI.feeId = null;
       if (d.tab === 'games') UI.gameId = null;
       if (d.tab === 'chat') { Chat.forceBottom = true; Chat.delId = null; render(); return; }
       try { localStorage.setItem('gs-baseball-tab', d.tab); } catch (e) { /* ignore */ }
@@ -3624,6 +3955,132 @@ body.viewer-on { overflow: hidden; }
       window.scrollTo(0, 0);
     },
     iqQuit() { UI.iq = null; render(); window.scrollTo(0, 0); },
+    goFees() { UI.tab = 'team'; UI.feeId = null; render(); const el = document.getElementById('your-fees'); if (el) el.scrollIntoView({ block: 'start' }); else window.scrollTo(0, 0); },
+    feeOpen(d) { UI.feeId = d.id; render(); window.scrollTo(0, 0); },
+    feeBack() { UI.feeId = null; render(); const el = document.getElementById('fees'); if (el) el.scrollIntoView({ block: 'start' }); },
+    feeEdit(d) {
+      if (!feeAccess()) return;
+      const f = d.id ? Fees.list[d.id] : null;
+      openSheet({ type: 'fee', id: f ? f.id : null, f: f ? { name: f.name, amount: (f.amount / 100).toFixed(f.amount % 100 ? 2 : 0), due: f.due, when: f.when, where: f.where } : { name: '', amount: '', due: '', when: '', where: '' }, players: f ? f.players.slice() : sortedRoster().map((p) => p.id), err: '' });
+    },
+    feePlayer(d) { const sh = UI.sheet; const i = sh.players.indexOf(d.id); if (i >= 0) sh.players.splice(i, 1); else sh.players.push(d.id); renderSheet(); },
+    feeAll(d) { const sh = UI.sheet; sh.players = d.v === 'all' ? sortedRoster().map((p) => p.id) : []; renderSheet(); },
+    async feeSave() {
+      const sh = UI.sheet, f = sh.f;
+      const name = String(f.name || '').trim().slice(0, 60);
+      const amount = Math.round(parseFloat(String(f.amount || '').replace(/[$,\s]/g, '')) * 100);
+      if (!name) { sh.err = 'Enter the tournament name.'; return renderSheet(); }
+      if (!(amount >= 50 && amount <= 100000)) { sh.err = 'Enter the amount per player, like 45.'; return renderSheet(); }
+      const id = sh.id || uid('f');
+      const old = sh.id ? Fees.list[sh.id] : null;
+      const doc = { name, when: String(f.when || '').trim().slice(0, 40), where: String(f.where || '').trim().slice(0, 60), amount, due: /^\d{4}-\d{2}-\d{2}$/.test(String(f.due || '')) ? f.due : '', players: sh.players.slice(), createdAt: old ? old.createdAt || Date.now() : Date.now(), updatedAt: Date.now() };
+      const ok = await feeWrite(() => FB.F.setDoc(FB.F.doc(FB.fs, 'fees', id), doc), sh.id ? 'Fee updated' : 'Fee added');
+      if (!ok) return;
+      Fees.list[id] = Object.assign({ id }, doc);
+      closeSheet();
+      UI.feeId = id;
+      render();
+      window.scrollTo(0, 0);
+    },
+    feeDelete() {
+      const sh = UI.sheet;
+      const f = Fees.list[sh.id];
+      if (!f) return closeSheet();
+      const paid = feeSummary(f).paid;
+      confirmSheet('Delete ' + f.name + '?', paid ? `This also removes the record of ${paid} payment${paid === 1 ? '' : 's'}. Money already paid isn’t refunded.` : 'Families won’t see this fee anymore.', 'Delete fee', async () => {
+        const pays = Object.keys(Fees.pays[f.id] || {});
+        await Promise.all(pays.map((pid) => FB.F.deleteDoc(payDoc(f.id, pid)).catch(() => {})));
+        if (await feeWrite(() => FB.F.deleteDoc(FB.F.doc(FB.fs, 'fees', f.id)), 'Fee deleted')) { UI.feeId = null; render(); }
+      }, true);
+    },
+    async payCard(d) {
+      const key = d.fee + '/' + d.pid;
+      if (Fees.busy) return;
+      Fees.busy = key; render();
+      let msg = '';
+      try {
+        const r = await workerPost({ task: 'pay-card', fee: d.fee, player: d.pid, back: location.origin + location.pathname });
+        if (r.ok && r.d.url) { location.href = r.d.url; return; }
+        const c = r.d.error;
+        msg = c === 'already_paid' ? 'This fee is already paid.' : c === 'card_off' || c === 'card_not_configured' ? 'Card payments aren’t turned on right now. Ask your coach.' : c === 'not_approved' || c === 'not_allowed' ? 'Your account isn’t linked to this player. Ask a coach.' : c === 'signed_out' ? 'Sign in again, then try paying.' : 'Couldn’t open checkout. Check your connection and try again.';
+      } catch (e) { msg = 'Couldn’t open checkout. Check your connection and try again.'; }
+      Fees.busy = '';
+      render();
+      toast(msg);
+    },
+    payClaim(d) { openSheet({ type: 'payClaim', fee: d.fee, pid: d.pid, method: '', back: false }); },
+    async payClaimSave(d) {
+      const sh = UI.sheet;
+      const f = Fees.list[sh.fee];
+      if (!f) return closeSheet();
+      closeSheet();
+      await feeWrite(() => FB.F.setDoc(payDoc(f.id, sh.pid), { status: 'claimed', method: d.m, amount: f.amount, by: Access.user.uid, at: FB.F.serverTimestamp() }), 'Thanks! A coach will confirm it.');
+    },
+    async payUnclaim(d) { await feeWrite(() => FB.F.deleteDoc(payDoc(d.fee, d.pid)), 'Removed'); },
+    async payConfirm(d) {
+      if (UI.sheet && UI.sheet.type === 'payRow') closeSheet();
+      await feeWrite(() => FB.F.updateDoc(payDoc(d.fee, d.pid), { status: 'paid', confirmedBy: Access.user.uid, confirmedAt: Date.now() }), 'Confirmed');
+    },
+    payRow(d, el, ev) { if (ev && ev.target.closest('button')) return; if (feeAccess()) openSheet({ type: 'payRow', fee: d.fee, pid: d.pid, how: '', note: '' }); },
+    payMarkHow(d) { UI.sheet.how = d.v; renderSheet(); },
+    async payMark() {
+      const sh = UI.sheet;
+      const f = Fees.list[sh.fee];
+      if (!f || !sh.how) return;
+      const doc = { status: 'paid', method: sh.how, amount: f.amount, by: Access.user.uid, at: FB.F.serverTimestamp(), confirmedBy: Access.user.uid, confirmedAt: Date.now() };
+      const note = String(sh.note || '').trim().slice(0, 80);
+      if (note) doc.note = note;
+      closeSheet();
+      await feeWrite(() => FB.F.setDoc(payDoc(f.id, sh.pid), doc), 'Marked paid');
+    },
+    payUnmark() {
+      const sh = UI.sheet;
+      const f = Fees.list[sh.fee];
+      if (!f) return closeSheet();
+      const pay = payOf(f.id, sh.pid);
+      const go = async () => { await feeWrite(() => FB.F.deleteDoc(payDoc(f.id, sh.pid)), 'Marked not paid'); };
+      if (pay && pay.status === 'claimed') { closeSheet(); go(); return; }
+      confirmSheet('Mark ' + feeName(playerName(sh.pid)) + ' not paid?', pay && pay.method === 'card' ? 'Only do this after refunding the payment in Stripe.' : 'They’ll show as not paid again.', pay && pay.method === 'card' ? 'Remove card payment' : 'Mark not paid', go, true);
+    },
+    async feeRemind(d) { await sendFeeReminder(d.id, null); },
+    async feeRemindOne() { const sh = UI.sheet; closeSheet(); await sendFeeReminder(sh.fee, [sh.pid]); },
+    paySetup() {
+      if (!Access.isOwner) return;
+      const c = Fees.cfg || {};
+      openSheet({ type: 'paySetup', venmo: c.venmo || '', cashapp: c.cashapp ? '$' + c.cashapp.replace(/^\$/, '') : '', card: !!c.card, status: null, err: '' });
+      if (workerUrl()) A.payStatusCheck();
+    },
+    paySetCard(d) { UI.sheet.card = d.v === 'on'; renderSheet(); },
+    async payStatusCheck() {
+      const sh = UI.sheet;
+      sh.status = { busy: true }; renderSheet();
+      try { const r = await workerPost({ task: 'pay-status' }); sh.status = r.ok ? r.d : { err: r.d.error === 'not_configured' ? 'Your Worker needs FIREBASE_SERVICE_ACCOUNT first.' : 'Your Worker didn’t answer. Paste the latest worker.js into Cloudflare.' }; }
+      catch (e) { sh.status = { err: 'Couldn’t reach your Worker.' }; }
+      if (UI.sheet === sh) renderSheet();
+    },
+    async paySetupSave() {
+      const sh = UI.sheet;
+      const venmo = String(sh.venmo || '').trim().replace(/^@/, '').replace(/^https?:\/\/(account\.)?venmo\.com\/(u\/)?/i, '').replace(/[/?#].*$/, '');
+      const cashapp = String(sh.cashapp || '').trim().replace(/^https?:\/\/cash\.app\//i, '').replace(/^\$/, '').replace(/[/?#].*$/, '');
+      if (venmo && !/^[A-Za-z0-9_-]{2,40}$/.test(venmo)) { sh.err = 'That Venmo username doesn’t look right. Use letters, numbers, - or _.'; return renderSheet(); }
+      if (cashapp && !/^[A-Za-z0-9_-]{1,30}$/.test(cashapp)) { sh.err = 'That $cashtag doesn’t look right.'; return renderSheet(); }
+      if (sh.card && sh.status && sh.status.card === false) { sh.err = 'Add STRIPE_SECRET_KEY to your Worker before turning on cards.'; return renderSheet(); }
+      if (await feeWrite(() => FB.F.setDoc(FB.F.doc(FB.fs, 'config', 'pay'), { venmo, cashapp, card: !!sh.card }), 'Saved')) closeSheet();
+    },
+    feeWho() { if (Access.isOwner) openSheet({ type: 'feeWho' }); },
+    async feeWhoToggle(d) {
+      const m = Access.members.find((x) => x.uid === d.uid);
+      if (!m || !Access.isOwner) return;
+      await feeWrite(() => FB.F.updateDoc(FB.F.doc(FB.fs, 'members', d.uid), { fees: m.fees !== true }), m.fees === true ? memberLabel(m) + ' can’t see fees now' : memberLabel(m) + ' can see fees now');
+    },
+    async memberPlayer(d) {
+      const m = Access.members.find((x) => x.uid === d.uid);
+      if (!m) return;
+      const cur = Array.isArray(m.players) ? m.players.slice() : [];
+      const i = cur.indexOf(d.id);
+      if (i >= 0) cur.splice(i, 1); else cur.push(d.id);
+      await feeWrite(() => FB.F.updateDoc(FB.F.doc(FB.fs, 'members', d.uid), { players: cur }));
+    },
     openGame(d) { UI.tab = 'games'; UI.gameId = d.id; UI.gameTab = 'box'; render(); window.scrollTo(0, 0); },
     back() { UI.gameId = null; render(); },
     gameTab(d) { UI.gameTab = d.k; render(); },
@@ -4792,6 +5249,8 @@ body.viewer-on { overflow: hidden; }
 
   // ---------- events ----------
   document.addEventListener('click', (ev) => {
+    const pl = ev.target.closest('a[data-paylink]');
+    if (pl) { Fees.pending = { fee: pl.dataset.fee, pid: pl.dataset.pid, method: pl.dataset.paylink, at: Date.now() }; return; }
     const el = ev.target.closest('[data-act]');
     if (!el) return;
     if (el.disabled) return;
@@ -4881,6 +5340,7 @@ body.viewer-on { overflow: hidden; }
   function maybeReady() {
     if (Data.loaded.team && Data.loaded.games && Data.loaded.opps) UI.ready = true;
     if (UI.ready && Backend.kind === 'fb' && Access.evaluated && !restoreUnsynced.done) { restoreUnsynced.done = true; restoreUnsynced(); }
+    if (UI.ready && Fees.returnSession && !Fees.verifying && feesAllowed()) payVerify();
     scheduleRender();
     if (UI.sheet && UI.sheet.type === 'playerCard') renderSheet();
   }

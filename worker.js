@@ -9,13 +9,17 @@
 //                   messages and score changes and send phone notifications
 //   photos  team chat photos: store them in R2, hand out short-lived viewing links, delete them.
 //           Only signed-in, approved members can send or see them.
+//   fees    card payments for tournament fees through Stripe Checkout, the payment check when a
+//           family comes back from checkout, the Stripe webhook, and fee reminder notifications.
 //
 // Set these in the Worker's Settings -> Variables and Secrets:
 //   ACCESS_CODE        Secret  any passphrase you make up; coaches type it into the scorebook
 //   ANTHROPIC_API_KEY  Secret  your key from console.anthropic.com (roster photos, scouting reports)
 //   CF_STREAM_TOKEN    Secret  Cloudflare API token with Account > Stream > Edit (live video)
 //   CF_ACCOUNT_ID      Text    your Cloudflare account ID (live video)
-//   FIREBASE_SERVICE_ACCOUNT  Secret  the whole service-account .json file from Firebase (notifications, photos)
+//   FIREBASE_SERVICE_ACCOUNT  Secret  the whole service-account .json file from Firebase (notifications, photos, fees)
+//   STRIPE_SECRET_KEY  Secret  your Stripe secret key (card payments for fees)
+//   STRIPE_WEBHOOK_SECRET  Secret  signing secret of the Stripe webhook pointed at <worker>/stripe-webhook
 // and under Settings -> Bindings add an R2 bucket with the variable name PHOTOS (chat photos),
 // and under Settings -> Triggers add a Cron Trigger that runs every minute (* * * * *).
 //   ALLOWED_ORIGIN     Text    optional; defaults to the scorebook site and keubanks16.github.io
@@ -30,6 +34,8 @@ const MAX_IMAGES = 5;
 const MAX_IMAGE_B64 = 6000000; // about 4.5 MB per image
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const PHOTO_TASKS = ['photo-urls', 'photo-delete'];
+const PAY_TASKS = ['pay-card', 'pay-verify', 'pay-status', 'fee-remind'];
+const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_PHOTO_BYTES = 6 * 1024 * 1024; // the Hub shrinks photos to about 0.3-1 MB before sending
 const PHOTO_KEY = /^chat\/[a-f0-9]{32}\.jpg$/;
 
@@ -48,6 +54,8 @@ export default {
     const here = new URL(request.url);
     // Chat photos are shown with plain <img> links, so they're checked by a signature, not a sign-in.
     if (request.method === 'GET' && here.pathname.startsWith('/p/')) return photoServe(here, env);
+    // Stripe calls this directly (no browser), so it's checked by Stripe's signature instead.
+    if (request.method === 'POST' && here.pathname === '/stripe-webhook') return stripeWebhook(request, env);
     const origin = request.headers.get('Origin') || '';
     const allowed = String(env.ALLOWED_ORIGIN || DEFAULT_ORIGIN).split(',').map((s) => s.trim()).filter(Boolean);
     const originOk = allowed.includes(origin);
@@ -77,6 +85,7 @@ export default {
     }
     // Team members prove who they are with their Hub sign-in, not the coaches' access code.
     if (PHOTO_TASKS.includes(task)) return photoTask(task, request, body, env, reply, ctx, here.origin, allowed[0]);
+    if (PAY_TASKS.includes(task)) return payTask(task, request, body, env, reply, allowed);
     if (!env.ACCESS_CODE) return reply(500, { error: 'not_configured', detail: 'Add ACCESS_CODE as a secret.' });
     if (!sameText(request.headers.get('x-gs-code') || '', String(env.ACCESS_CODE))) return reply(401, { error: 'bad_code' });
     if (STREAM_TASKS.includes(task)) return stream(task, body, env, reply);
@@ -219,6 +228,11 @@ async function photoTask(task, request, body, env, reply, ctx, self, site) {
 }
 async function photoUser(request, env) {
   if (!env.PHOTOS || !env.FIREBASE_SERVICE_ACCOUNT) throw { status: 500, error: 'photos_not_configured' };
+  return hubUser(request, env);
+}
+// Who is asking: checks their Hub sign-in (a Firebase ID token) and their member record.
+async function hubUser(request, env) {
+  if (!env.FIREBASE_SERVICE_ACCOUNT) throw { status: 500, error: 'not_configured' };
   const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
   const m = /^Bearer\s+(\S+)$/.exec(request.headers.get('authorization') || '');
   if (!m) throw { status: 401, error: 'signed_out' };
@@ -229,7 +243,7 @@ async function photoUser(request, env) {
   const owner = !!(setup && setup.owner === uid);
   const approved = !!(member && member.status === 'approved');
   if (!owner && !approved) throw { status: 403, error: 'not_approved' };
-  return { uid, db, sa, admin: owner || (approved && member.role === 'admin'), name: member && member.name };
+  return { uid, db, sa, owner, member: member || {}, admin: owner || (approved && member.role === 'admin'), name: member && member.name };
 }
 // Checks a Firebase sign-in token against Google's published keys. Returns the user id, or null.
 let JWKS = null;
@@ -295,6 +309,143 @@ async function photoServe(url, env) {
 function hexRand(n) { return Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, '0')).join(''); }
 function b64urlBytes(s) { return Uint8Array.from(atob(String(s).replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((String(s).length + 3) % 4)), (c) => c.charCodeAt(0)); }
 
+// ---------- Tournament fees ----------
+// Families pay by card on Stripe's own checkout page. The app never sees card numbers. A payment
+// is recorded only after Stripe says it's paid: when the family comes back from checkout
+// (pay-verify) or when Stripe calls the webhook, whichever comes first.
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const money = (c) => '$' + (c % 100 ? (c / 100).toFixed(2) : String(c / 100));
+const dueText = (d) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d || '')); return m ? MONTHS[Number(m[2]) - 1] + ' ' + Number(m[3]) : ''; };
+// Where to send people back to: the page they came from, if it's one of this team's sites.
+function backUrl(back, allowed) {
+  try {
+    const u = new URL(String(back || ''));
+    if (allowed.includes(u.origin) && (u.protocol === 'https:' || u.hostname === 'localhost' || u.hostname === '127.0.0.1')) return u.origin + u.pathname;
+  } catch (e) { /* fall through */ }
+  return allowed[0] + '/';
+}
+async function payTask(task, request, body, env, reply, allowed) {
+  let u;
+  try { u = await hubUser(request, env); } catch (e) { return reply(e.status || 500, { error: e.error || 'upstream' }); }
+  const m = u.member || {};
+  const feeAccess = u.owner || (m.status === 'approved' && m.fees === true);
+  const mine = (pid) => Array.isArray(m.players) && m.players.includes(pid);
+  const stripe = (path, form) => fetch('https://api.stripe.com/v1/' + path, form
+    ? { method: 'POST', headers: { Authorization: 'Bearer ' + env.STRIPE_SECRET_KEY, 'content-type': 'application/x-www-form-urlencoded' }, body: form.toString() }
+    : { headers: { Authorization: 'Bearer ' + env.STRIPE_SECRET_KEY } });
+  try {
+    if (task === 'pay-status') {
+      if (!feeAccess) return reply(403, { error: 'not_allowed' });
+      const k = String(env.STRIPE_SECRET_KEY || '');
+      return reply(200, { card: !!k, mode: /^(sk|rk)_live_/.test(k) ? 'live' : k ? 'test' : '', webhook: !!env.STRIPE_WEBHOOK_SECRET });
+    }
+    if (task === 'pay-card') {
+      if (!env.STRIPE_SECRET_KEY) return reply(500, { error: 'card_not_configured' });
+      const feeId = String(body.fee || ''), pid = String(body.player || '');
+      if (!ID_RE.test(feeId) || !ID_RE.test(pid)) return reply(400, { error: 'bad_request' });
+      if (!mine(pid) && !feeAccess) return reply(403, { error: 'not_allowed' });
+      const [fee, paid, cfg, team] = await Promise.all([u.db.get('fees/' + feeId), u.db.get('fees/' + feeId + '/pay/' + pid), u.db.get('config/pay'), u.db.get('team/main')]);
+      if (!fee || !Array.isArray(fee.players) || !fee.players.includes(pid)) return reply(404, { error: 'no_fee' });
+      if (!cfg || cfg.card !== true) return reply(403, { error: 'card_off' });
+      if (paid && paid.status === 'paid') return reply(409, { error: 'already_paid' });
+      const amount = Math.round(Number(fee.amount));
+      if (!(amount >= 50 && amount <= 100000)) return reply(400, { error: 'bad_amount' });
+      const p = ((team && team.players) || []).find((x) => x.id === pid);
+      const label = String(fee.name || 'Tournament fee').slice(0, 80) + ' · ' + String((p && p.name) || 'Player').slice(0, 40);
+      const back = backUrl(body.back, allowed);
+      const f = new URLSearchParams();
+      f.set('mode', 'payment');
+      f.set('line_items[0][quantity]', '1');
+      f.set('line_items[0][price_data][currency]', 'usd');
+      f.set('line_items[0][price_data][unit_amount]', String(amount));
+      f.set('line_items[0][price_data][product_data][name]', label);
+      f.set('success_url', back + '?paid={CHECKOUT_SESSION_ID}#team');
+      f.set('cancel_url', back + '#team');
+      f.set('client_reference_id', u.uid);
+      for (const [k, v] of [['fee', feeId], ['player', pid], ['uid', u.uid]]) { f.set('metadata[' + k + ']', v); f.set('payment_intent_data[metadata][' + k + ']', v); }
+      f.set('payment_intent_data[description]', label);
+      if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(m.email || ''))) f.set('customer_email', m.email);
+      const r = await stripe('checkout/sessions', f);
+      const d = await r.json().catch(() => null);
+      if (!r.ok || !d || !d.url) return reply(502, { error: r.status === 401 ? 'stripe_key' : 'stripe_error', detail: d && d.error && d.error.message ? String(d.error.message).slice(0, 200) : '' });
+      return reply(200, { url: d.url, id: d.id });
+    }
+    if (task === 'pay-verify') {
+      if (!env.STRIPE_SECRET_KEY) return reply(500, { error: 'card_not_configured' });
+      const sid = String(body.session || '');
+      if (!/^cs_[A-Za-z0-9_]{8,200}$/.test(sid)) return reply(400, { error: 'bad_request' });
+      const r = await stripe('checkout/sessions/' + encodeURIComponent(sid));
+      const sess = await r.json().catch(() => null);
+      if (!r.ok || !sess) return reply(502, { error: 'stripe_error' });
+      return reply(200, await recordCardPayment(u.db, sess));
+    }
+    if (task === 'fee-remind') {
+      if (!feeAccess) return reply(403, { error: 'not_allowed' });
+      const feeId = String(body.fee || '');
+      if (!ID_RE.test(feeId)) return reply(400, { error: 'bad_request' });
+      const fee = await u.db.get('fees/' + feeId);
+      if (!fee || !Array.isArray(fee.players)) return reply(404, { error: 'no_fee' });
+      const [members, tokens, pays, team] = await Promise.all([u.db.list('members'), u.db.list('pushTokens'), u.db.list('fees/' + feeId + '/pay'), u.db.get('team/main')]);
+      const done = new Set(pays.filter((x) => x.status === 'paid').map((x) => x._id));
+      const want = (Array.isArray(body.players) ? body.players.map(String) : fee.players).filter((pid) => fee.players.includes(pid) && !done.has(pid));
+      const site = backUrl(body.back, allowed).replace(/\/$/, '');
+      const name = (pid) => { const p = ((team && team.players) || []).find((x) => x.id === pid); return (p && p.name) || 'your player'; };
+      const items = [], reached = [], noApp = [];
+      for (const pid of want) {
+        const fams = new Set(members.filter((x) => x.status === 'approved' && Array.isArray(x.players) && x.players.includes(pid)).map((x) => x._id));
+        const toks = tokens.filter((t) => t.token && fams.has(t.uid));
+        if (!toks.length) { noApp.push(name(pid)); continue; }
+        reached.push(pid);
+        const due = dueText(fee.due);
+        for (const t of toks) items.push({ id: t._id, token: t.token, title: 'Fee reminder: ' + String(fee.name || 'Tournament'), body: money(Number(fee.amount) || 0) + ' for ' + name(pid) + (due ? ' is due ' + due : ' is due') + '. Tap to pay.', tag: 'fee-' + feeId + '-' + pid, link: site + '/#team', icon: site + '/icons/icon-192.png' });
+      }
+      if (items.length) await sendItems(u.sa.project_id, await googleToken(u.sa), items.slice(0, 60), u.db);
+      return reply(200, { reminded: reached.length, noApp });
+    }
+    return reply(400, { error: 'bad_request' });
+  } catch (e) {
+    return reply(502, { error: 'upstream' });
+  }
+}
+// Records a paid Checkout Session on the fee. Safe to call more than once for the same session.
+async function recordCardPayment(db, s) {
+  const md = (s && s.metadata) || {};
+  if (!s || s.payment_status !== 'paid' || !ID_RE.test(String(md.fee || '')) || !ID_RE.test(String(md.player || ''))) return { paid: false };
+  const fee = await db.get('fees/' + md.fee);
+  if (!fee) return { paid: false };
+  const path = 'fees/' + md.fee + '/pay/' + md.player;
+  const cur = await db.get(path);
+  if (cur && cur.method === 'card' && cur.session === s.id) return { paid: true, fee: md.fee, player: md.player };
+  const ok = await db.set(path, { status: 'paid', method: 'card', amount: Math.round(Number(s.amount_total) || 0), by: String(md.uid || ''), session: String(s.id) }, 'at');
+  if (!ok) throw new Error('could not save the payment');
+  return { paid: true, fee: md.fee, player: md.player };
+}
+async function stripeWebhook(request, env) {
+  const raw = await request.text();
+  const res = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+  if (!env.STRIPE_WEBHOOK_SECRET || !env.FIREBASE_SERVICE_ACCOUNT) return res(500, { error: 'not_configured' });
+  let t = '';
+  const sigs = [];
+  for (const part of String(request.headers.get('stripe-signature') || '').split(',')) {
+    const i = part.indexOf('=');
+    const k = part.slice(0, i).trim(), v = part.slice(i + 1).trim();
+    if (k === 't') t = v; else if (k === 'v1') sigs.push(v);
+  }
+  if (!/^\d+$/.test(t) || Math.abs(Date.now() / 1000 - Number(t)) > 300 || !sigs.length) return res(400, { error: 'bad_signature' });
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(env.STRIPE_WEBHOOK_SECRET)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(t + '.' + raw)));
+  const want = Array.from(mac, (b) => b.toString(16).padStart(2, '0')).join('');
+  if (!sigs.some((x) => sameText(x, want))) return res(400, { error: 'bad_signature' });
+  let ev;
+  try { ev = JSON.parse(raw); } catch (e) { return res(400, { error: 'bad_request' }); }
+  if (ev && (ev.type === 'checkout.session.completed' || ev.type === 'checkout.session.async_payment_succeeded')) {
+    const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
+    try { await recordCardPayment(firestore(sa.project_id, await googleToken(sa)), ev.data && ev.data.object); }
+    catch (e) { return res(500, { error: 'upstream' }); } // Stripe retries later
+  }
+  return res(200, { received: true });
+}
+
 // ---------- Notifications ----------
 // Watches Firestore with the service account (which skips the security rules) and sends phone
 // notifications through Firebase Cloud Messaging. State lives in config/notify and is saved with
@@ -347,6 +498,13 @@ function firestore(pid, tok) {
       if (timeField) write.updateTransforms = [{ fieldPath: timeField, setToServerValue: 'REQUEST_TIME' }];
       const r = await fetch(base + ':commit', { method: 'POST', headers: H, body: JSON.stringify({ writes: [write] }) });
       return r.ok ? id : null;
+    },
+    // Writes the whole document at path; timeField (if given) is set to the server's clock.
+    async set(path, data, timeField) {
+      const write = { update: { name: 'projects/' + pid + '/databases/(default)/documents/' + path, fields: fsEnc(data).mapValue.fields } };
+      if (timeField) write.updateTransforms = [{ fieldPath: timeField, setToServerValue: 'REQUEST_TIME' }];
+      const r = await fetch(base + ':commit', { method: 'POST', headers: H, body: JSON.stringify({ writes: [write] }) });
+      return r.ok;
     },
     async del(path) { const r = await fetch(base + '/' + path, { method: 'DELETE', headers: H }).catch(() => null); return !!(r && (r.ok || r.status === 404)); },
     async query(col, field, op, value, order, limit) {

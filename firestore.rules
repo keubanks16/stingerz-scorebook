@@ -9,6 +9,10 @@ rules_version = '2';
 //   Camera  members/{uid} with role 'camera' and status 'approved'; views, streams games,
 //           and can attach a replay link to a game. Can't score or change anything else.
 //   Family  members/{uid} with role 'parent' and status 'approved'; view only.
+// Fees
+//   Only the owner, and anyone the owner turns on (members/{uid}.fees == true), can see the
+//   fee list and who has paid. Coaches don't get it automatically. A family sees only the pay
+//   status of the players a coach linked to their account (members/{uid}.players).
 // Who can watch
 //   config/access.publicView == true   anyone with the link can view, no sign-in.
 //   otherwise                          only approved families and coaches can view.
@@ -32,6 +36,8 @@ service cloud.firestore {
       return exists(docPath('config', 'access')) && get(docPath('config', 'access')).data.publicView == true;
     }
     function canView() { return publicView() || isApproved() || isAdmin(); }
+    function feeAccess() { return isOwner() || (isApproved() && myMember().get('fees', false) == true); }
+    function myPlayers() { return isApproved() ? myMember().get('players', []) : []; }
 
     // Who owns this scorebook. Claimable once, by the first signed-in account; never changed after.
     match /config/setup {
@@ -63,7 +69,10 @@ service cloud.firestore {
         && request.resource.data.role == 'parent'
         && request.resource.data.status == 'pending'
         && request.resource.data.keys().hasOnly(['name', 'email', 'note', 'role', 'status', 'createdAt']);
-      allow create, update, delete: if isAdmin();
+      // Coaches manage accounts, but only the owner decides who can see fees.
+      allow create: if isOwner() || (isAdmin() && !request.resource.data.keys().hasAny(['fees']));
+      allow update: if isOwner() || (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['fees']));
+      allow delete: if isAdmin();
     }
 
     // Team data: roster and settings, games, opponent rosters.
@@ -100,6 +109,46 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['uid', 'token', 'chat', 'scores', 'at'])
         && request.resource.data.scores in ['off', 'runs', 'all'];
       allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // Where families send money: the owner's Venmo and Cash App, and whether card payments are on.
+    match /config/pay {
+      allow read: if isApproved() || isAdmin();
+      allow write: if isOwner()
+        && request.resource.data.keys().hasOnly(['venmo', 'cashapp', 'card'])
+        && request.resource.data.venmo is string && request.resource.data.venmo.size() <= 40
+        && request.resource.data.cashapp is string && request.resource.data.cashapp.size() <= 40
+        && request.resource.data.card is bool;
+    }
+
+    // Tournament fees. Families can read a fee (name, amount, due date) so they can pay it.
+    match /fees/{id} {
+      allow read: if isApproved() || isAdmin();
+      allow create, update: if feeAccess()
+        && request.resource.data.keys().hasOnly(['name', 'when', 'where', 'amount', 'due', 'players', 'createdAt', 'updatedAt'])
+        && request.resource.data.amount is int && request.resource.data.amount > 0 && request.resource.data.amount <= 100000
+        && request.resource.data.players is list;
+      allow delete: if feeAccess();
+
+      // One doc per player who has paid or says they paid. Card payments are written only by
+      // the Worker after Stripe confirms them (it uses the service account, which skips these rules).
+      match /pay/{pid} {
+        allow read: if feeAccess() || pid in myPlayers();
+        allow create, update: if feeAccess()
+          && request.resource.data.keys().hasOnly(['status', 'method', 'amount', 'by', 'at', 'confirmedBy', 'confirmedAt', 'note'])
+          && request.resource.data.status in ['paid', 'claimed']
+          && request.resource.data.method in ['venmo', 'cashapp']
+          && (resource == null || resource.data.method != 'card');
+        // A family can only say they paid (a coach confirms), for their own player.
+        allow create: if pid in myPlayers()
+          && request.resource.data.keys().hasOnly(['status', 'method', 'amount', 'by', 'at'])
+          && request.resource.data.status == 'claimed'
+          && request.resource.data.method in ['venmo', 'cashapp']
+          && request.resource.data.by == request.auth.uid;
+        // A card payment stays recorded unless the owner removes it (after refunding it in Stripe).
+        allow delete: if isOwner() || (feeAccess() && resource.data.method != 'card')
+          || (pid in myPlayers() && resource.data.status == 'claimed');
+      }
     }
 
     // Team chat: one group conversation for signed-in, approved members (not link-only viewers).
