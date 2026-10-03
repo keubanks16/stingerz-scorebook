@@ -8,6 +8,7 @@ Score games pitch by pitch, keep box scores and season stats, chart spray charts
 |---|---|---|
 | Score games, edit rosters, scan rosters | Yes | No |
 | Follow games live, box scores, stats, scouting | Yes | Yes |
+| Watch the live video with the scoreboard on top | Yes | Yes |
 | Approve families, add coaches, change who can watch | Yes | No |
 
 - The **owner** is the first account created on the site. The owner is always an admin.
@@ -24,6 +25,19 @@ Score games pitch by pitch, keep box scores and season stats, chart spray charts
 3. **Publish the security rules.** In Firebase: **Databases & Storage → Firestore → Rules**. Replace everything with the contents of [`firestore.rules`](firestore.rules) and tap **Publish**.
 4. **Create the admin account.** Open the scorebook and tap **Create the admin account**. Do this before sharing the address, because the first account becomes the owner.
 5. **Bring over existing games** (optional). In the old copy, **Team → Export backup**. Here, **Team → Import backup**.
+
+## Live video
+
+During a live game, families see your YouTube stream on the Live tab with the scoreboard (score, inning, count, outs) on top of the video. YouTube runs 10 to 30 seconds behind real life, so each viewer can set **Score delay** under the video to hold the scoreboard back and avoid spoilers. Coaches always see the live score and can tap **Show video** on the Live tab.
+
+**One-time setup**
+
+1. **Get your channel ID.** In YouTube Studio: **Settings → Channel → Advanced settings**. It starts with `UC`. An `@name` link won't work for embedding.
+2. **Add it to the scorebook.** **Team → Live video → Set up**, paste the channel ID or `youtube.com/channel/UC…` link, and save.
+3. **Get your stream key.** In YouTube Studio on a computer: **Create → Go live → Stream**. Copy the **Stream URL** and **Stream key**. The key stays the same from game to game.
+4. **Set up a streaming app on the phone.** In an RTMP streaming app such as Larix Broadcaster, add a connection with the Stream URL and key (in Larix, the URL is the Stream URL followed by `/` and the key). Streaming this way doesn't need 50 subscribers; going live from the YouTube app does.
+
+**Each game:** start the stream from the streaming app. If the stream is **Public**, it shows up in the scorebook automatically. If it's **Unlisted**, the channel link can't find it, so paste that game's video link under the game's **Edit details**. That field is also where to put the replay link after the game.
 
 ## Claude connection
 

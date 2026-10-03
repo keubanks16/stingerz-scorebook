@@ -352,6 +352,17 @@ body.gated .tabs { display: none; }
 .gate .logo-tile { background: var(--navy); padding: 12px 14px; clip-path: polygon(var(--cut) 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, var(--cut) 100%, 0 calc(100% - var(--cut)), 0 var(--cut)); }
 .gate .logo-tile img { height: 56px; width: auto; display: block; }
 .gate p { max-width: 42ch; }
+.video-dock { max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: 16px 0; display: flex; flex-direction: column; gap: 8px; }
+.video-box { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; background: #000000; border-radius: 10px; overflow: hidden; }
+.video-box iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.bug { position: absolute; left: 8px; top: 8px; display: flex; align-items: stretch; gap: 0; background: rgba(4, 18, 45, .88); color: #FFFFFF; font-size: 13px; font-weight: 700; line-height: 1.15; pointer-events: none; clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px); font-variant-numeric: tabular-nums; }
+.bug > span { padding: 5px 8px; display: flex; align-items: center; gap: 4px; border-left: 1px solid rgba(255, 255, 255, .15); }
+.bug > span:first-child { border-left: 0; }
+.bug-teams { flex-direction: column; align-items: flex-start !important; gap: 1px !important; }
+.bug-teams b { color: #8FBDF0; margin-left: 4px; font-family: var(--font-display); font-weight: 400; }
+.bug-outs i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, .25); display: inline-block; }
+.bug-outs i.on { background: #FF6B5B; }
+.video-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .toast { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--ground); padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 15px; z-index: 50; max-width: calc(100% - 32px); box-shadow: var(--shadow); }
 .loading { padding: 60px 0; text-align: center; color: var(--ink-2); display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .loading img { height: 60px; width: auto; animation: pulse 1.4s infinite; }
@@ -377,6 +388,7 @@ body.gated .tabs { display: none; }
   <span class="pill" id="sync" data-s="saved" hidden>Saved</span>
 </div></header>
 
+<div id="video-dock" class="video-dock" hidden></div>
 <main id="view"><div class="loading"><div>Loading your team…</div></div></main>
 
 <nav class="tabs" aria-label="Sections"><div class="tabs-in" id="tabs">
@@ -1356,7 +1368,7 @@ body.gated .tabs { display: none; }
     const v = $('#view');
     const gated = Backend.kind === 'fb' && Access.evaluated && !Access.canView;
     document.body.classList.toggle('gated', gated);
-    if (gated) { v.innerHTML = renderGate(); return; }
+    if (gated) { v.innerHTML = renderGate(); renderDock(); return; }
     if (!UI.ready) { v.innerHTML = `<div class="loading"><img src="${LOGO}" alt=""><div>Loading your team…</div></div>`; return; }
     let h = '';
     try {
@@ -1370,6 +1382,7 @@ body.gated .tabs { display: none; }
       h = `<div class="card empty"><h3>Something went wrong showing this screen</h3><p>${esc(err && err.message)}</p></div>`;
     }
     v.innerHTML = h;
+    try { renderDock(); } catch (err) { console.error(err); }
   }
 
   function sampleBanner() {
@@ -1537,6 +1550,95 @@ body.gated .tabs { display: none; }
     if (b.K) extra.push(b.K > 1 ? b.K + ' K' : 'K');
     return `${b.H}-for-${b.AB} today${extra.length ? ', ' + extra.join(', ') : ''}`;
   }
+  // ----- live video -----
+  function videoEmbed(raw) {
+    const t = String(raw || '').trim();
+    if (!t) return null;
+    const yt = (id) => ({ kind: 'yt', src: 'https://www.youtube.com/embed/' + id + '?autoplay=1&mute=1&playsinline=1&rel=0', watch: 'https://www.youtube.com/watch?v=' + id });
+    const ch = (id) => ({ kind: 'yt', channel: true, src: 'https://www.youtube.com/embed/live_stream?channel=' + id + '&autoplay=1&mute=1&playsinline=1', watch: 'https://www.youtube.com/channel/' + id + '/live' });
+    let m = t.match(/^(UC[\w-]{22})$/);
+    if (m) return ch(m[1]);
+    let u;
+    try { u = new URL(/^https?:\/\//i.test(t) ? t : 'https://' + t); } catch (e) { return null; }
+    const host = u.hostname.replace(/^(www\.|m\.)/, '');
+    if (host === 'youtu.be') { const id = u.pathname.slice(1, 12); return /^[\w-]{11}$/.test(id) ? yt(id) : null; }
+    if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+      const v = u.searchParams.get('v');
+      if (v && /^[\w-]{11}$/.test(v)) return yt(v);
+      if ((m = u.pathname.match(/^\/(?:live|embed|shorts)\/([\w-]{11})(?:[/?]|$)/))) return yt(m[1]);
+      if ((m = u.pathname.match(/^\/channel\/(UC[\w-]{22})/))) return ch(m[1]);
+      const cid = u.searchParams.get('channel');
+      if (u.pathname.startsWith('/embed/live_stream') && cid && /^UC[\w-]{22}$/.test(cid)) return ch(cid);
+      if (u.pathname.startsWith('/@')) return { kind: 'handle' };
+      return null;
+    }
+    if (u.protocol === 'https:') return { kind: 'other', src: u.href, watch: u.href };
+    return null;
+  }
+  const VIDEO_PREF = 'gs-baseball-video';
+  function videoPrefs() { try { return Object.assign({ delay: 0, coachShow: false }, JSON.parse(localStorage.getItem(VIDEO_PREF) || '{}')); } catch (e) { return { delay: 0, coachShow: false }; } }
+  function setVideoPrefs(p) { try { localStorage.setItem(VIDEO_PREF, JSON.stringify(Object.assign(videoPrefs(), p))); } catch (e) { /* per-viewer convenience only */ } }
+  function gameVideo(g) {
+    const e = videoEmbed(g && g.video) || videoEmbed(Data.team.video);
+    return e && e.kind !== 'handle' ? e : null;
+  }
+  // Families can hold the scoreboard back to match the video's delay.
+  const DC = { id: null, n: -1, s: null };
+  function delayedCount(g, delay) {
+    const cutoff = Date.now() - delay * 1000;
+    const ev = g.events;
+    let n = ev.length;
+    while (n > 0 && ev[n - 1].ts && ev[n - 1].ts > cutoff) n--;
+    return n;
+  }
+  function viewState(g) {
+    const delay = UI.readOnly ? videoPrefs().delay : 0;
+    if (!delay || !gameVideo(g)) return st(g);
+    const n = delayedCount(g, delay);
+    if (n === g.events.length) return st(g);
+    if (DC.id !== g.id || DC.n !== n || DC.v !== g.updatedAt) { DC.id = g.id; DC.n = n; DC.v = g.updatedAt; DC.s = E.replay(g, n); }
+    return DC.s;
+  }
+  let dockSrc = null;
+  function renderDock() {
+    const dock = $('#video-dock');
+    const g = UI.ready && UI.tab === 'live' ? liveGame() : null;
+    const vid = g ? gameVideo(g) : null;
+    const prefs = videoPrefs();
+    const show = !!vid && (UI.readOnly || prefs.coachShow);
+    if (!show) { if (!dock.hidden) { dock.hidden = true; dock.innerHTML = ''; dockSrc = null; } return; }
+    const s = viewState(g);
+    const names = sideNames(g);
+    const short = (n) => esc(String(n || '').split(/\s+/)[0].slice(0, 10).toUpperCase());
+    const outs = [0, 1].map((i) => `<i class="${i < s.outs ? 'on' : ''}"></i>`).join('');
+    const bug = `<span class="bug-teams"><span>${short(names.away)} <b>${s.score.away}</b></span><span>${short(names.home)} <b>${s.score.home}</b></span></span><span class="bug-inn">${s.half ? '▼' : '▲'}${s.inning}</span><span class="bug-count">${s.balls}-${s.strikes}</span><span class="bug-outs" aria-label="${s.outs} outs">${outs}</span>`;
+    if (!UI.standalone) {
+      dock.hidden = false;
+      dock.innerHTML = `<div class="card stack" style="padding:12px 14px"><div class="row"><span class="grow">This game is streaming on YouTube.</span><a class="btn sm primary" href="${esc(vid.watch)}" target="_blank" rel="noopener">Watch</a></div></div>`;
+      dockSrc = null;
+      return;
+    }
+    if (dockSrc !== vid.src) {
+      dock.hidden = false;
+      dock.innerHTML = `<div class="video-box"><iframe src="${esc(vid.src)}" title="Live video" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe><div class="bug" id="video-bug"></div></div><div class="video-tools" id="video-tools"></div>`;
+      dockSrc = vid.src;
+    }
+    $('#video-bug').innerHTML = bug;
+    const delays = [[0, 'Live'], [10, '10s'], [20, '20s'], [30, '30s']];
+    $('#video-tools').innerHTML = (UI.readOnly
+      ? `<span class="small muted">Score delay</span><div class="seg">${delays.map(([v, l]) => `<button data-act="videoDelay" data-v="${v}" aria-pressed="${prefs.delay === v}">${l}</button>`).join('')}</div>`
+      : '<span class="small muted grow">You see the live score; families can match it to the video delay.</span>')
+      + `<a class="btn ghost sm" href="${esc(vid.watch)}" target="_blank" rel="noopener">Open in YouTube</a>`;
+  }
+  let delayTick = 0;
+  setInterval(() => {
+    if (UI.tab !== 'live' || !UI.readOnly || !videoPrefs().delay) return;
+    const g = liveGame();
+    if (!g || !gameVideo(g)) return;
+    const n = delayedCount(g, videoPrefs().delay);
+    if (n !== delayTick) { delayTick = n; render(); }
+  }, 1000);
+
   function renderLive() {
     const g = liveGame();
     if (!g) {
@@ -1546,7 +1648,7 @@ body.gated .tabs { display: none; }
       return h;
     }
     UI.liveId = g.id;
-    const s = st(g);
+    const s = viewState(g);
     const names = sideNames(g);
     const arrow = s.half === 0 ? '<svg viewBox="0 0 10 10"><path d="M5 1 9 8H1z"/></svg>' : '<svg viewBox="0 0 10 10"><path d="M5 9 1 2h8z"/></svg>';
     let h = `<section class="board live-board">
@@ -1599,6 +1701,7 @@ body.gated .tabs { display: none; }
         <button class="btn sm" data-act="quickPA" data-r="IBB">Int. walk</button>
         <button class="btn sm" data-act="pitcher">Pitcher</button>
         <button class="btn sm" data-act="sub">Sub</button>
+        ${gameVideo(g) && UI.standalone ? `<button class="btn sm" data-act="coachVideo">${videoPrefs().coachShow ? 'Hide video' : 'Show video'}</button>` : ''}
       </div>`;
     } else {
       h += `<div class="follow-note card" style="padding:12px 14px"><span class="pill" data-s="follow" style="background:var(--accent-soft);color:var(--ink)">Live</span><span>Updates as the scorer records each pitch.</span></div>`;
@@ -1770,6 +1873,10 @@ body.gated .tabs { display: none; }
       else h += `<div class="card roster">${rs.map(([k, r]) => `<button class="player" data-act="roster" data-key="${esc(k)}"><span class="no" style="font-size:16px">${esc((r.name || '?').slice(0, 3).toUpperCase())}</span><span style="min-width:0"><span class="nm">${esc(r.name)}</span><span class="meta">${r.players.length} player${r.players.length === 1 ? '' : 's'}${r.updatedAt ? ' · updated ' + esc(new Date(r.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) : ''}</span></span><span class="meta">Edit</span></button>`).join('')}</div>`;
     }
     h += accountHTML() + familiesHTML();
+    if (canEdit()) {
+      const vid = videoEmbed(Data.team.video);
+      h += `<h2 class="sec">Live video</h2><section class="card stack" style="padding:14px"><p style="margin:0">${!Data.team.video ? 'Not set up. Add your YouTube channel and every live game shows the stream with the scoreboard on top.' : vid && vid.channel ? 'Your YouTube channel is connected. Whatever you stream publicly shows up on the Live tab during games.' : 'A video link is set for the team.'}</p><div><button class="btn${Data.team.video ? '' : ' primary'}" data-act="videoSetup">${Data.team.video ? 'Change video link' : 'Set up live video'}</button></div></section>`;
+    }
     if (UI.standalone && canEdit()) {
       const c = loadAiCfg();
       h += `<h2 class="sec">Claude connection</h2><section class="card stack" style="padding:14px"><p style="margin:0">${c ? 'Connected. Roster photo scanning and scouting reports are on.' : 'Not set up. Connect your own Claude API key to scan roster photos and get scouting reports.'}</p><div><button class="btn${c ? '' : ' primary'}" data-act="aiSetup">${c ? 'Change connection' : 'Set up'}</button></div></section>`;
@@ -1822,6 +1929,7 @@ body.gated .tabs { display: none; }
         <div class="grid2"><label><span class="field-lbl">Date</span>${inp('f.date', sh.f.date, 'type="date"')}</label><label><span class="field-lbl">Time</span>${inp('f.time', sh.f.time, 'type="time"')}</label></div>
         <div><span class="field-lbl">We are</span>${segB('gameHome', sh.f.home ? 'home' : 'away', [['home', 'Home'], ['away', 'Away']])}</div>
         <div class="grid2"><label><span class="field-lbl">Location</span>${inp('f.location', sh.f.location, 'placeholder="Field name"')}</label><label><span class="field-lbl">Innings</span>${inp('f.innings', sh.f.innings, 'type="number" min="1" max="12" inputmode="numeric"')}</label></div>
+        <label><span class="field-lbl">Video link for this game (optional)</span>${inp('f.video', sh.f.video || '', 'type="url" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="YouTube link to this game\u2019s stream"')}<span class="small muted" style="display:block;margin-top:4px">Leave empty to use the team\u2019s channel. Use this for Unlisted streams or the replay.</span></label>
         ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
         <div class="row"><button class="btn primary" data-act="saveGame">${sh.id ? 'Save' : 'Add game'}</button>${sh.id ? '' : '<button class="btn" data-act="saveGame" data-then="lineup">Add &amp; set lineup</button>'}</div>`;
     },
@@ -1961,6 +2069,14 @@ body.gated .tabs { display: none; }
         <label><span class="field-lbl">Access code</span>${inp('code', sh.code, 'autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="The ACCESS_CODE you set in the Worker"')}</label>
         ${status}
         <div class="row"><button class="btn primary" data-act="aiSave">Save</button><button class="btn" data-act="aiTest" ${t && t.busy ? 'disabled' : ''}>Test connection</button>${loadAiCfg() ? '<button class="btn danger" data-act="aiDisconnect">Disconnect</button>' : ''}</div>`;
+    },
+    video(sh) {
+      const e = videoEmbed(sh.url);
+      const hint = !String(sh.url || '').trim() ? '' : !e ? '<div class="warn-text">That doesn\u2019t look like a YouTube channel or video link.</div>' : e.kind === 'handle' ? '<div class="warn-text">Links with @name don\u2019t work for embedding. Use the channel ID that starts with UC (YouTube Studio, Settings, Channel, Advanced settings).</div>' : e.channel ? '<div class="small" style="color:var(--good);font-weight:600">Channel found. Public live streams will show automatically.</div>' : '<div class="small" style="color:var(--good);font-weight:600">Video link found.</div>';
+      return head('Live video') + `<p class="small muted" style="margin:0">Paste your YouTube channel link or channel ID (starts with UC). During a live game, families see the stream on the Live tab with the scoreboard on top.</p>
+        <label><span class="field-lbl">YouTube channel</span>${inp('url', sh.url, 'type="url" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="youtube.com/channel/UC\u2026"')}</label>${hint}
+        <p class="small muted" style="margin:0">Find the ID in YouTube Studio: Settings, Channel, Advanced settings. The channel link only finds <b>Public</b> streams. For an Unlisted stream, paste that game\u2019s video link under the game\u2019s Edit details instead.</p>
+        <div class="row"><button class="btn primary" data-act="videoSave">Save</button>${Data.team.video ? '<button class="btn danger" data-act="videoClear">Remove</button>' : '<button class="btn" data-act="close">Cancel</button>'}</div>`;
     },
     teamEdit(sh) {
       return head('Team settings') + `<label><span class="field-lbl">Team name</span>${inp('f.name', sh.f.name)}</label>
@@ -2163,6 +2279,7 @@ body.gated .tabs { display: none; }
     const g = liveGame();
     if (!g || !canEdit()) return;
     const before = st(g);
+    ev.ts = Date.now();
     g.events.push(ev);
     saveGame(g);
     const after = st(g);
@@ -2210,7 +2327,7 @@ body.gated .tabs { display: none; }
     confirmYes() { const fn = UI.sheet && UI.sheet.fn; closeSheet(); if (fn) fn(); },
 
     newGame() { openSheet({ type: 'game', f: { opponent: '', date: todayISO(), time: '', home: true, location: '', innings: Data.team.innings || 7 } }); },
-    editGame(d) { const g = Data.games[d.id]; openSheet({ type: 'game', id: g.id, f: { opponent: g.opponent, date: g.date, time: g.time || '', home: !!g.home, location: g.location || '', innings: g.innings } }); },
+    editGame(d) { const g = Data.games[d.id]; openSheet({ type: 'game', id: g.id, f: { opponent: g.opponent, date: g.date, time: g.time || '', home: !!g.home, location: g.location || '', innings: g.innings, video: g.video || '' } }); },
     gameHome(d) { UI.sheet.f.home = d.v === 'home'; renderSheet(); },
     saveGame(d) {
       const sh = UI.sheet, f = sh.f;
@@ -2220,7 +2337,9 @@ body.gated .tabs { display: none; }
       let g = sh.id ? Data.games[sh.id] : null;
       if (g && g.events.length && !!g.home !== !!f.home) { sh.err = "Home/away can't change after the first pitch."; return renderSheet(); }
       if (!g) { g = normGame({ id: uid('g'), status: 'scheduled', events: [] }); Data.games[g.id] = g; }
-      Object.assign(g, { opponent: String(f.opponent).trim(), date: f.date, time: f.time, home: !!f.home, location: String(f.location).trim(), innings });
+      const video = String(f.video || '').trim();
+      if (video && !videoEmbed(video)) { sh.err = "That video link doesn't look right. Paste a YouTube link, or leave it empty."; return renderSheet(); }
+      Object.assign(g, { opponent: String(f.opponent).trim(), date: f.date, time: f.time, home: !!f.home, location: String(f.location).trim(), innings, video });
       saveGame(g);
       closeSheet();
       UI.tab = 'games'; UI.gameId = g.id;
@@ -2352,7 +2471,7 @@ body.gated .tabs { display: none; }
       if (th && '~' + th !== sh.t0) evs.push({ t: 'pc', side: s.them, ref: '~' + th });
       closeSheet();
       if (!evs.length) return;
-      for (const ev of evs) g.events.push(ev);
+      for (const ev of evs) { ev.ts = Date.now(); g.events.push(ev); }
       saveGame(g);
       toast('Pitching change recorded');
       render();
@@ -2550,6 +2669,21 @@ body.gated .tabs { display: none; }
       toast('Claude connection saved');
     },
     aiDisconnect() { saveAiCfg(null); Caps.sample = null; closeSheet(); render(); toast('Claude connection removed'); },
+    videoSetup() { openSheet({ type: 'video', url: Data.team.video || '' }); },
+    videoSave() {
+      const sh = UI.sheet;
+      const url = String(sh.url || '').trim();
+      const e = videoEmbed(url);
+      if (url && (!e || e.kind === 'handle')) return renderSheet();
+      Data.team.video = url;
+      saveTeam();
+      closeSheet();
+      render();
+      toast(url ? 'Live video saved' : 'Live video removed');
+    },
+    videoClear() { Data.team.video = ''; saveTeam(); closeSheet(); render(); toast('Live video removed'); },
+    videoDelay(d) { setVideoPrefs({ delay: +d.v }); delayTick = -1; render(); },
+    coachVideo() { setVideoPrefs({ coachShow: !videoPrefs().coachShow }); render(); },
     teamEdit() { const t = Data.team; openSheet({ type: 'teamEdit', f: { name: t.name, pitchLimit: t.pitchLimit, innings: t.innings } }); },
     saveTeamEdit() {
       const f = UI.sheet.f;
