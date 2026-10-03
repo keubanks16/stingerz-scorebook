@@ -363,6 +363,24 @@ body.gated .tabs { display: none; }
 .bug-outs i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, .25); display: inline-block; }
 .bug-outs i.on { background: #FF6B5B; }
 .video-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.video-box video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000000; }
+.dock-msg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #FFFFFF; background: rgba(0, 0, 0, .6); padding: 8px 12px; border-radius: 8px; font-size: 14px; white-space: nowrap; }
+.unmute { position: absolute; right: 8px; bottom: 8px; border: 0; background: rgba(4, 18, 45, .88); color: #FFFFFF; font-weight: 700; font-size: 13px; padding: 7px 10px; border-radius: 8px; }
+body.cam-on { overflow: hidden; }
+.cam { position: fixed; inset: 0; z-index: 60; background: #000000; color: #FFFFFF; }
+.cam video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000000; }
+.cam-top { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 10px); left: 10px; right: 10px; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; z-index: 1; }
+.cam .bug { position: static; flex: 0 0 auto; }
+.bug { white-space: nowrap; }
+.cam-status { background: rgba(0, 0, 0, .6); color: #FFFFFF; font-weight: 700; font-size: 13px; padding: 6px 10px; border-radius: 99px; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cam-status[data-s="live"] { background: #D9342B; }
+.cam-status[data-s="reconnecting"], .cam-status[data-s="paused"], .cam-status[data-s="connecting"] { background: #9A6A08; }
+.cam-msg { position: absolute; left: 12px; right: 12px; top: calc(env(safe-area-inset-top, 0px) + 66px); background: rgba(0, 0, 0, .72); color: #FFFFFF; padding: 10px 12px; border-radius: 10px; font-size: 14px; z-index: 1; max-width: 560px; }
+.cam-bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 12px calc(env(safe-area-inset-bottom, 0px) + 14px); display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, .8)); z-index: 1; }
+.cam-btn { background: rgba(255, 255, 255, .16); color: #FFFFFF; border-color: transparent; }
+.cam-go { min-width: 140px; }
+.cam-end { background: #D9342B; color: #FFFFFF; border-color: transparent; min-width: 160px; }
+.cam-summary { width: 100%; max-width: 560px; background: var(--surface); color: var(--ink); border-radius: 10px; }
 .toast { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--ground); padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 15px; z-index: 50; max-width: calc(100% - 32px); box-shadow: var(--shadow); }
 .loading { padding: 60px 0; text-align: center; color: var(--ink-2); display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .loading img { height: 60px; width: auto; animation: pulse 1.4s infinite; }
@@ -1054,18 +1072,21 @@ body.gated .tabs { display: none; }
     for (const x of tries) { try { return JSON.parse(x); } catch (e) { /* try the next shape */ } }
     throw { code: 'invalid_json', text: s };
   }
+  async function workerCall(cfg, task, payload, signal) {
+    let r;
+    try {
+      r = await fetch(cfg.url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-gs-code': cfg.code }, body: JSON.stringify(Object.assign({ task }, payload || {})), signal });
+    } catch (e) { throw { code: e && e.name === 'AbortError' ? 'cancelled' : 'network' }; }
+    const d = await r.json().catch(() => null);
+    if (!r.ok || !d) throw { code: (d && d.error) || (r.status === 401 ? 'bad_code' : 'upstream_error'), message: (d && d.detail) || '' };
+    return d;
+  }
   function makeWorkerAI(cfg) {
     async function call(task, prompt, opts) {
       const o = opts || {};
       const images = [];
       if (o.images) for (const b of Array.from(o.images)) images.push({ media_type: b.type || 'image/jpeg', data: await blobToB64(b) });
-      let r;
-      try {
-        r = await fetch(cfg.url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-gs-code': cfg.code }, body: JSON.stringify({ task, prompt, images }), signal: o.signal });
-      } catch (e) { throw { code: e && e.name === 'AbortError' ? 'cancelled' : 'network' }; }
-      const d = await r.json().catch(() => null);
-      if (!r.ok || !d) throw { code: (d && d.error) || (r.status === 401 ? 'bad_code' : 'upstream_error'), message: (d && d.detail) || '' };
-      return d;
+      return workerCall(cfg, task, { prompt, images }, o.signal);
     }
     const ai = async (prompt, opts) => {
       const d = await call('scout', prompt, opts);
@@ -1383,6 +1404,7 @@ body.gated .tabs { display: none; }
     }
     v.innerHTML = h;
     try { renderDock(); } catch (err) { console.error(err); }
+    if (Cam.open) camBug();
   }
 
   function sampleBanner() {
@@ -1579,6 +1601,8 @@ body.gated .tabs { display: none; }
   function videoPrefs() { try { return Object.assign({ delay: 0, coachShow: false }, JSON.parse(localStorage.getItem(VIDEO_PREF) || '{}')); } catch (e) { return { delay: 0, coachShow: false }; } }
   function setVideoPrefs(p) { try { localStorage.setItem(VIDEO_PREF, JSON.stringify(Object.assign(videoPrefs(), p))); } catch (e) { /* per-viewer convenience only */ } }
   function gameVideo(g) {
+    const st2 = Data.stream;
+    if (g && st2 && st2.live && st2.gid === g.id && st2.whep && UI.standalone) return { kind: 'cf', src: 'cf:' + st2.whep, whep: st2.whep };
     const e = videoEmbed(g && g.video) || videoEmbed(Data.team.video);
     return e && e.kind !== 'handle' ? e : null;
   }
@@ -1593,7 +1617,8 @@ body.gated .tabs { display: none; }
   }
   function viewState(g) {
     const delay = UI.readOnly ? videoPrefs().delay : 0;
-    if (!delay || !gameVideo(g)) return st(g);
+    const gv = delay ? gameVideo(g) : null;
+    if (!delay || !gv || gv.kind === 'cf') return st(g);
     const n = delayedCount(g, delay);
     if (n === g.events.length) return st(g);
     if (DC.id !== g.id || DC.n !== n || DC.v !== g.updatedAt) { DC.id = g.id; DC.n = n; DC.v = g.updatedAt; DC.s = E.replay(g, n); }
@@ -1606,7 +1631,7 @@ body.gated .tabs { display: none; }
     const vid = g ? gameVideo(g) : null;
     const prefs = videoPrefs();
     const show = !!vid && (UI.readOnly || prefs.coachShow);
-    if (!show) { if (!dock.hidden) { dock.hidden = true; dock.innerHTML = ''; dockSrc = null; } return; }
+    if (!show) { if (!dock.hidden) { dock.hidden = true; dock.innerHTML = ''; dockSrc = null; } playerStop(); return; }
     const s = viewState(g);
     const names = sideNames(g);
     const short = (n) => esc(String(n || '').split(/\s+/)[0].slice(0, 10).toUpperCase());
@@ -1620,10 +1645,20 @@ body.gated .tabs { display: none; }
     }
     if (dockSrc !== vid.src) {
       dock.hidden = false;
-      dock.innerHTML = `<div class="video-box"><iframe src="${esc(vid.src)}" title="Live video" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe><div class="bug" id="video-bug"></div></div><div class="video-tools" id="video-tools"></div>`;
+      playerStop();
+      if (vid.kind === 'cf') {
+        dock.innerHTML = `<div class="video-box"><video id="dock-video" playsinline autoplay muted></video><div class="bug" id="video-bug"></div><div class="dock-msg" id="dock-msg">Connecting to the live video…</div><button class="unmute" id="dock-unmute" data-act="dockUnmute">Tap for sound</button></div><div class="video-tools" id="video-tools"></div>`;
+        playerStart(vid.whep, $('#dock-video'));
+      } else {
+        dock.innerHTML = `<div class="video-box"><iframe src="${esc(vid.src)}" title="Live video" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe><div class="bug" id="video-bug"></div></div><div class="video-tools" id="video-tools"></div>`;
+      }
       dockSrc = vid.src;
     }
     $('#video-bug').innerHTML = bug;
+    if (vid.kind === 'cf') {
+      $('#video-tools').innerHTML = '<span class="small muted grow">Live from the field, less than a second behind.</span>';
+      return;
+    }
     const delays = [[0, 'Live'], [10, '10s'], [20, '20s'], [30, '30s']];
     $('#video-tools').innerHTML = (UI.readOnly
       ? `<span class="small muted">Score delay</span><div class="seg">${delays.map(([v, l]) => `<button data-act="videoDelay" data-v="${v}" aria-pressed="${prefs.delay === v}">${l}</button>`).join('')}</div>`
@@ -1702,6 +1737,7 @@ body.gated .tabs { display: none; }
         <button class="btn sm" data-act="pitcher">Pitcher</button>
         <button class="btn sm" data-act="sub">Sub</button>
         ${gameVideo(g) && UI.standalone ? `<button class="btn sm" data-act="coachVideo">${videoPrefs().coachShow ? 'Hide video' : 'Show video'}</button>` : ''}
+        ${UI.standalone && Backend.kind === 'fb' ? `<button class="btn sm" data-act="camOpen">${Data.stream && Data.stream.live && Data.stream.gid === g.id ? 'Camera (live)' : 'Stream video'}</button>` : ''}
       </div>`;
     } else {
       h += `<div class="follow-note card" style="padding:12px 14px"><span class="pill" data-s="follow" style="background:var(--accent-soft);color:var(--ink)">Live</span><span>Updates as the scorer records each pitch.</span></div>`;
@@ -1879,7 +1915,8 @@ body.gated .tabs { display: none; }
     }
     if (UI.standalone && canEdit()) {
       const c = loadAiCfg();
-      h += `<h2 class="sec">Claude connection</h2><section class="card stack" style="padding:14px"><p style="margin:0">${c ? 'Connected. Roster photo scanning and scouting reports are on.' : 'Not set up. Connect your own Claude API key to scan roster photos and get scouting reports.'}</p><div><button class="btn${c ? '' : ' primary'}" data-act="aiSetup">${c ? 'Change connection' : 'Set up'}</button></div></section>`;
+      h += `<h2 class="sec">Cloudflare Worker</h2><section class="card stack" style="padding:14px"><p style="margin:0">${c ? 'Connected on this phone. Roster photo scanning, scouting reports and live video are on.' : 'Not set up on this phone. Connect your Worker to scan roster photos, get scouting reports and stream games.'}</p><div><button class="btn${c ? '' : ' primary'}" data-act="aiSetup">${c ? 'Change connection' : 'Set up'}</button></div></section>`;
+      h += recordingsHTML();
     }
     h += `<h2 class="sec">Your data</h2><section class="card stack" style="padding:14px">`;
     if (Backend.kind === 'db') h += `<p style="margin:0">Games and the roster are saved with this page in your Claude account, so they sync across your devices. Share the page and families can follow games live as you score.</p>`;
@@ -2064,7 +2101,7 @@ body.gated .tabs { display: none; }
     ai(sh) {
       const t = sh.test;
       const status = !t ? '' : t.busy ? '<div class="scan"><span class="spin" aria-hidden="true"></span><span>Checking the connection…</span></div>' : t.ok ? '<div class="small" style="color:var(--good);font-weight:600">Connected. Claude answered.</div>' : `<div class="warn-text">${esc(t.err)}</div>`;
-      return head('Claude connection') + `<p class="small muted" style="margin:0">Roster photo scanning and scouting reports use your own Claude API key, kept in your Cloudflare Worker so it never sits on this public site. <a href="https://github.com/keubanks16/stingerz-scorebook#claude-connection" target="_blank" rel="noopener">Setup steps</a></p>
+      return head('Cloudflare Worker') + `<p class="small muted" style="margin:0">Roster photo scanning, scouting reports and live video go through your Cloudflare Worker, which keeps your keys off this public site. <a href="https://github.com/keubanks16/stingerz-scorebook#claude-connection" target="_blank" rel="noopener">Setup steps</a></p>
         <label><span class="field-lbl">Worker address</span>${inp('url', sh.url, 'type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://gs-scorebook-ai.yourname.workers.dev"')}</label>
         <label><span class="field-lbl">Access code</span>${inp('code', sh.code, 'autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="The ACCESS_CODE you set in the Worker"')}</label>
         ${status}
@@ -2195,6 +2232,11 @@ body.gated .tabs { display: none; }
       case 'origin': return "Your Cloudflare Worker doesn't allow this site. Check ALLOWED_ORIGIN in the Worker.";
       case 'not_configured': return 'Your Cloudflare Worker is missing ANTHROPIC_API_KEY or ACCESS_CODE.';
       case 'network': return "Couldn't reach your Cloudflare Worker. Check its address and your connection.";
+      case 'stream_not_configured': return 'Your Cloudflare Worker needs CF_STREAM_TOKEN and CF_ACCOUNT_ID before it can stream. Add them and paste the latest worker.js.';
+      case 'stream_token': return 'Cloudflare rejected the Stream API token. Check that CF_STREAM_TOKEN has Account, Stream, Edit permission.';
+      case 'stream_error': return 'Cloudflare Stream couldn\u2019t start the stream. Check that Stream is turned on in your Cloudflare account.' + (e && e.message ? ' (' + e.message + ')' : '');
+      case 'whip': return 'The video connection to Cloudflare failed. Check the signal and try again.';
+      case 'camera': return 'The scorebook can\u2019t use the camera. In Settings, Safari, Camera and Microphone, choose Allow, then try again.';
       case 'rate_limited': return 'Claude is busy or your usage limit was reached. Try again in a bit.';
       case 'session_expired': return 'Sign in to Claude again, then retry.';
       case 'invalid_json': case 'empty_completion': case 'refused':
@@ -2203,6 +2245,7 @@ body.gated .tabs { display: none; }
     }
     if (HIDE_CODES.includes(c)) return scan ? 'Reading photos needs your OK for Claude to look at them. Reload the page to be asked again, or type the roster.' : '';
     if (what === 'test') return 'The test failed. Check the Worker address and try again.';
+    if (what === 'stream') return 'The stream couldn\u2019t start. Check your signal and try again.';
     return scan ? 'Reading the roster failed. Check your connection and try again.' : 'The report could not be finished. Try again.';
   }
   function scanError(e) {
@@ -2751,6 +2794,358 @@ body.gated .tabs { display: none; }
     aiStop() { for (const k in UI.ai) if (UI.ai[k].ctl) UI.ai[k].ctl.abort(); }
   };
 
+  // ---------- in-app streaming: camera phone (WHIP) and family player (WHEP) ----------
+  const ICE = [{ urls: 'stun:stun.cloudflare.com:3478' }];
+  function iceDone(pc, ms) {
+    return new Promise((res) => {
+      if (pc.iceGatheringState === 'complete') return res();
+      const t = setTimeout(res, ms);
+      pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } });
+    });
+  }
+  async function sdpExchange(pc, url) {
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await iceDone(pc, 2500);
+    const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/sdp' }, body: pc.localDescription.sdp });
+    if (!r.ok) throw { code: 'whip', status: r.status };
+    const loc = r.headers.get('Location');
+    const answer = await r.text();
+    await pc.setRemoteDescription({ type: 'answer', sdp: answer });
+    return loc ? new URL(loc, url).href : null;
+  }
+  function endSession(url) { if (url) fetch(url, { method: 'DELETE' }).catch(() => {}); }
+
+  // Family player
+  const Player = { pc: null, session: null, url: null, video: null, retry: 0 };
+  function playerStop() {
+    clearTimeout(Player.retry);
+    if (Player.pc) { try { Player.pc.close(); } catch (e) { /* closed */ } }
+    endSession(Player.session);
+    Player.pc = null; Player.session = null; Player.url = null; Player.video = null;
+  }
+  function playerMsg(t) { const m = $('#dock-msg'); if (m) { m.textContent = t; m.hidden = !t; } }
+  async function playerStart(url, video) {
+    playerStop();
+    Player.url = url; Player.video = video;
+    const pc = new RTCPeerConnection({ iceServers: ICE, bundlePolicy: 'max-bundle' });
+    Player.pc = pc;
+    pc.addTransceiver('video', { direction: 'recvonly' });
+    pc.addTransceiver('audio', { direction: 'recvonly' });
+    const ms = new MediaStream();
+    video.srcObject = ms;
+    pc.ontrack = (e) => { ms.addTrack(e.track); video.play().catch(() => {}); };
+    pc.onconnectionstatechange = () => {
+      if (Player.pc !== pc) return;
+      if (pc.connectionState === 'connected') playerMsg('');
+      else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') { playerMsg('Reconnecting to the camera…'); playerRetry(url, video, 3000); }
+    };
+    try { Player.session = await sdpExchange(pc, url); }
+    catch (e) { if (Player.pc === pc) { playerMsg('Waiting for the camera to start…'); playerRetry(url, video, 5000); } }
+  }
+  function playerRetry(url, video, ms) {
+    clearTimeout(Player.retry);
+    Player.retry = setTimeout(() => { if (Player.url === url && document.body.contains(video)) playerStart(url, video); }, ms);
+  }
+
+  // Recordings on this phone (IndexedDB, saved in 10-second pieces)
+  const RecDB = {
+    db: null,
+    open() {
+      if (this.db) return Promise.resolve(this.db);
+      return new Promise((res, rej) => {
+        const q = indexedDB.open('gs-recordings', 1);
+        q.onupgradeneeded = () => { const d = q.result; d.createObjectStore('meta', { keyPath: 'rid' }); d.createObjectStore('chunks', { keyPath: ['rid', 'seq'] }); };
+        q.onsuccess = () => { this.db = q.result; res(this.db); };
+        q.onerror = () => rej(q.error);
+      });
+    },
+    async tx(stores, mode, fn) {
+      const d = await this.open();
+      return new Promise((res, rej) => { const t = d.transaction(stores, mode); const out = fn(t); t.oncomplete = () => res(out && out.result !== undefined ? out.result : out); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error); });
+    },
+    putMeta(m) { return this.tx(['meta'], 'readwrite', (t) => t.objectStore('meta').put(m)); },
+    putChunk(rid, seq, blob) { return this.tx(['chunks'], 'readwrite', (t) => t.objectStore('chunks').put({ rid, seq, blob })); },
+    listMeta() { return this.tx(['meta'], 'readonly', (t) => t.objectStore('meta').getAll()); },
+    chunks(rid) { return this.tx(['chunks'], 'readonly', (t) => t.objectStore('chunks').getAll(IDBKeyRange.bound([rid, 0], [rid, Infinity]))); },
+    remove(rid) { return this.tx(['meta', 'chunks'], 'readwrite', (t) => { t.objectStore('meta').delete(rid); t.objectStore('chunks').delete(IDBKeyRange.bound([rid, 0], [rid, Infinity])); }); }
+  };
+  const Recs = { list: null, files: {}, busy: {} };
+  async function loadRecs() { try { Recs.list = (await RecDB.listMeta()).sort((a, b) => b.startedAt - a.startedAt); } catch (e) { Recs.list = []; } scheduleRender(); if (Cam.open) camRender(); }
+  const mb = (n) => (n >= 1e9 ? (n / 1e9).toFixed(2) + ' GB' : Math.max(0.1, n / 1e6).toFixed(n >= 1e8 ? 0 : 1) + ' MB');
+  const dur = (ms) => { const m = Math.max(0, Math.round(ms / 60000)); return m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + ' min'; };
+  function recRowHTML(r) {
+    const live = Cam.rec && Cam.rec.rid === r.rid;
+    const file = Recs.files[r.rid];
+    const act = live ? '<span class="chip live">REC</span>'
+      : Recs.busy[r.rid] ? '<span class="small muted">Preparing…</span>'
+      : file ? `<button class="btn sm primary" data-act="recSave" data-rid="${esc(r.rid)}">Save to phone</button>`
+      : `<button class="btn sm" data-act="recPrepare" data-rid="${esc(r.rid)}">Get video</button>`;
+    return `<div class="player" style="cursor:default"><span class="no" style="font-size:14px">REC</span><span style="min-width:0"><span class="nm">${esc(r.title || 'Game video')}</span><span class="meta">${esc(new Date(r.startedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))} · ${dur((r.endedAt || Date.now()) - r.startedAt)} · ${mb(r.bytes || 0)}</span></span><span class="row" style="gap:6px">${act}${live ? '' : `<button class="btn sm danger" data-act="recDelete" data-rid="${esc(r.rid)}" aria-label="Delete recording">Delete</button>`}</span></div>`;
+  }
+  function recordingsHTML() {
+    if (Backend.kind !== 'fb' || !window.indexedDB) return '';
+    if (Recs.list === null) { loadRecs(); return ''; }
+    if (!Recs.list.length) return '';
+    return `<h2 class="sec">Game videos on this phone</h2><div class="card roster">${Recs.list.map(recRowHTML).join('')}</div><p class="small muted" style="margin:0">Get video, then Save to phone, then upload it to YouTube as Unlisted and paste the link in the game’s Edit details. Delete it here afterward to free up space.</p>`;
+  }
+
+  // Camera phone
+  const Cam = { open: false, state: 'off', stream: null, facing: 'environment', mic: true, pc: null, session: null, uid: null, whip: null, whep: null, gid: null, wantLive: false, rec: null, wake: null, timer: 0, startedAt: 0, confirmEnd: false, err: '', retry: 0 };
+  const CAM_KEY = 'gs-baseball-cam';
+  function camSaved() { try { return JSON.parse(localStorage.getItem(CAM_KEY) || 'null'); } catch (e) { return null; } }
+  function camSave(v) { try { if (v) localStorage.setItem(CAM_KEY, JSON.stringify(v)); else localStorage.removeItem(CAM_KEY); } catch (e) { /* per-device only */ } }
+  function camEl() {
+    let el = $('#cam');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'cam'; el.className = 'cam'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Stream this game');
+      el.innerHTML = '<video id="cam-video" playsinline autoplay muted></video><div class="cam-top"><div class="bug" id="cam-bug"></div><span class="cam-status" id="cam-status"></span></div><div class="cam-msg" id="cam-msg" hidden></div><div class="cam-bar" id="cam-bar"></div>';
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+  function camBug() {
+    const g = Cam.gid && Data.games[Cam.gid];
+    const b = $('#cam-bug');
+    if (!b) return;
+    if (!g) { b.hidden = true; return; }
+    const s = st(g);
+    const names = sideNames(g);
+    const short = (n) => esc(String(n || '').split(/\s+/)[0].slice(0, 10).toUpperCase());
+    b.hidden = false;
+    b.innerHTML = `<span class="bug-teams"><span>${short(names.away)} <b>${s.score.away}</b></span><span>${short(names.home)} <b>${s.score.home}</b></span></span><span class="bug-inn">${s.half ? '▼' : '▲'}${s.inning}</span><span class="bug-count">${s.balls}-${s.strikes}</span><span class="bug-outs">${[0, 1].map((i) => `<i class="${i < s.outs ? 'on' : ''}"></i>`).join('')}</span>`;
+  }
+  function camRender() {
+    if (!Cam.open) return;
+    camEl();
+    const stEl = $('#cam-status');
+    const labels = { preview: 'Preview', starting: 'Starting…', connecting: 'Connecting…', live: 'LIVE', reconnecting: 'Reconnecting…', paused: 'Camera paused', ended: 'Stream ended' };
+    const el = Cam.startedAt && (Cam.state === 'live' || Cam.state === 'reconnecting') ? ' · ' + dur(Date.now() - Cam.startedAt) : '';
+    const recInfo = Cam.rec ? ' · REC ' + mb(Cam.rec.bytes) : '';
+    stEl.textContent = (labels[Cam.state] || '') + el + recInfo;
+    stEl.dataset.s = Cam.state;
+    const msg = $('#cam-msg');
+    let m = Cam.err;
+    if (!m && Cam.state === 'preview') m = 'Keep this screen open for the whole game. Locking the phone or switching apps pauses the stream. Plug into a battery pack.';
+    if (!m && Cam.state === 'paused') m = 'The camera stopped when the screen locked or another app opened. Tap Resume to go back on air.';
+    msg.hidden = !m; msg.textContent = m;
+    let bar = '';
+    const live = Cam.state === 'live' || Cam.state === 'reconnecting' || Cam.state === 'connecting';
+    if (Cam.state === 'ended') {
+      const r = Recs.list && Recs.list.find((x) => x.rid === Cam.lastRid);
+      bar = `<div class="cam-summary">${r ? recRowHTML(r) : '<span>No recording was saved on this phone.</span>'}</div><button class="btn" data-act="camClose">Close</button>`;
+    } else {
+      if (!live && Cam.state !== 'starting') bar += '<button class="btn cam-btn" data-act="camClose">Close</button>';
+      bar += `<button class="btn cam-btn" data-act="camMic" ${Cam.stream ? '' : 'disabled'}>${Cam.mic ? 'Mic on' : 'Mic off'}</button>`;
+      if (!live) bar += `<button class="btn cam-btn" data-act="camFlip" ${Cam.stream && Cam.state !== 'starting' ? '' : 'disabled'}>Flip</button>`;
+      if (Cam.state === 'paused') bar += '<button class="btn primary cam-go" data-act="camResume">Resume</button>';
+      else if (live) bar += `<button class="btn cam-end" data-act="camEnd">${Cam.confirmEnd ? 'Tap again to end' : 'End stream'}</button>`;
+      else bar += `<button class="btn primary cam-go" data-act="camGo" ${Cam.stream && Cam.state === 'preview' ? '' : 'disabled'}>${camSaved() && camSaved().gid === Cam.gid && Data.stream && Data.stream.live && Data.stream.uid === camSaved().uid ? 'Resume stream' : 'Go Live'}</button>`;
+    }
+    $('#cam-bar').innerHTML = bar;
+    camBug();
+  }
+  async function camMedia() {
+    if (Cam.stream) Cam.stream.getTracks().forEach((t) => t.stop());
+    Cam.stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: Cam.facing, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
+      audio: true
+    });
+    Cam.stream.getAudioTracks().forEach((t) => { t.enabled = Cam.mic; });
+    const v = $('#cam-video');
+    v.srcObject = Cam.stream;
+    v.play().catch(() => {});
+    Cam.stream.getVideoTracks().forEach((t) => t.addEventListener('ended', () => { if (Cam.wantLive) { Cam.state = 'paused'; camRender(); } }));
+  }
+  async function camWake(on) {
+    try {
+      if (on && 'wakeLock' in navigator) { if (!Cam.wake) { Cam.wake = await navigator.wakeLock.request('screen'); Cam.wake.addEventListener('release', () => { Cam.wake = null; }); } }
+      else if (!on && Cam.wake) { await Cam.wake.release(); Cam.wake = null; }
+    } catch (e) { /* not available on this phone */ }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !Cam.open) return;
+    if (Cam.wantLive) camWake(true);
+    const vt = Cam.stream && Cam.stream.getVideoTracks()[0];
+    if (Cam.wantLive && (!vt || vt.readyState === 'ended')) { Cam.state = 'paused'; camRender(); }
+  });
+  async function publish() {
+    if (Cam.pc) { try { Cam.pc.close(); } catch (e) { /* closed */ } }
+    endSession(Cam.session); Cam.session = null;
+    const pc = new RTCPeerConnection({ iceServers: ICE, bundlePolicy: 'max-bundle' });
+    Cam.pc = pc;
+    for (const t of Cam.stream.getTracks()) pc.addTransceiver(t, { direction: 'sendonly', streams: [Cam.stream] });
+    pc.onconnectionstatechange = () => {
+      if (Cam.pc !== pc || !Cam.wantLive) return;
+      if (pc.connectionState === 'connected') { Cam.state = 'live'; Cam.err = ''; camRender(); }
+      else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') { Cam.state = 'reconnecting'; camRender(); camRetry(3000); }
+    };
+    Cam.session = await sdpExchange(pc, Cam.whip);
+    for (const snd of pc.getSenders()) {
+      if (!snd.track || snd.track.kind !== 'video') continue;
+      try { const prm = snd.getParameters(); if (!prm.encodings || !prm.encodings.length) prm.encodings = [{}]; prm.encodings[0].maxBitrate = 2000000; await snd.setParameters(prm); } catch (e) { /* default bitrate */ }
+    }
+  }
+  function camRetry(ms) {
+    clearTimeout(Cam.retry);
+    Cam.retry = setTimeout(async () => {
+      if (!Cam.wantLive || Cam.state === 'paused') return;
+      try { await publish(); } catch (e) { Cam.state = 'reconnecting'; camRender(); camRetry(5000); }
+    }, ms);
+  }
+  async function recStart() {
+    if (!window.MediaRecorder || !window.indexedDB) return;
+    const types = ['video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp8,opus', 'video/webm'];
+    const type = types.find((t) => { try { return MediaRecorder.isTypeSupported(t); } catch (e) { return false; } }) || '';
+    let mr;
+    try { mr = new MediaRecorder(Cam.stream, Object.assign(type ? { mimeType: type } : {}, { videoBitsPerSecond: 2000000 })); } catch (e) { return; }
+    const g = Data.games[Cam.gid];
+    const rid = 'r' + Date.now().toString(36);
+    const meta = { rid, gid: Cam.gid, title: g ? (g.home ? 'vs ' : '@ ') + g.opponent + ' ' + g.date : 'Game video', startedAt: Date.now(), endedAt: 0, type: mr.mimeType || type || 'video/mp4', bytes: 0, parts: 0 };
+    Cam.rec = { rid, mr, seq: 0, bytes: 0, meta };
+    Cam.lastRid = rid;
+    try { await RecDB.putMeta(meta); if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) { Cam.rec = null; return; }
+    const rec = Cam.rec;
+    mr.ondataavailable = (e) => {
+      if (!e.data || !e.data.size) return;
+      const seq = rec.seq++;
+      rec.bytes += e.data.size;
+      meta.bytes = rec.bytes; meta.parts = rec.seq;
+      RecDB.putChunk(rid, seq, e.data).then(() => RecDB.putMeta(meta)).catch(() => { Cam.err = 'This phone is out of space for the recording. The stream keeps going.'; camRender(); });
+    };
+    mr.onstop = () => { meta.endedAt = Date.now(); RecDB.putMeta(meta).finally(loadRecs); };
+    mr.start(10000);
+    loadRecs();
+  }
+  function recStop() {
+    const r = Cam.rec;
+    Cam.rec = null;
+    if (r && r.mr.state !== 'inactive') { try { r.mr.stop(); } catch (e) { /* stopped */ } }
+  }
+  function camGameName(g) { return (g.home ? 'vs ' : '@ ') + g.opponent + ' · ' + g.date; }
+
+  Object.assign(A, {
+    async camOpen() {
+      const g = liveGame();
+      if (!g) { toast('Start the game first, then stream it.'); return; }
+      if (!loadAiCfg()) { toast('Connect your Cloudflare Worker first, under Team.'); return; }
+      Cam.open = true; Cam.gid = g.id; Cam.err = ''; Cam.confirmEnd = false;
+      if (!Cam.wantLive) Cam.state = 'starting';
+      camEl().hidden = false;
+      document.body.classList.add('cam-on');
+      camRender();
+      if (Cam.wantLive) return;
+      try { await camMedia(); Cam.state = 'preview'; }
+      catch (e) { Cam.state = 'preview'; Cam.err = aiErrorText({ code: 'camera' }); }
+      if (Recs.list === null) loadRecs();
+      camRender();
+    },
+    camClose() {
+      if (Cam.wantLive) return;
+      if (Cam.stream) Cam.stream.getTracks().forEach((t) => t.stop());
+      Cam.stream = null; Cam.open = false; Cam.state = 'off';
+      const el = $('#cam'); if (el) { el.hidden = true; $('#cam-bar').innerHTML = ''; }
+      document.body.classList.remove('cam-on');
+      render();
+    },
+    camMic() { Cam.mic = !Cam.mic; if (Cam.stream) Cam.stream.getAudioTracks().forEach((t) => { t.enabled = Cam.mic; }); camRender(); },
+    async camFlip() {
+      Cam.facing = Cam.facing === 'environment' ? 'user' : 'environment';
+      try { await camMedia(); } catch (e) { Cam.err = aiErrorText({ code: 'camera' }); }
+      camRender();
+    },
+    async camGo() {
+      const cfg = loadAiCfg();
+      const g = Data.games[Cam.gid];
+      if (!cfg || !g || !Cam.stream) return;
+      Cam.err = ''; Cam.state = 'connecting'; Cam.wantLive = true; camRender();
+      try {
+        const saved = camSaved();
+        if (saved && saved.gid === g.id && Data.stream && Data.stream.live && Data.stream.uid === saved.uid) {
+          Object.assign(Cam, { uid: saved.uid, whip: saved.whip, whep: saved.whep });
+        } else {
+          const d = await workerCall(cfg, 'live-start', { name: Data.team.name + ' ' + camGameName(g) });
+          Object.assign(Cam, { uid: d.uid, whip: d.whip, whep: d.whep });
+          camSave({ gid: g.id, uid: d.uid, whip: d.whip, whep: d.whep });
+        }
+        await publish();
+        Cam.startedAt = Cam.startedAt || Date.now();
+        Data.stream = { gid: g.id, uid: Cam.uid, whep: Cam.whep, live: true, startedAt: Cam.startedAt };
+        Saver.put('team/stream', Data.stream);
+        camWake(true);
+        await recStart();
+        clearInterval(Cam.timer);
+        Cam.timer = setInterval(camRender, 1000);
+      } catch (e) {
+        Cam.wantLive = false; Cam.state = 'preview';
+        Cam.err = aiErrorText(e, 'stream') || 'Could not start the stream.';
+      }
+      camRender();
+    },
+    async camResume() {
+      Cam.err = '';
+      try { await camMedia(); } catch (e) { Cam.err = aiErrorText({ code: 'camera' }); camRender(); return; }
+      Cam.state = 'reconnecting'; camRender();
+      camWake(true);
+      try { await publish(); } catch (e) { camRetry(4000); }
+      await recStart();
+    },
+    async camEnd() {
+      if (!Cam.confirmEnd) { Cam.confirmEnd = true; camRender(); setTimeout(() => { Cam.confirmEnd = false; camRender(); }, 4000); return; }
+      Cam.confirmEnd = false; Cam.wantLive = false;
+      clearTimeout(Cam.retry); clearInterval(Cam.timer);
+      if (Cam.pc) { try { Cam.pc.close(); } catch (e) { /* closed */ } }
+      endSession(Cam.session); Cam.pc = null; Cam.session = null;
+      recStop();
+      const cfg = loadAiCfg();
+      if (cfg && Cam.uid) workerCall(cfg, 'live-end', { uid: Cam.uid }).catch(() => {});
+      if (Data.stream && Data.stream.uid === Cam.uid) { Data.stream = Object.assign({}, Data.stream, { live: false, endedAt: Date.now() }); Saver.put('team/stream', Data.stream); }
+      camSave(null);
+      Cam.uid = null; Cam.whip = null; Cam.whep = null; Cam.startedAt = 0;
+      camWake(false);
+      if (Cam.stream) Cam.stream.getTracks().forEach((t) => t.stop());
+      Cam.stream = null;
+      Cam.state = 'ended';
+      setTimeout(loadRecs, 600);
+      camRender();
+    },
+    async recPrepare(d) {
+      const r = Recs.list && Recs.list.find((x) => x.rid === d.rid);
+      if (!r) return;
+      Recs.busy[r.rid] = true; render(); camRender();
+      try {
+        const parts = await RecDB.chunks(r.rid);
+        const blob = new Blob(parts.map((c) => c.blob), { type: r.type || 'video/mp4' });
+        const ext = /webm/.test(r.type || '') ? 'webm' : 'mp4';
+        Recs.files[r.rid] = new File([blob], ('GS ' + (r.title || 'game')).replace(/[^\w .@-]+/g, '').trim() + '.' + ext, { type: r.type || 'video/mp4' });
+      } catch (e) { toast('Could not open that recording.'); }
+      delete Recs.busy[r.rid];
+      render(); camRender();
+    },
+    async recSave(d) {
+      const f = Recs.files[d.rid];
+      if (!f) return;
+      if (navigator.canShare && navigator.canShare({ files: [f] })) {
+        try { await navigator.share({ files: [f], title: f.name }); } catch (e) { /* the viewer closed the share sheet */ }
+        return;
+      }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(f); a.download = f.name;
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
+    },
+    recDelete(d) {
+      confirmSheet('Delete this video from the phone?', 'Only delete it after you’ve saved it to Photos or uploaded it. This can’t be undone.', 'Delete video', async () => {
+        try { await RecDB.remove(d.rid); } catch (e) { toast('Could not delete it.'); }
+        delete Recs.files[d.rid];
+        await loadRecs();
+        toast('Video deleted from the scorebook');
+      }, true);
+    },
+    dockUnmute() { const v = $('#dock-video'); if (v) { v.muted = false; v.play().catch(() => {}); } const b = $('#dock-unmute'); if (b) b.hidden = true; }
+  });
+
   function doImport(file) {
     const reader = new FileReader();
     reader.onload = () => {
@@ -2794,6 +3189,10 @@ body.gated .tabs { display: none; }
   // ---------- boot ----------
   function subscribe(db) {
     const subs = [];
+    subs.push(db.doc('team/stream').onSnapshot((snap) => {
+      if (!Saver.busy('team/stream')) Data.stream = snap.exists ? clone(snap.data()) : null;
+      scheduleRender();
+    }, () => {}));
     subs.push(db.doc('team/main').onSnapshot((snap) => {
       if (!Saver.busy('team/main')) Data.team = normTeam(snap.exists ? clone(snap.data()) : null);
       Data.loaded.team = true;

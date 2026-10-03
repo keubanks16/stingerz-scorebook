@@ -9,6 +9,7 @@ Score games pitch by pitch, keep box scores and season stats, chart spray charts
 | Score games, edit rosters, scan rosters | Yes | No |
 | Follow games live, box scores, stats, scouting | Yes | Yes |
 | Watch the live video with the scoreboard on top | Yes | Yes |
+| Stream from the built-in camera | Yes | No |
 | Approve families, add coaches, change who can watch | Yes | No |
 
 - The **owner** is the first account created on the site. The owner is always an admin.
@@ -28,32 +29,56 @@ Score games pitch by pitch, keep box scores and season stats, chart spray charts
 
 ## Live video
 
-During a live game, families see your YouTube stream on the Live tab with the scoreboard (score, inning, count, outs) on top of the video. YouTube runs 10 to 30 seconds behind real life, so each viewer can set **Score delay** under the video to hold the scoreboard back and avoid spoilers. Coaches always see the live score and can tap **Show video** on the Live tab.
+During a live game, families see the video on the Live tab with the scoreboard (score, inning, count, outs) on top. There are two ways to stream.
+
+### Built-in camera (Cloudflare Stream)
+
+A second phone streams straight from the scorebook. Families watch inside the scorebook less than a second behind real life, so the video and the score always match. The video only plays in the scorebook, so your "who can watch" setting covers it.
 
 **One-time setup**
 
-1. **Get your channel ID.** In YouTube Studio: **Settings → Channel → Advanced settings**. It starts with `UC`. An `@name` link won't work for embedding.
-2. **Add it to the scorebook.** **Team → Live video → Set up**, paste the channel ID or `youtube.com/channel/UC…` link, and save.
-3. **Get your stream key.** In YouTube Studio on a computer: **Create → Go live → Stream**. Copy the **Stream URL** and **Stream key**. The key stays the same from game to game.
-4. **Set up a streaming app on the phone.** In an RTMP streaming app such as Larix Broadcaster, add a connection with the Stream URL and key (in Larix, the URL is the Stream URL followed by `/` and the key). Streaming this way doesn't need 50 subscribers; going live from the YouTube app does.
+1. In Cloudflare, open **Images & Stream** and turn Stream on (pick the cheapest plan if it asks). Viewing costs about $1 per 1,000 minutes watched, roughly $2.40 for a 2-hour game with 20 families.
+2. Create an API token: profile icon → **My Profile → API Tokens → Create Token → Create Custom Token**, permission **Account · Stream · Edit**.
+3. In your Worker's **Settings → Variables and Secrets**, add `CF_STREAM_TOKEN` (Secret, the token) and `CF_ACCOUNT_ID` (Text, your Cloudflare account ID).
+4. Paste the latest [`worker.js`](worker.js) into the Worker (**Edit code**) and deploy.
+5. On the camera phone: sign in to the scorebook as a coach and set up **Team → Cloudflare Worker**.
 
-**Each game:** start the stream from the streaming app. If the stream is **Public**, it shows up in the scorebook automatically. If it's **Unlisted**, the channel link can't find it, so paste that game's video link under the game's **Edit details**. That field is also where to put the replay link after the game.
+**Each game**
 
-## Claude connection
+1. Start the game in the scorebook (on any coach's phone).
+2. On the camera phone: **Live → Stream video → Go Live**. Mount it sideways behind the plate and plug in a battery pack. Keep the screen on; locking the phone pauses the stream (tap **Resume**).
+3. When the game ends: **End stream** (tap twice).
 
-Roster photo scanning and scouting reports use your own Claude API key, kept in a Cloudflare Worker ([`worker.js`](worker.js)) so it never sits on this public site. If you set up the Worker for the earlier GitHub copy, add this site to it: in the Worker, **Settings → Variables and Secrets**, add a **Text** variable `ALLOWED_ORIGIN` with the value
+**Saving the game:** Cloudflare doesn't record these streams, so the camera phone records the game itself in 10-second pieces. After the game, on the camera phone: **Get video → Save to phone** (from the end screen, or **Team → Game videos on this phone**), upload it to YouTube as **Unlisted**, and paste the link under the game's **Edit details**. Then delete it from the scorebook to free up space. A 2-hour game takes about 2 GB.
 
-```
-https://scorebook.stingerz-baseball.com,https://keubanks16.github.io
-```
+### YouTube
 
-then deploy. In the scorebook, a coach opens **Team → Claude connection → Set up**, pastes the Worker address and access code, taps **Test connection**, then **Save**. This is saved per phone.
+Free, saves every game, and anyone with the link can watch. YouTube runs 10 to 30 seconds behind, so each viewer can set **Score delay** under the video to keep the scoreboard from spoiling plays.
 
-New Worker from scratch:
+1. **Get your channel ID.** In YouTube Studio: **Settings → Channel → Advanced settings**. It starts with `UC`.
+2. **Add it to the scorebook.** **Team → Live video → Set up**.
+3. **Get your stream key.** In YouTube Studio: **Create → Go live → Stream**. Copy the **Stream URL** and **Stream key**, turn on auto-start and auto-stop, and choose **Low latency**.
+4. **Set up a streaming app** such as Larix Broadcaster with the URL `rtmp://a.rtmp.youtube.com/live2/` followed by your key. Streaming this way doesn't need 50 subscribers; going live from the YouTube app does.
 
-1. Get an API key at [console.anthropic.com](https://console.anthropic.com) (add credit and set a monthly spend limit under Billing).
-2. In [Cloudflare](https://dash.cloudflare.com), create a Worker from "Hello World", then **Edit code** and paste [`worker.js`](worker.js). Deploy.
-3. In the Worker's **Settings → Variables and Secrets**, add secrets `ANTHROPIC_API_KEY` (your key) and `ACCESS_CODE` (any passphrase).
+Each game, start the stream in the app. **Public** streams appear automatically; for an **Unlisted** stream, paste that game's link under the game's **Edit details**.
+
+When a built-in camera stream is live, the scorebook shows it; otherwise it shows YouTube.
+
+## Cloudflare Worker
+
+Roster photo scanning, scouting reports and the built-in camera go through your Cloudflare Worker ([`worker.js`](worker.js)), which keeps your keys off this public site. Its **Settings → Variables and Secrets**:
+
+| Name | Type | What it's for |
+| --- | --- | --- |
+| `ACCESS_CODE` | Secret | Any passphrase; coaches type it into the scorebook |
+| `ANTHROPIC_API_KEY` | Secret | Roster photos and scouting reports ([console.anthropic.com](https://console.anthropic.com)) |
+| `CF_STREAM_TOKEN` | Secret | Built-in camera (Account · Stream · Edit token) |
+| `CF_ACCOUNT_ID` | Text | Built-in camera (your Cloudflare account ID) |
+| `ALLOWED_ORIGIN` | Text | Optional. Defaults to `https://scorebook.stingerz-baseball.com,https://keubanks16.github.io` |
+
+In the scorebook, each coach's phone needs **Team → Cloudflare Worker → Set up**: paste the Worker address and access code, tap **Test connection**, then **Save**.
+
+To create the Worker from scratch: in [Cloudflare](https://dash.cloudflare.com), create a Worker from "Hello World", choose **Edit code**, paste [`worker.js`](worker.js), deploy, then add the variables above.
 
 ## Put it on a phone's home screen
 
@@ -66,7 +91,7 @@ New Worker from scratch:
 | --- | --- |
 | `index.html` | The whole app in one page, including the Firebase settings |
 | `firestore.rules` | Database security rules: owner, coaches, families, who can watch |
-| `worker.js` | Cloudflare Worker that holds the Claude API key |
+| `worker.js` | Cloudflare Worker: holds the Claude API key and opens private Cloudflare streams for the camera phone |
 | `CNAME` | Tells GitHub Pages to serve this at scorebook.stingerz-baseball.com |
 | `icons/`, `manifest.webmanifest` | Home-screen icon and app settings |
 
