@@ -7,13 +7,16 @@
 //   live-start / live-end   open and close a private Cloudflare Stream for the camera phone
 //   notifications   every minute (Cron Trigger) and when a coach scores, look for new chat
 //                   messages and score changes and send phone notifications
+//   photos  team chat photos: store them in R2, hand out short-lived viewing links, delete them.
+//           Only signed-in, approved members can send or see them.
 //
 // Set these in the Worker's Settings -> Variables and Secrets:
 //   ACCESS_CODE        Secret  any passphrase you make up; coaches type it into the scorebook
 //   ANTHROPIC_API_KEY  Secret  your key from console.anthropic.com (roster photos, scouting reports)
 //   CF_STREAM_TOKEN    Secret  Cloudflare API token with Account > Stream > Edit (live video)
 //   CF_ACCOUNT_ID      Text    your Cloudflare account ID (live video)
-//   FIREBASE_SERVICE_ACCOUNT  Secret  the whole service-account .json file from Firebase (notifications)
+//   FIREBASE_SERVICE_ACCOUNT  Secret  the whole service-account .json file from Firebase (notifications, photos)
+// and under Settings -> Bindings add an R2 bucket with the variable name PHOTOS (chat photos),
 // and under Settings -> Triggers add a Cron Trigger that runs every minute (* * * * *).
 //   ALLOWED_ORIGIN     Text    optional; defaults to the scorebook site and keubanks16.github.io
 //   MODEL              Text    optional; defaults to claude-sonnet-5-5
@@ -26,6 +29,9 @@ const MAX_PROMPT_CHARS = 24000;
 const MAX_IMAGES = 5;
 const MAX_IMAGE_B64 = 6000000; // about 4.5 MB per image
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const PHOTO_TASKS = ['photo-urls', 'photo-delete'];
+const MAX_PHOTO_BYTES = 6 * 1024 * 1024; // the Hub shrinks photos to about 0.3-1 MB before sending
+const PHOTO_KEY = /^chat\/[a-f0-9]{32}\.jpg$/;
 
 export default {
   async scheduled(event, env, ctx) {
@@ -39,13 +45,16 @@ export default {
       if (b && b.task === 'notify-send' && Array.isArray(b.items)) await sendItems(b.pid, b.gtok, b.items.slice(0, 40));
       return new Response('{}', { headers: { 'content-type': 'application/json' } });
     }
+    const here = new URL(request.url);
+    // Chat photos are shown with plain <img> links, so they're checked by a signature, not a sign-in.
+    if (request.method === 'GET' && here.pathname.startsWith('/p/')) return photoServe(here, env);
     const origin = request.headers.get('Origin') || '';
     const allowed = String(env.ALLOWED_ORIGIN || DEFAULT_ORIGIN).split(',').map((s) => s.trim()).filter(Boolean);
     const originOk = allowed.includes(origin);
     const cors = {
       'Access-Control-Allow-Origin': originOk ? origin : allowed[0],
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'content-type, x-gs-code',
+      'Access-Control-Allow-Headers': 'content-type, x-gs-code, authorization',
       'Access-Control-Max-Age': '86400',
       'Vary': 'Origin'
     };
@@ -54,14 +63,20 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (request.method !== 'POST') return reply(405, { error: 'bad_request', detail: 'Use POST.' });
     if (!originOk) return reply(403, { error: 'origin', detail: 'This site is not in ALLOWED_ORIGIN.' });
+    // Sending a chat photo is the one request that isn't JSON.
+    if ((request.headers.get('content-type') || '').startsWith('multipart/form-data')) {
+      return photoTask('photo-send', request, null, env, reply, ctx, here.origin, allowed[0]);
+    }
     let body;
     try { body = await request.json(); } catch (e) { return reply(400, { error: 'bad_request' }); }
     const task = body && body.task;
     // Anyone on the site may ask for a notification check; it only sends what's new.
     if (task === 'notify-check') {
-      ctx.waitUntil(notifyRun(env, new URL(request.url).origin, allowed[0]).catch(() => {}));
+      ctx.waitUntil(notifyRun(env, here.origin, allowed[0]).catch(() => {}));
       return reply(202, { ok: true });
     }
+    // Team members prove who they are with their Hub sign-in, not the coaches' access code.
+    if (PHOTO_TASKS.includes(task)) return photoTask(task, request, body, env, reply, ctx, here.origin, allowed[0]);
     if (!env.ACCESS_CODE) return reply(500, { error: 'not_configured', detail: 'Add ACCESS_CODE as a secret.' });
     if (!sameText(request.headers.get('x-gs-code') || '', String(env.ACCESS_CODE))) return reply(401, { error: 'bad_code' });
     if (STREAM_TASKS.includes(task)) return stream(task, body, env, reply);
@@ -144,6 +159,142 @@ async function stream(task, body, env, reply) {
   }
 }
 
+// ---------- Team chat photos ----------
+// Photos live in the R2 bucket bound as PHOTOS, never on the public website. The Worker checks
+// each person's Hub sign-in (a Firebase ID token) and their approved member record before it
+// stores a photo, writes the chat message itself (so a message can only point at a real photo),
+// or gives out viewing links. Viewing links are signed, last one to two days, and stay the same
+// all day so phones can cache the pictures.
+async function photoTask(task, request, body, env, reply, ctx, self, site) {
+  let u;
+  try { u = await photoUser(request, env); } catch (e) { return reply(e.status || 500, { error: e.error || 'upstream' }); }
+  try {
+    if (task === 'photo-send') {
+      let form;
+      try { form = await request.formData(); } catch (e) { return reply(400, { error: 'bad_request' }); }
+      const file = form.get('photo');
+      if (!file || typeof file === 'string') return reply(400, { error: 'bad_image' });
+      if (file.size > MAX_PHOTO_BYTES) return reply(413, { error: 'too_big' });
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      if (bytes.length < 4 || bytes[0] !== 0xFF || bytes[1] !== 0xD8 || bytes[2] !== 0xFF) return reply(400, { error: 'bad_image' });
+      const dim = (v) => Math.max(0, Math.min(10000, Math.round(Number(v) || 0)));
+      const key = 'chat/' + hexRand(16) + '.jpg';
+      await env.PHOTOS.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg' }, customMetadata: { uid: u.uid } });
+      const msg = {
+        uid: u.uid,
+        name: String(form.get('name') || u.name || 'Team member').trim().slice(0, 60) || 'Team member',
+        text: String(form.get('text') || '').trim().slice(0, 1000),
+        coach: u.admin,
+        photo: { key, w: dim(form.get('w')), h: dim(form.get('h')) }
+      };
+      let id;
+      try { id = await u.db.create('messages', msg, 'at'); } catch (e) { id = null; }
+      if (!id) { await env.PHOTOS.delete(key).catch(() => {}); return reply(502, { error: 'upstream', detail: 'Could not save the message.' }); }
+      ctx.waitUntil(notifyRun(env, self, site).catch(() => {}));
+      return reply(200, { id, key });
+    }
+    if (task === 'photo-urls') {
+      const keys = [...new Set((Array.isArray(body.keys) ? body.keys : []).map(String))].filter((k) => PHOTO_KEY.test(k)).slice(0, 300);
+      const exp = (Math.floor(Date.now() / 86400000) + 2) * 86400; // end of tomorrow (UTC), in seconds
+      const hk = await photoKey(u.sa);
+      const urls = {};
+      for (const k of keys) urls[k] = self + '/p/' + k + '?e=' + exp + '&s=' + (await photoSig(hk, k, exp));
+      return reply(200, { urls, exp });
+    }
+    if (task === 'photo-delete') {
+      const id = String(body.id || '');
+      if (!/^[A-Za-z0-9]{1,40}$/.test(id)) return reply(400, { error: 'bad_request' });
+      const m = await u.db.get('messages/' + id);
+      if (!m) return reply(200, { ok: true });
+      if (m.uid !== u.uid && !u.admin) return reply(403, { error: 'not_allowed' });
+      const key = m.photo && m.photo.key;
+      if (key && PHOTO_KEY.test(key)) await env.PHOTOS.delete(key);
+      if (!(await u.db.del('messages/' + id))) return reply(502, { error: 'upstream', detail: 'Could not delete the message.' });
+      return reply(200, { ok: true });
+    }
+    return reply(400, { error: 'bad_request' });
+  } catch (e) {
+    return reply(502, { error: 'upstream', detail: 'Photo storage had a problem.' });
+  }
+}
+async function photoUser(request, env) {
+  if (!env.PHOTOS || !env.FIREBASE_SERVICE_ACCOUNT) throw { status: 500, error: 'photos_not_configured' };
+  const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
+  const m = /^Bearer\s+(\S+)$/.exec(request.headers.get('authorization') || '');
+  if (!m) throw { status: 401, error: 'signed_out' };
+  const uid = await verifyIdToken(m[1], sa.project_id);
+  if (!uid) throw { status: 401, error: 'signed_out' };
+  const db = firestore(sa.project_id, await googleToken(sa));
+  const [member, setup] = await Promise.all([db.get('members/' + uid), db.get('config/setup')]);
+  const owner = !!(setup && setup.owner === uid);
+  const approved = !!(member && member.status === 'approved');
+  if (!owner && !approved) throw { status: 403, error: 'not_approved' };
+  return { uid, db, sa, admin: owner || (approved && member.role === 'admin'), name: member && member.name };
+}
+// Checks a Firebase sign-in token against Google's published keys. Returns the user id, or null.
+let JWKS = null;
+async function verifyIdToken(tok, pid) {
+  try {
+    const parts = String(tok).split('.');
+    if (parts.length !== 3) return null;
+    const json = (s) => JSON.parse(new TextDecoder().decode(b64urlBytes(s)));
+    const h = json(parts[0]), p = json(parts[1]);
+    const now = Date.now() / 1000;
+    if (h.alg !== 'RS256' || !h.kid) return null;
+    if (p.aud !== pid || p.iss !== 'https://securetoken.google.com/' + pid) return null;
+    if (typeof p.sub !== 'string' || !p.sub || p.sub.length > 128) return null;
+    if (!(p.exp > now) || !(p.iat <= now + 300)) return null;
+    let jwk = (await googleKeys(false)).find((k) => k.kid === h.kid);
+    if (!jwk) jwk = (await googleKeys(true)).find((k) => k.kid === h.kid);
+    if (!jwk) return null;
+    const key = await crypto.subtle.importKey('jwk', { kty: 'RSA', n: jwk.n, e: jwk.e, alg: 'RS256', ext: true }, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, b64urlBytes(parts[2]), new TextEncoder().encode(parts[0] + '.' + parts[1]));
+    return ok ? p.sub : null;
+  } catch (e) { return null; }
+}
+async function googleKeys(fresh) {
+  if (!fresh && JWKS && JWKS.exp > Date.now()) return JWKS.keys;
+  const r = await fetch('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com');
+  const d = await r.json().catch(() => null);
+  if (!d || !Array.isArray(d.keys)) return (JWKS && JWKS.keys) || [];
+  JWKS = { keys: d.keys, exp: Date.now() + 3600000 };
+  return d.keys;
+}
+// The signing key for viewing links comes from the service account's private key, so there's no
+// extra secret to set up and nobody outside the Worker can make a valid link.
+let PKEY = null;
+async function photoKey(sa) {
+  if (PKEY && PKEY.email === sa.client_email) return PKEY.key;
+  const raw = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(sa.private_key) + '|gs-chat-photos'));
+  const key = await crypto.subtle.importKey('raw', raw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  PKEY = { email: sa.client_email, key };
+  return key;
+}
+async function photoSig(hk, key, exp) {
+  return b64url(new Uint8Array(await crypto.subtle.sign('HMAC', hk, new TextEncoder().encode(key + '|' + exp))));
+}
+async function photoServe(url, env) {
+  const no = (s) => new Response(null, { status: s, headers: { 'cache-control': 'no-store' } });
+  if (!env.PHOTOS || !env.FIREBASE_SERVICE_ACCOUNT) return no(404);
+  const key = decodeURIComponent(url.pathname.slice(3));
+  const exp = Number(url.searchParams.get('e'));
+  const sig = url.searchParams.get('s') || '';
+  if (!PHOTO_KEY.test(key) || !Number.isFinite(exp) || exp * 1000 < Date.now()) return no(403);
+  const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
+  if (!sameText(sig, await photoSig(await photoKey(sa), key, exp))) return no(403);
+  const obj = await env.PHOTOS.get(key);
+  if (!obj) return no(404);
+  return new Response(obj.body, {
+    headers: {
+      'content-type': 'image/jpeg',
+      'cache-control': 'private, max-age=' + Math.max(0, Math.floor(exp - Date.now() / 1000)) + ', immutable',
+      'x-content-type-options': 'nosniff'
+    }
+  });
+}
+function hexRand(n) { return Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, '0')).join(''); }
+function b64urlBytes(s) { return Uint8Array.from(atob(String(s).replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((String(s).length + 3) % 4)), (c) => c.charCodeAt(0)); }
+
 // ---------- Notifications ----------
 // Watches Firestore with the service account (which skips the security rules) and sends phone
 // notifications through Firebase Cloud Messaging. State lives in config/notify and is saved with
@@ -176,12 +327,28 @@ function fsVal(v) {
   return null;
 }
 function fsObj(fields) { const o = {}; for (const k in fields || {}) o[k] = fsVal(fields[k]); return o; }
+function fsEnc(v) {
+  if (typeof v === 'string') return { stringValue: v };
+  if (typeof v === 'boolean') return { booleanValue: v };
+  if (typeof v === 'number') return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+  if (v && typeof v === 'object') { const fields = {}; for (const k in v) fields[k] = fsEnc(v[k]); return { mapValue: { fields } }; }
+  return { nullValue: null };
+}
 function firestore(pid, tok) {
   const base = 'https://firestore.googleapis.com/v1/projects/' + pid + '/databases/(default)/documents';
   const H = { Authorization: 'Bearer ' + tok, 'content-type': 'application/json' };
   const docOut = (d) => Object.assign(fsObj(d.fields), { _id: d.name.split('/').pop(), _updateTime: d.updateTime });
   return {
     async get(path) { const r = await fetch(base + '/' + path, { headers: H }); if (r.status === 404) return null; if (!r.ok) throw new Error('firestore get ' + r.status); return docOut(await r.json()); },
+    // New document with a random id; timeField (if given) is set to the server's clock, like serverTimestamp().
+    async create(col, data, timeField) {
+      const id = hexRand(10);
+      const write = { update: { name: 'projects/' + pid + '/databases/(default)/documents/' + col + '/' + id, fields: fsEnc(data).mapValue.fields }, currentDocument: { exists: false } };
+      if (timeField) write.updateTransforms = [{ fieldPath: timeField, setToServerValue: 'REQUEST_TIME' }];
+      const r = await fetch(base + ':commit', { method: 'POST', headers: H, body: JSON.stringify({ writes: [write] }) });
+      return r.ok ? id : null;
+    },
+    async del(path) { const r = await fetch(base + '/' + path, { method: 'DELETE', headers: H }).catch(() => null); return !!(r && (r.ok || r.status === 404)); },
     async query(col, field, op, value, order, limit) {
       const q = { from: [{ collectionId: col }], where: { fieldFilter: { field: { fieldPath: field }, op, value } }, limit };
       if (order) q.orderBy = [{ field: { fieldPath: order }, direction: 'ASCENDING' }];
@@ -222,8 +389,9 @@ async function notifyRun(env, self, site) {
   else if (first) state.msgAt = since;
   if (!first) {
     const link = site + '/#chat';
-    if (msgs.length <= 3) for (const m of msgs) out.push({ kind: 'chat', title: (m.name || 'Team chat') + (m.coach ? ' (Coach)' : ''), body: String(m.text || '').slice(0, 160), tag: 'chat-' + m._id, link, except: m.uid });
-    else { const last = msgs[msgs.length - 1]; out.push({ kind: 'chat', title: msgs.length + ' new messages in team chat', body: (last.name || '') + ': ' + String(last.text || '').slice(0, 120), tag: 'chat', link }); }
+    const say = (m, n) => (m.photo ? '📷 Photo' + (m.text ? ': ' : '') : '') + String(m.text || '').slice(0, n);
+    if (msgs.length <= 3) for (const m of msgs) out.push({ kind: 'chat', title: (m.name || 'Team chat') + (m.coach ? ' (Coach)' : ''), body: say(m, 160), tag: 'chat-' + m._id, link, except: m.uid });
+    else { const last = msgs[msgs.length - 1]; out.push({ kind: 'chat', title: msgs.length + ' new messages in team chat', body: (last.name || '') + ': ' + say(last, 120), tag: 'chat', link }); }
   }
 
   // Games in progress: start, runs, half-innings, final

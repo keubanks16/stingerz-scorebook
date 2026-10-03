@@ -407,8 +407,38 @@ body.cam-on { overflow: hidden; }
 .chat-hint { align-self: center; font-size: 12px; color: var(--ink-3); margin-top: 10px; text-align: center; }
 body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
 .chat-bar { position: fixed; left: 0; right: 0; bottom: calc(57px + env(safe-area-inset-bottom, 0px)); z-index: 29; background: var(--surface); border-top: 1px solid var(--line); padding: 8px max(12px, calc((100% - 760px) / 2 + 12px)); display: flex; gap: 8px; align-items: flex-end; }
-.chat-bar textarea { flex: 1; min-width: 0; resize: none; border: 1px solid var(--line); background: var(--surface-2); border-radius: 20px; padding: 10px 14px; font-size: 16px; line-height: 1.3; max-height: 120px; color: var(--ink); }
+.chat-bar textarea { flex: 1; min-width: 0; resize: none; font-family: inherit; border: 1px solid var(--line); background: var(--surface-2); border-radius: 20px; padding: 10px 14px; font-size: 16px; line-height: 1.3; max-height: 120px; color: var(--ink); }
 .chat-bar .btn { border-radius: 20px; clip-path: none; min-height: 42px; }
+.chat-bar { flex-wrap: wrap; }
+.chat-pic { flex: none; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; color: var(--accent); background: var(--surface-2); border: 1px solid var(--line); cursor: pointer; }
+.chat-pic[hidden] { display: none; }
+.chat-pic svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+.vh { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; opacity: 0; }
+.chat-pend { flex: 1 0 100%; }
+.chat-pend[hidden] { display: none; }
+.pend-row { display: flex; align-items: center; gap: 10px; padding: 2px 0 4px; font-size: 14px; color: var(--ink-2); }
+.pend-row img { width: 56px; height: 56px; object-fit: cover; border-radius: 10px; flex: none; background: var(--surface-2); }
+.pend-row b { display: block; color: var(--ink); font-size: 15px; }
+.pend-row .bar { display: block; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin-top: 6px; }
+.pend-row .bar i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+body.chat-on.chat-pend-on main { padding-bottom: calc(220px + env(safe-area-inset-bottom, 0px)); }
+.msg .photo { display: block; width: min(250px, 62vw); max-height: 340px; padding: 0; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--surface-2); cursor: zoom-in; }
+.msg.me .photo { border-color: transparent; }
+.msg .photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.msg.sel .photo { box-shadow: 0 0 0 2px var(--bad); }
+.viewer { position: fixed; inset: 0; z-index: 60; background: #030A18; color: #fff; display: flex; flex-direction: column; padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); }
+.viewer-top { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; }
+.viewer-who { flex: 1; min-width: 0; font-size: 15px; color: #C9D7EE; }
+.viewer-who b { color: #fff; }
+.viewer-x { width: 40px; height: 40px; flex: none; border-radius: 50%; border: 0; background: rgba(255, 255, 255, .14); color: #fff; display: grid; place-items: center; cursor: pointer; }
+.viewer-x svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.viewer-img { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 8px; }
+.viewer-img img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; }
+.viewer-img .wait { color: #A6B7D3; }
+.viewer-cap { padding: 12px 16px 0; font-size: 16px; line-height: 1.35; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 28vh; overflow-y: auto; }
+.viewer-acts { display: flex; align-items: center; gap: 12px; padding: 12px 16px 16px; font-size: 13px; color: #A6B7D3; }
+.viewer-acts .del { background: transparent; border: 1px solid rgba(255, 255, 255, .3); color: #FF9C93; border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; flex: none; }
+body.viewer-on { overflow: hidden; }
 .toast { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--ground); padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 15px; z-index: 50; max-width: calc(100% - 32px); box-shadow: var(--shadow); }
 .loading { padding: 60px 0; text-align: center; color: var(--ink-2); display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .loading img { height: 60px; width: auto; animation: pulse 1.4s infinite; }
@@ -446,7 +476,7 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
   <button data-act="tab" data-tab="team"><svg viewBox="0 0 24 24"><path d="M8 3.5 4 6l-1.5 4.5L6 12v8.5h12V12l3.5-1.5L20 6l-4-2.5c-.5 1.8-2 3-4 3s-3.5-1.2-4-3z"/></svg>Team</button>
 </div></nav>
 
-<form id="chat-bar" class="chat-bar" hidden><textarea id="chat-input" rows="1" maxlength="1000" placeholder="Message the team" aria-label="Message the team"></textarea><button type="submit" class="btn primary" id="chat-send">Send</button></form>
+<form id="chat-bar" class="chat-bar" hidden><div id="chat-pend" class="chat-pend" hidden></div><label class="chat-pic" id="chat-pic" for="chat-file" title="Add a photo" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5h3.6L9 5h6l1.9 2.5h3.6v12h-17z"/><circle cx="12" cy="13.2" r="3.6"/></svg><span class="vh">Add a photo</span></label><input type="file" id="chat-file" class="vh" accept="image/*" tabindex="-1"><textarea id="chat-input" rows="1" maxlength="1000" placeholder="Message the team" aria-label="Message the team"></textarea><button type="submit" class="btn primary" id="chat-send">Send</button></form>
 <div id="sheet-root"></div>
 <div class="toast" id="toast" role="status" hidden></div>
 
@@ -1099,7 +1129,7 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
   }
 
   // ---------- Team chat (one group conversation for everyone approved) ----------
-  const Chat = { sub: null, list: [], loaded: false, delId: null, forceBottom: false, sending: false };
+  const Chat = { sub: null, list: [], loaded: false, delId: null, forceBottom: false, sending: false, pending: null, urls: new Map(), urlBusy: false, urlRetry: 0 };
   const CHAT_SEEN = 'gs-baseball-chat-seen';
   const CHAT_DELHINT = 'gs-baseball-chat-delhint';
   function chatDelHintDone() { try { return localStorage.getItem(CHAT_DELHINT) === '1'; } catch (e) { return false; } }
@@ -1121,10 +1151,13 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
       Chat.list = snap.docs.map((d) => {
         const x = d.data({ serverTimestamps: 'estimate' }) || {};
         const at = x.at && typeof x.at.toMillis === 'function' ? x.at.toMillis() : Number(x.at) || Date.now();
-        return { id: d.id, uid: x.uid, name: x.name || 'Team member', text: String(x.text || ''), coach: !!x.coach, at };
+        const ph = x.photo && typeof x.photo.key === 'string' ? { key: x.photo.key, w: Number(x.photo.w) || 0, h: Number(x.photo.h) || 0 } : null;
+        return { id: d.id, uid: x.uid, name: x.name || 'Team member', text: String(x.text || ''), coach: !!x.coach, at, photo: ph };
       }).reverse();
       Chat.loaded = true;
       scheduleRender();
+      chatPhotoUrls();
+      viewerSync();
     }, () => { Chat.loaded = true; scheduleRender(); });
   }
   function chatName() { return (Access.member && Access.member.name) || (Access.user && (Access.user.displayName || String(Access.user.email || '').split('@')[0])) || 'Team member'; }
@@ -1152,7 +1185,12 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
       if (canDel) anyDel = true;
       h += `<div class="msg${mine ? ' me' : ''}${grouped ? ' grouped' : ''}${sel ? ' sel' : ''}"${canDel ? ` data-act="msgTap" data-id="${esc(m.id)}"` : ''}>`;
       if (!grouped) h += `<div class="msg-meta">${mine ? '' : `<b>${esc(m.name)}</b>${m.coach ? '<span class="chip">Coach</span>' : ''} · `}${esc(chatTime(m.at))}</div>`;
-      h += `<div class="bubble">${esc(m.text)}</div>`;
+      if (m.photo) {
+        const u = chatPhotoUrl(m.photo.key);
+        const ar = m.photo.w && m.photo.h ? Math.min(2, Math.max(0.5, m.photo.w / m.photo.h)) : 0.75;
+        h += `<button class="photo" data-act="photoOpen" data-id="${esc(m.id)}" style="aspect-ratio:${ar.toFixed(3)}" aria-label="Open photo from ${esc(m.name)}">${u ? `<img src="${esc(u)}" alt="">` : ''}</button>`;
+      }
+      if (m.text) h += `<div class="bubble">${esc(m.text)}</div>`;
       if (sel) h += `<div class="msg-acts"><button class="btn sm danger" data-act="msgDelete" data-id="${esc(m.id)}">Delete message</button><button class="btn sm ghost" data-act="msgCancel">Cancel</button></div>`;
       h += '</div>';
       prev = m;
@@ -1162,6 +1200,7 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
     return h + '</div>';
   }
   async function chatSend() {
+    if (Chat.pending) return chatSendPhoto();
     const box = $('#chat-input');
     const text = String(box.value || '').trim().slice(0, 1000);
     if (!text || Chat.sending || !chatAllowed()) return;
@@ -1179,6 +1218,169 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
     Chat.sending = false;
   }
   function chatGrow() { const box = $('#chat-input'); if (!box) return; box.style.height = 'auto'; box.style.height = Math.min(120, box.scrollHeight) + 'px'; }
+
+  // ---------- Team chat photos ----------
+  // Photos go to the team's Cloudflare Worker, which keeps them in private R2 storage and writes
+  // the chat message. Phones get short-lived viewing links from the Worker after it checks the
+  // person's sign-in, so photos are only visible to approved members.
+  function workerUrl() { return String((loadAiCfg() || {}).url || Data.team.notifyUrl || '').trim(); }
+  function chatPhotoUrl(key) { const c = Chat.urls.get(key); return c && c.exp * 1000 > Date.now() ? c.url : ''; }
+  async function workerPost(body) {
+    const tok = await Access.user.getIdToken();
+    const r = await fetch(workerUrl(), { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + tok }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => null);
+    return { ok: r.ok, status: r.status, d: d || {} };
+  }
+  async function chatPhotoUrls() {
+    if (Chat.urlBusy || !chatAllowed() || !workerUrl() || Date.now() < Chat.urlRetry) return;
+    const soon = Date.now() + 6 * 3600 * 1000;
+    const need = [...new Set(Chat.list.filter((m) => m.photo).map((m) => m.photo.key))].filter((k) => { const c = Chat.urls.get(k); return !(c && c.exp * 1000 > soon); });
+    if (!need.length) return;
+    Chat.urlBusy = true;
+    try {
+      const r = await workerPost({ task: 'photo-urls', keys: need.slice(0, 300) });
+      if (r.ok && r.d.urls) {
+        for (const k in r.d.urls) Chat.urls.set(k, { url: r.d.urls[k], exp: Number(r.d.exp) || 0 });
+        Chat.urlRetry = 0;
+        scheduleRender();
+        viewerSync();
+      } else Chat.urlRetry = Date.now() + 60000;
+    } catch (e) { Chat.urlRetry = Date.now() + 30000; }
+    Chat.urlBusy = false;
+  }
+  function photoErrText(status, code) {
+    if (code === 'photos_not_configured' || code === 'bad_request' || code === 'bad_code') return 'Photos aren’t turned on yet. A coach needs to finish photo setup.';
+    if (code === 'not_approved') return 'A coach needs to approve your account before you can send photos.';
+    if (code === 'signed_out') return 'Sign in again, then try sending the photo.';
+    if (code === 'too_big') return 'That photo is too large. Try a screenshot of it instead.';
+    if (code === 'bad_image') return 'That photo couldn’t be sent. Try a different one.';
+    return 'Couldn’t send the photo. Check your connection and try again.';
+  }
+  async function chatPickPhoto(file) {
+    if (!chatAllowed() || Chat.sending) return;
+    if (!workerUrl()) { toast(photoErrText(0, 'photos_not_configured')); return; }
+    chatPhotoClear();
+    Chat.pending = { busy: true };
+    chatPendSync();
+    try {
+      const j = await toJpegSized(file, 1600, 0.82);
+      Chat.pending = { blob: j.blob, w: j.w, h: j.h, url: URL.createObjectURL(j.blob), pct: null };
+    } catch (e) {
+      Chat.pending = null;
+      toast('That photo couldn’t be opened. Try a screenshot or a different photo.');
+    }
+    chatPendSync();
+    Chat.forceBottom = true;
+    render();
+  }
+  function chatPhotoClear() {
+    if (Chat.pending && Chat.pending.url) URL.revokeObjectURL(Chat.pending.url);
+    Chat.pending = null;
+    chatPendSync();
+  }
+  function chatPendSync() {
+    const el = $('#chat-pend'), box = $('#chat-input'), send = $('#chat-send');
+    if (!el) return;
+    const P = Chat.pending;
+    el.hidden = !P;
+    document.body.classList.toggle('chat-pend-on', !!P);
+    box.placeholder = P ? 'Add a caption (optional)' : 'Message the team';
+    send.disabled = !!(P && (P.busy || P.pct != null));
+    send.textContent = P && P.pct != null ? 'Sending…' : 'Send';
+    if (!P) { el.innerHTML = ''; return; }
+    if (P.busy) { el.innerHTML = '<div class="pend-row"><span class="spin"></span><span>Getting the photo ready…</span></div>'; return; }
+    const sending = P.pct != null;
+    el.innerHTML = `<div class="pend-row"><img src="${esc(P.url)}" alt=""><div class="grow"><b>${sending ? (P.pct >= 100 ? 'Almost done…' : 'Sending photo… ' + P.pct + '%') : 'Photo ready to send'}</b>${sending ? `<span class="bar"><i style="width:${Math.max(4, P.pct)}%"></i></span>` : '<span>Add a caption if you like, then tap Send.</span>'}</div>${sending ? '' : '<button type="button" class="btn sm ghost" data-act="photoClear">Remove</button>'}</div>`;
+  }
+  async function chatSendPhoto() {
+    const P = Chat.pending, box = $('#chat-input');
+    if (!P || !P.blob || Chat.sending || !chatAllowed()) return;
+    const url = workerUrl();
+    if (!url) { toast(photoErrText(0, 'photos_not_configured')); return; }
+    Chat.sending = true;
+    P.pct = 0;
+    chatPendSync();
+    let res = { status: 0, d: null };
+    try {
+      const tok = await Access.user.getIdToken();
+      const fd = new FormData();
+      fd.append('text', String(box.value || '').trim().slice(0, 1000));
+      fd.append('name', chatName().slice(0, 60));
+      fd.append('w', String(P.w));
+      fd.append('h', String(P.h));
+      fd.append('photo', P.blob, 'photo.jpg');
+      // XMLHttpRequest instead of fetch so the progress bar can move while it uploads.
+      res = await new Promise((resolve) => {
+        const x = new XMLHttpRequest();
+        x.open('POST', url);
+        x.setRequestHeader('Authorization', 'Bearer ' + tok);
+        x.timeout = 120000;
+        x.upload.onprogress = (e) => { if (e.lengthComputable && Chat.pending === P) { P.pct = Math.min(100, Math.round((e.loaded / e.total) * 100)); chatPendSync(); } };
+        x.onload = () => { let d = null; try { d = JSON.parse(x.responseText); } catch (e) { /* not JSON */ } resolve({ status: x.status, d }); };
+        x.onerror = x.ontimeout = () => resolve({ status: 0, d: null });
+        x.send(fd);
+      });
+    } catch (e) { res = { status: 0, d: null }; }
+    Chat.sending = false;
+    if (res.status === 200 && res.d && res.d.id) {
+      if (Chat.pending === P) chatPhotoClear();
+      box.value = '';
+      chatGrow();
+      Chat.forceBottom = true;
+      render();
+    } else {
+      P.pct = null;
+      chatPendSync();
+      toast(photoErrText(res.status, res.d && res.d.error));
+    }
+  }
+  // Deleting a photo message goes through the Worker so the photo itself is removed too.
+  async function chatDeleteMsg(m) {
+    if (m && m.photo && workerUrl()) {
+      try {
+        const r = await workerPost({ task: 'photo-delete', id: m.id });
+        if (r.ok) return;
+        if (r.d.error === 'not_allowed') throw { code: 'permission-denied' };
+      } catch (e) { if (e && e.code === 'permission-denied') throw e; }
+    }
+    await FB.F.deleteDoc(FB.F.doc(FB.fs, 'messages', m ? m.id : ''));
+  }
+  // Full-screen photo viewer
+  let ViewerId = null;
+  function viewerOpen(id) {
+    const m = Chat.list.find((x) => x.id === id);
+    if (!m || !m.photo) return;
+    viewerClose();
+    ViewerId = id;
+    const canDel = m.uid === Access.user.uid || Access.isAdmin;
+    const u = chatPhotoUrl(m.photo.key);
+    const el = document.createElement('div');
+    el.className = 'viewer';
+    el.id = 'viewer';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-label', 'Photo from ' + m.name);
+    el.dataset.act = 'viewerClose';
+    el.innerHTML = `<div class="viewer-top"><div class="viewer-who"><b>${esc(m.uid === Access.user.uid ? 'You' : m.name)}</b>${m.coach ? ' (Coach)' : ''} · ${esc(chatDay(m.at))} ${esc(chatTime(m.at))}</div><button class="viewer-x" data-act="viewerClose" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+      <div class="viewer-img">${u ? `<img src="${esc(u)}" alt="">` : '<span class="wait">Loading the photo…</span>'}</div>
+      ${m.text ? `<div class="viewer-cap">${esc(m.text)}</div>` : ''}
+      <div class="viewer-acts">${canDel ? `<button class="del" data-act="msgDelete" data-id="${esc(m.id)}">Delete photo</button>` : ''}<span>Press and hold the photo to save it to your phone.</span></div>`;
+    document.body.appendChild(el);
+    document.body.classList.add('viewer-on');
+    if (!u) chatPhotoUrls();
+  }
+  function viewerSync() {
+    if (!ViewerId) return;
+    const m = Chat.list.find((x) => x.id === ViewerId);
+    if (!m || !m.photo) { viewerClose(); return; }
+    const u = chatPhotoUrl(m.photo.key), box = $('#viewer .viewer-img');
+    if (u && box && !box.querySelector('img')) box.innerHTML = `<img src="${esc(u)}" alt="">`;
+  }
+  function viewerClose() {
+    const v = $('#viewer');
+    if (v) v.remove();
+    ViewerId = null;
+    document.body.classList.remove('viewer-on');
+  }
 
   // ---------- Phone notifications (Firebase Cloud Messaging) ----------
   const PUSH_KEY = 'gs-baseball-push';
@@ -1594,6 +1796,7 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
     $('#chat-dot').hidden = !(UI.tab !== 'chat' && chatUnread());
     const chatOn = UI.tab === 'chat' && chatAllowed();
     $('#chat-bar').hidden = !chatOn;
+    $('#chat-pic').hidden = !(chatOn && workerUrl());
     document.body.classList.toggle('chat-on', chatOn);
     const nearBottom = chatOn && (Chat.forceBottom || window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 140);
     const v = $('#view');
@@ -2404,16 +2607,19 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
     h += scanBlock(sh, R && R.players.length ? 'secondary' : 'primary');
     return h + '</div>';
   }
-  async function toJpeg(file) {
+  async function toJpeg(file) { return (await toJpegSized(file, 1600, 0.88)).blob; }
+  // Shrinks a photo to fit maxSide pixels and re-saves it as JPEG (also turns iPhone HEIC photos into JPEG).
+  async function toJpegSized(file, maxSide, quality) {
     const url = URL.createObjectURL(file);
     try {
       const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej({ code: 'decode' }); i.src = url; });
-      const scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+      const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
       const c = document.createElement('canvas');
       c.width = Math.max(1, Math.round(img.naturalWidth * scale));
       c.height = Math.max(1, Math.round(img.naturalHeight * scale));
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      return await new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej({ code: 'decode' })), 'image/jpeg', 0.88));
+      const blob = await new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej({ code: 'decode' })), 'image/jpeg', quality));
+      return { blob, w: c.width, h: c.height };
     } finally { URL.revokeObjectURL(url); }
   }
   function cleanRoster(raw) {
@@ -2886,11 +3092,15 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
       render();
     },
     msgCancel() { Chat.delId = null; render(); },
+    photoOpen(d) { viewerOpen(d.id); },
+    viewerClose() { viewerClose(); },
+    photoClear() { chatPhotoClear(); render(); },
     async msgDelete(d) {
       Chat.delId = null;
+      viewerClose();
       render();
       try {
-        await FB.F.deleteDoc(FB.F.doc(FB.fs, 'messages', d.id));
+        await chatDeleteMsg(Chat.list.find((x) => x.id === d.id) || { id: d.id });
         try { localStorage.setItem(CHAT_DELHINT, '1'); } catch (e) { /* per-device only */ }
         toast('Message deleted');
       } catch (e) {
@@ -3682,10 +3892,12 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
   document.addEventListener('change', (ev) => {
     const el = ev.target;
     if (el.id === 'import-file' && el.files && el.files[0]) { doImport(el.files[0]); el.value = ''; return; }
+    if (el.id === 'chat-file' && el.files && el.files[0]) { const f = el.files[0]; el.value = ''; chatPickPhoto(f); return; }
     if (el.dataset && el.dataset.scan && el.files && el.files.length) { const files = Array.from(el.files); el.value = ''; runScan(files); return; }
     if (el.dataset && el.dataset.bind && UI.sheet) setPath(UI.sheet, el.dataset.bind, el.value);
   });
   document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && ViewerId) { viewerClose(); return; }
     if (ev.key === 'Escape' && UI.sheet) closeSheet();
     if (ev.key === 'Enter' && !ev.shiftKey && ev.target && ev.target.id === 'chat-input' && !('ontouchstart' in window)) { ev.preventDefault(); chatSend(); }
   });

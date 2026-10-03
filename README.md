@@ -11,6 +11,7 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 | Watch the live video with the scoreboard on top | Yes | Yes | Yes |
 | Stream from the built-in camera, upload game video | Yes | Yes | No |
 | Team chat (read and post) | Yes | Yes | Yes |
+| Send photos in the team chat | Yes | Yes | Yes |
 | Delete anyone's chat message | Yes | No | No |
 | Approve families, add coaches and camera operators, change who can watch | Yes | No | No |
 
@@ -22,6 +23,20 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 ## Team chat
 
 The **Chat** tab is one group conversation for everyone with an approved account: coaches, families and camera operators. People watching through "Anyone with the link" without signing in don't see it. Coaches' messages show a **Coach** tag. To delete a message, tap it and then tap **Delete message**. Anyone can delete their own messages; coaches can delete any message. A hint under the latest message says so until you've deleted one. A red dot on the Chat tab means there are new messages. The chat keeps the latest 300 messages on screen.
+
+### Photos in the chat
+
+Tap the camera button next to the message box to take a photo or pick one from the phone, add a caption if you like, and tap **Send**. The Hub shrinks each photo (to about 1600 pixels on the long side) before sending, so it goes quickly on a weak signal at the field. Tap a photo to see it full screen; press and hold it there to save it to your phone. Whoever sent a photo can delete it from the full-screen view, and coaches can delete any photo. Deleting a photo removes the picture itself, not just the message.
+
+Photos are private to the team. They're stored in your Cloudflare account (R2), not on this public website, and the Worker only shows them to signed-in, approved members, using viewing links that expire within two days. The camera button appears once a coach has saved the Worker under **Team → Cloudflare Worker**.
+
+**Setting up photo storage (one time):**
+
+1. In [Cloudflare](https://dash.cloudflare.com), open **R2 Object Storage** and choose **Create bucket**. Name it `gs-hub-photos` and keep the default location. (If Cloudflare asks you to turn on R2 first, do that. The free tier covers 10 GB of storage a month, roughly 30,000 chat photos.)
+2. Open your Worker, then **Settings → Bindings → Add → R2 bucket**. Set the variable name to `PHOTOS`, pick `gs-hub-photos`, and deploy.
+3. Open the Worker's **Edit code**, paste the latest [`worker.js`](worker.js), and **Deploy**.
+
+Photos also need the `FIREBASE_SERVICE_ACCOUNT` secret, which the Worker already uses for notifications.
 
 ## Notifications
 
@@ -111,7 +126,7 @@ Videos go to the channel of the Google account that signs in, and that account m
 
 ## Cloudflare Worker
 
-Roster photo scanning, scouting reports, the built-in camera and phone notifications go through your Cloudflare Worker ([`worker.js`](worker.js)), which keeps your keys off this public site. Its **Settings → Variables and Secrets**:
+Roster photo scanning, scouting reports, the built-in camera, chat photos and phone notifications go through your Cloudflare Worker ([`worker.js`](worker.js)), which keeps your keys off this public site. Its **Settings → Variables and Secrets**:
 
 | Name | Type | What it's for |
 | --- | --- | --- |
@@ -119,12 +134,12 @@ Roster photo scanning, scouting reports, the built-in camera and phone notificat
 | `ANTHROPIC_API_KEY` | Secret | Roster photos and scouting reports ([console.anthropic.com](https://console.anthropic.com)) |
 | `CF_STREAM_TOKEN` | Secret | Built-in camera (Account · Stream · Edit token) |
 | `CF_ACCOUNT_ID` | Text | Built-in camera (your Cloudflare account ID) |
-| `FIREBASE_SERVICE_ACCOUNT` | Secret | Phone notifications (see [Notifications](#notifications)) |
+| `FIREBASE_SERVICE_ACCOUNT` | Secret | Phone notifications and chat photos (see [Notifications](#notifications)) |
 | `ALLOWED_ORIGIN` | Text | Optional. Defaults to `https://scorebook.stingerz-baseball.com,https://keubanks16.github.io` |
 
 In the scorebook, each coach's phone needs **Team → Cloudflare Worker → Set up**: paste the Worker address and access code, tap **Test connection**, then **Save**.
 
-To create the Worker from scratch: in [Cloudflare](https://dash.cloudflare.com), create a Worker from "Hello World", choose **Edit code**, paste [`worker.js`](worker.js), deploy, then add the variables above and the every-minute Cron Trigger.
+To create the Worker from scratch: in [Cloudflare](https://dash.cloudflare.com), create a Worker from "Hello World", choose **Edit code**, paste [`worker.js`](worker.js), deploy, then add the variables above, the `PHOTOS` R2 bucket binding (see [Photos in the chat](#photos-in-the-chat)), and the every-minute Cron Trigger.
 
 ## Put it on a phone's home screen
 
@@ -137,7 +152,7 @@ To create the Worker from scratch: in [Cloudflare](https://dash.cloudflare.com),
 | --- | --- |
 | `index.html` | The whole app in one page, including the Firebase settings |
 | `firestore.rules` | Database security rules: owner, coaches, families, who can watch |
-| `worker.js` | Cloudflare Worker: holds the API key, opens private Cloudflare streams for the camera phone, and sends notifications |
+| `worker.js` | Cloudflare Worker: holds the API key, opens private Cloudflare streams for the camera phone, stores and shows chat photos, and sends notifications |
 | `firebase-messaging-sw.js` | Shows notifications when the Hub is closed. Must stay at the top level of the site |
 | `CNAME` | Tells GitHub Pages to serve this at scorebook.stingerz-baseball.com |
 | `icons/`, `manifest.webmanifest` | Home-screen icon and app settings |
