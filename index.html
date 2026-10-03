@@ -256,6 +256,7 @@ table.st tr:last-child td { border-bottom: 0; }
 .legend .lr { background: #F2C94C; }
 .legend .li { background: var(--navy); border: 1.5px solid var(--carolina); }
 .field .dot-imp { fill: var(--navy); stroke: #FFFFFF; stroke-width: .5; }
+.field .dot-count { fill: #FFFFFF; font-family: var(--font-body); font-weight: 700; text-anchor: middle; pointer-events: none; }
 .sp-key { font-size: 13px; color: var(--ink-2); text-align: center; line-height: 1.5; }
 .sp-key b { font-weight: 700; }
 .sp-key .k-pu { color: #1B9A5A; }
@@ -1721,6 +1722,11 @@ body.viewer-on { overflow: hidden; }
       marks += `<g class="heat" filter="url(#blur${n})" clip-path="url(#all${n})">` + o.points.map((p) => `<circle cx="${p.loc[0]}" cy="${p.loc[1]}" r="6" opacity="${Math.min(0.5, 0.18 + 1.2 / o.points.length)}"/>`).join('') + '</g>';
     } else if (o.points) {
       for (const p of o.points) {
+        if (p.count) {
+          const r = Math.min(5.2, 1.9 + Math.sqrt(p.count) * 0.38) * Math.min(1.4, o.dot || 1);
+          marks += `<g class="bubble"><circle class="dot-imp" cx="${p.loc[0]}" cy="${p.loc[1]}" r="${r.toFixed(2)}"/><text class="dot-count" x="${p.loc[0]}" y="${(p.loc[1] + r * 0.36).toFixed(2)}" font-size="${(r * 1.05).toFixed(2)}">${p.count}</text><title>${esc(p.title || '')}</title></g>`;
+          continue;
+        }
         // Imported chart balls carry res (h/o/e) instead of a scored result code.
         const m = p.res || p.imp ? {} : E.RESULTS[p.r] || {};
         const hit = p.res ? p.res === 'h' : !!m.hit;
@@ -2289,7 +2295,7 @@ body.viewer-on { overflow: hidden; }
     const sel = key === '*' ? null : by.get(key);
     const pas = sel ? sel.pas : list.flatMap((x) => x.pas);
     const t = tendencies(pas, sel ? sel.bats : '');
-    const pts = sprayPoints(pas);
+    const pts = sprayPoints(pas, 1, UI.sprayMode !== 'heat');
     const title = sel ? [sel.num ? '#' + sel.num : '', sel.name].filter(Boolean).join(' ') : (Data.team.name || 'Our team') + ' hitters';
     const sp = Data.team.spray && Array.isArray(Data.team.spray.players) && Data.team.spray.players.length ? Data.team.spray : null;
     let h = `<h2 class="sec" id="team-spray">Spray charts${headBtn}</h2><section class="card stack" style="padding:14px">
@@ -2406,7 +2412,9 @@ body.viewer-on { overflow: hidden; }
   const SPRAY_RES = { h: { cls: 'dot-hit', n: 'Hit' }, o: { cls: 'dot-out', n: 'Out' }, e: { cls: 'dot-reach', n: 'Reached on error' } };
   const BT_NAME = { G: 'Ground ball', L: 'Line drive', F: 'Fly ball', P: 'Pop up' };
   // Dots for the field drawing. Imported balls at the same spot fan out in a tight spiral around it.
-  function sprayPoints(pas, spread) {
+  // Spots with more than 10 imported balls become one bubble with the count (bubble = false keeps
+  // every ball, which the heat map needs).
+  function sprayPoints(pas, spread, bubble) {
     const out = [], groups = {};
     for (const p of pas) {
       if (p.imp) (groups[p.zone] = groups[p.zone] || []).push(p);
@@ -2415,6 +2423,12 @@ body.viewer-on { overflow: hidden; }
     for (const z in groups) {
       const g = groups[z].slice().sort((a, b) => 'GLFP'.indexOf(a.bt) - 'GLFP'.indexOf(b.bt) || 'eoh'.indexOf(a.res) - 'eoh'.indexOf(b.res));
       const c = SPRAY_ZONES[z].at, step = (spread || 1) * Math.min(2, 7.5 / Math.sqrt(g.length));
+      if (bubble !== false && g.length > 10) {
+        const kinds = {};
+        for (const p of g) { const k = BT_NAME[p.bt] || (SPRAY_RES[p.res] && SPRAY_RES[p.res].n) || 'Ball in play'; kinds[k] = (kinds[k] || 0) + 1; }
+        out.push({ loc: c, imp: 1, count: g.length, title: g.length + ' balls to ' + SPRAY_ZONES[z].name + ' (imported chart): ' + Object.entries(kinds).map(([k, n]) => n + ' ' + k.toLowerCase()).join(', ') });
+        continue;
+      }
       g.forEach((p, i) => {
         const r = step * Math.sqrt(i), a = i * 2.39996;
         const what = [BT_NAME[p.bt], SPRAY_RES[p.res] && SPRAY_RES[p.res].n].filter(Boolean).join(', ') || 'Ball in play';
@@ -2445,7 +2459,7 @@ body.viewer-on { overflow: hidden; }
     const t = tendencies(pas, sel ? sel.bats : '');
     const line = lineFor(pas);
     const title = sel ? hitterLabel(sel) : O.name + ' lineup';
-    const pts = sprayPoints(pas);
+    const pts = sprayPoints(pas, 1, UI.sprayMode !== 'heat');
     const parts = [];
     if (line.PA) parts.push(`${line.H}-for-${line.AB}${line.XBH ? ', ' + line.XBH + ' XBH' : ''} · ${line.BB} BB/HBP · ${line.K} K`);
     if (O.games) parts.push(`${O.games} game${O.games === 1 ? '' : 's'} scored`);
@@ -2688,7 +2702,8 @@ body.viewer-on { overflow: hidden; }
       const off = ps.filter((p) => p.bip != null && p.bip !== sprayTotal(p.dots)).length;
       h += `<div class="sp-top"><div class="grow" style="min-width:0"><div class="sp-opp">${esc(us ? teamName : sh.name)}</div>${sh.read.title ? `<div class="small muted">${esc(sh.read.title)}</div>` : ''}</div><div class="sp-count"><b>${ps.length}</b><span>hitters</span></div><div class="sp-count"><b>${total}</b><span>balls in play</span></div></div>
         <div class="sp-key">${sh.read.legend ? 'Colors read from the chart\u2019s own key.' : 'Colors read as <b class="k-pu">green = pop up</b> · <b class="k-gb">red = ground ball</b> · <b class="k-ld">gold = line drive</b>'}</div>
-        ${off ? `<div class="warn-text">${off} hitter${off === 1 ? '’s' : 's’'} dots don’t add up to the chart’s total. Check ${off === 1 ? 'it' : 'them'} against the screenshot below.</div>` : `<div class="small" style="color:var(--good);font-weight:600">Every hitter’s dots add up to the chart’s totals.</div>`}
+        ${sprayReadNotes(sh.read)}
+        ${off ? `<div class="warn-text">${off} hitter${off === 1 ? '’s' : 's’'} dots don’t add up to the chart’s total. Check ${off === 1 ? 'it' : 'them'} against the screenshot below.</div>` : ps.some((p) => p.bip != null) ? `<div class="small" style="color:var(--good);font-weight:600">Every hitter’s dots add up to the chart’s totals.</div>` : '<div class="small muted">This chart doesn’t print totals to check against, so compare a few hitters with your screenshot before saving.</div>'}
         <div class="sp-list">${ps.map((p, i) => {
           const n = sprayTotal(p.dots), d = sprayDirs(p.dots);
           const bad = p.bip != null && p.bip !== n;
@@ -2793,7 +2808,7 @@ body.viewer-on { overflow: hidden; }
       const spx = sp && Array.isArray(sp.players) ? sp.players.find((x) => x && x.id === sh.id) : null;
       if (spx) pas.push(...importedPas(spx, !sp.v, todayISO(new Date(sp.at || Date.now()))));
       const t = tendencies(pas, p ? p.bats : '');
-      const pts = sprayPoints(pas);
+      const pts = sprayPoints(pas, 1, UI.sprayMode !== 'heat');
       const obp = E.rate(tot.H + tot.BB + tot.HBP, tot.AB + tot.BB + tot.HBP + tot.SF);
       return head(esc(p ? (p.num ? '#' + p.num + ' ' : '') + p.name : 'Player')) + `
         <div class="mu-sub" style="margin-top:-8px">${esc(p ? (p.pos || '') + ' · B/T ' + (p.bats || '?') + '/' + (p.throws || '?') : '')}</div>
@@ -2880,24 +2895,48 @@ body.viewer-on { overflow: hidden; }
   // ---------- importing a spray chart screenshot ----------
   // The reader only reports what it sees (spot, count, dot color). Colors become results here, so a
   // chart's own legend can override the usual green = hit, red = out, gold = error.
-  const SPRAY_PROMPT = 'These images show a baseball spray chart report: one panel per hitter, each with the hitter\'s name, often a summary line such as "13 BIP • 54% Left • 15% Middle • 31% Right", and a field diagram with colored dots. If there are several images they are consecutive pieces of the same report, cut between rows of panels, in top-to-bottom order.\n\n'
+  // One screenshot piece per reading, and each dot as a short code ("SS11r"), so even a big team's
+  // chart fits well inside the reader's reply limit.
+  const SPRAY_PROMPT = 'This image shows part of a baseball spray chart report: panels, one per hitter, each with the hitter\'s name, sometimes a summary line such as "13 BIP • 54% Left • 15% Middle • 31% Right", and a field diagram with colored dots. It may be one piece of a taller report, cut between rows of panels.\n\n'
     + 'For every panel, read every dot. Most charts print a number by each dot: how many balls in play went to that spot. If a dot has no number, it counts as 1.\n'
     + 'Name each dot\'s spot with one of these codes, from the catcher\'s view with home plate at the bottom:\n'
-    + '- "LF", "CF", "RF": in the outfield grass on the left, in the middle, or on the right.\n'
-    + '- "3B": at or just outside the left corner of the infield diamond (third base).\n'
-    + '- "SS": inside the diamond, left of center (between third and second).\n'
-    + '- "2B": inside the diamond, right of center (between second and first).\n'
-    + '- "1B": at or just outside the right corner of the diamond (first base).\n'
-    + '- "P": the middle of the diamond.\n'
-    + '- "C": at the bottom of the diamond, just in front of home plate.\n'
+    + '- LF, CF, RF: in the outfield grass on the left, in the middle, or on the right.\n'
+    + '- 3B: at or just outside the left corner of the infield diamond (third base).\n'
+    + '- SS: inside the diamond, left of center (between third and second).\n'
+    + '- 2B: inside the diamond, right of center (between second and first).\n'
+    + '- 1B: at or just outside the right corner of the diamond (first base).\n'
+    + '- P: the middle of the diamond.\n'
+    + '- C: at the bottom of the diamond, just in front of home plate.\n'
     + 'If a chart has more spots than these (for example left-center), use the nearest code.\n'
-    + 'Name each dot\'s color as "green", "red", "gold" (also for yellow or orange), "blue" or "gray".\n\n'
-    + 'Reply with only JSON shaped {"title": string, "legend": object, "players": [{"name": string, "bip": number or null, "dots": [{"z": string, "n": number, "c": string}]}]}.\n'
+    + 'Name each dot\'s color with one letter: g = green, r = red, y = gold, yellow or orange, b = blue, k = gray.\n\n'
+    + 'Reply with only compact JSON on one line, shaped {"title":string,"legend":object,"players":[{"name":string,"bip":number or null,"dots":string}]}.\n'
     + '- title: the small heading over the panels (team, season), or "".\n'
-    + '- legend: if the image explains what the colors mean, map each color to its meaning, for example {"green":"hit","red":"out"}; otherwise {}.\n'
-    + '- name: the hitter\'s name exactly as written. bip: the balls-in-play number from the summary line, or null if there is none.\n'
-    + '- Use one entry per dot and keep the panels in order. Never invent a dot, a number or a hitter you cannot read.\n'
-    + 'Example: {"title":"2026 Fall 8U Tigers","legend":{},"players":[{"name":"Sam C","bip":4,"dots":[{"z":"LF","n":1,"c":"green"},{"z":"SS","n":3,"c":"red"}]}]}';
+    + '- legend: if the image explains what the colors mean, map each color name to its meaning, for example {"green":"pop up","red":"ground ball"}; otherwise {}.\n'
+    + '- name: the hitter\'s name exactly as written, including any jersey number. bip: the balls-in-play number from the summary line, or null if there is none.\n'
+    + '- dots: every dot in that panel as codes separated by single spaces. Each code is the spot, then the number printed by the dot, then the color letter: "SS11r" is a red dot at shortstop with 11 by it, "C1y" is a gold dot in front of home plate with 1.\n'
+    + 'Keep the panels in order and include every hitter in the image. Never invent a dot, a number or a hitter you cannot read.\n'
+    + 'Example: {"title":"2026 Fall 8U Tigers","legend":{},"players":[{"name":"Sam Cole #4","bip":null,"dots":"LF2g CF1g SS3r 1B1y"}]}';
+  const SPRAY_LETTER = { g: 'green', r: 'red', y: 'gold', o: 'gold', b: 'blue', k: 'gray' };
+  // Reads dot codes like "LF5g SS11r 1B2r" (also tolerates commas and the older object list).
+  function sprayCodes(dots) {
+    if (Array.isArray(dots)) return dots;
+    const out = [];
+    for (const tok of String(dots || '').split(/[\s,;]+/)) {
+      const m = /^(LF|CF|RF|3B|SS|2B|1B|P|C)(\d{0,2})([A-Za-z]?)$/i.exec(tok.trim());
+      if (m) out.push({ z: m[1].toUpperCase(), n: m[2] ? Number(m[2]) : 1, c: SPRAY_LETTER[m[3].toLowerCase()] || m[3] });
+    }
+    return out;
+  }
+  // If a reply got cut off before its JSON closed, keep every hitter that came through whole.
+  function spraySalvage(text) {
+    const t = String(text || '');
+    const players = [];
+    const re = /\{\s*"name"\s*:\s*"((?:[^"\\]|\\.){1,80})"\s*,\s*"bip"\s*:\s*(null|-?\d+)\s*,\s*"dots"\s*:\s*"([^"]*)"\s*\}/g;
+    let m;
+    while ((m = re.exec(t))) players.push({ name: m[1].replace(/\\"/g, '"'), bip: m[2] === 'null' ? null : Number(m[2]), dots: m[3] });
+    const title = /"title"\s*:\s*"((?:[^"\\]|\\.){0,120})"/.exec(t);
+    return { title: title ? title[1] : '', legend: {}, players };
+  }
   const SPRAY_ALIAS = { P: 'P', PITCHER: 'P', C: 'C', CATCHER: 'C', '1B': '1B', FIRST: '1B', FIRSTBASE: '1B', '2B': '2B', SECOND: '2B', SECONDBASE: '2B', SS: 'SS', SHORTSTOP: 'SS', '3B': '3B', THIRD: '3B', THIRDBASE: '3B', LF: 'LF', LEFTFIELD: 'LF', LCF: 'LF', CF: 'CF', CENTERFIELD: 'CF', RF: 'RF', RIGHTFIELD: 'RF', RCF: 'RF' };
   // Dot colors mean contact type on GS Baseball's charts: green = pop up, red = ground ball,
   // gold = line drive. A chart with its own color key can say otherwise, including hit/out/error.
@@ -2920,10 +2959,14 @@ body.viewer-on { overflow: hidden; }
     const out = [];
     for (const x of arr) {
       if (!x || typeof x !== 'object') continue;
-      const name = String(x.name == null ? '' : x.name).replace(/\s+/g, ' ').trim().slice(0, 40);
+      let name = String(x.name == null ? '' : x.name).replace(/\s+/g, ' ').trim();
+      let num = '';
+      const nm = /^(.*?)\s*#\s*(\d{1,3})\s*$/.exec(name) || /^#?\s*(\d{1,3})\s+(.*)$/.exec(name);
+      if (nm) { const swap = /^#?\s*\d/.test(name); num = swap ? nm[1] : nm[2]; name = (swap ? nm[2] : nm[1]).trim(); }
+      name = name.slice(0, 40);
       if (!name) continue;
       const dots = [];
-      for (const d of Array.isArray(x.dots) ? x.dots : []) {
+      for (const d of sprayCodes(x.dots)) {
         if (!d || typeof d !== 'object') continue;
         const z = SPRAY_ALIAS[String(d.z || '').toUpperCase().replace(/[^A-Z0-9]/g, '')];
         const n = Math.round(Number(d.n == null || d.n === '' ? 1 : d.n));
@@ -2938,7 +2981,7 @@ body.viewer-on { overflow: hidden; }
       }
       if (!dots.length) continue;
       const b = x.bip == null || x.bip === '' ? NaN : Math.round(Number(x.bip));
-      out.push({ name, bip: b >= 0 && b < 1000 ? b : null, dots });
+      out.push({ name, num, bip: b >= 0 && b < 1000 ? b : null, dots });
     }
     return { title: String((raw && raw.title) || '').replace(/\s+/g, ' ').trim().slice(0, 80), players: out, legend: used };
   }
@@ -2961,7 +3004,7 @@ body.viewer-on { overflow: hidden; }
     const free = () => roster.filter((p) => rosterKey(p) && !used.has(p.id));
     const take = (i, list) => { if (list.length === 1) { res[i] = list[0].id; used.add(list[0].id); } };
     players.forEach((p, i) => { const n = sprayNorm(p.name); take(i, free().filter((q) => sprayNorm(q.name) === n)); });
-    players.forEach((p, i) => { if (res[i]) return; const m = p.name.match(/#\s*(\d{1,3})\b|^(\d{1,3})\s/); const num = m && (m[1] || m[2]); if (num) take(i, free().filter((q) => String(q.num || '').trim() === num)); });
+    players.forEach((p, i) => { if (res[i] || !p.num) return; take(i, free().filter((q) => String(q.num || '').trim() === p.num)); });
     players.forEach((p, i) => {
       if (res[i]) return;
       const nt = sprayNorm(p.name.replace(/#\s*\d+/g, '')).split(' ').filter(Boolean);
@@ -3047,25 +3090,49 @@ body.viewer-on { overflow: hidden; }
     try {
       const lim = await Caps.sample.limits().catch(() => null);
       if (!lim || !lim.images) throw { code: 'images_unavailable' };
-      const max = Math.max(1, lim.images.maxCount || 1);
       const pieces = [];
       for (const f of files.slice(0, 6)) pieces.push(...(await sprayPieces(f)));
       if (ctl.signal.aborted) throw { code: 'cancelled' };
-      const all = { title: '', players: [], legend: false };
-      const parts = Math.ceil(pieces.length / max);
-      for (let i = 0; i < pieces.length; i += max) {
-        if (parts > 1) { sh.busy.note = `Part ${i / max + 1} of ${parts}.`; renderSheet(); }
-        const r = cleanSpray(await Caps.sample.json(SPRAY_PROMPT, { images: pieces.slice(i, i + max), signal: ctl.signal }));
+      // One reading per piece, up to three at a time. A piece that fails doesn't sink the rest,
+      // and a reply that got cut off still gives back every hitter that came through whole.
+      const results = new Array(pieces.length).fill(null);
+      let next = 0, done = 0, firstErr = null;
+      const progress = () => { if (pieces.length > 1 && UI.sheet === sh && sh.busy) { sh.busy.note = `${done} of ${pieces.length} parts read.`; renderSheet(); } };
+      progress();
+      const reader = async () => {
+        while (next < pieces.length) {
+          const i = next++;
+          try {
+            let raw, cut = false;
+            try { raw = await Caps.sample.json(SPRAY_PROMPT, { images: [pieces[i]], signal: ctl.signal }); }
+            catch (e) { if (e && e.code === 'invalid_json' && e.text) { raw = spraySalvage(e.text); cut = true; } else throw e; }
+            results[i] = Object.assign(cleanSpray(raw), { cut });
+          } catch (e) {
+            if (e && e.code === 'cancelled') throw e;
+            if (!firstErr) firstErr = e;
+          }
+          done++;
+          progress();
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(3, pieces.length) }, reader));
+      if (ctl.signal.aborted) throw { code: 'cancelled' };
+      const all = { title: '', players: [], legend: false, missed: [], cut: [] };
+      results.forEach((r, i) => {
+        if (!r) { all.missed.push(i + 1); return; }
+        if (r.cut) all.cut.push(i + 1);
         if (!all.title) all.title = r.title;
         all.legend = all.legend || r.legend;
         for (const p of r.players) {
-          const twin = all.players.find((q) => sprayNorm(q.name) === sprayNorm(p.name));
+          const twin = all.players.find((q) => sprayNorm(q.name) === sprayNorm(p.name) && (q.num || '') === (p.num || ''));
           if (!twin) all.players.push(p);
           else if (sprayTotal(p.dots) > sprayTotal(twin.dots)) Object.assign(twin, p);
         }
-      }
+      });
+      all.parts = pieces.length;
       if (UI.sheet !== sh) return;
       sh.busy = null;
+      if (!all.players.length && firstErr) throw firstErr;
       if (!all.players.length) { sh.err = 'Couldn’t find any hitters in that chart. Try a screenshot where each hitter’s name and dots are clear.'; renderSheet(); return; }
       const R = us ? null : rosterFor(name);
       const match = sprayMatch(all.players, us ? Data.team.players : R ? R.players : []);
@@ -3079,6 +3146,13 @@ body.viewer-on { overflow: hidden; }
       sh.err = e && e.code === 'cancelled' ? '' : sprayErrText(e);
     }
     renderSheet();
+  }
+  function sprayReadNotes(read) {
+    const parts = (list) => (list.length === 1 ? 'Part ' + list[0] : 'Parts ' + list.join(' and ')) + ' of ' + read.parts;
+    let h = '';
+    if (read.missed && read.missed.length) h += `<div class="warn-text">${parts(read.missed)} of the screenshot couldn’t be read, so some hitters are missing. Save these and import again for the rest, or start over.</div>`;
+    if (read.cut && read.cut.length) h += `<div class="warn-text">The reading of ${parts(read.cut).toLowerCase()} was cut short, so a hitter near the end of it may be missing.</div>`;
+    return h;
   }
   // Shown in an opponent's roster sheet: what's been imported for them, with import and remove.
   function sprayRosterBox(key) {
@@ -3099,7 +3173,7 @@ body.viewer-on { overflow: hidden; }
       if (p.match === 'skip') continue;
       let id = p.match;
       if (!id || !playerById(id)) {
-        const np = { id: uid('p'), num: '', name: p.name, pos: '', bats: '', throws: '' };
+        const np = { id: uid('p'), num: p.num || '', name: p.name, pos: '', bats: '', throws: '' };
         team.players.push(np);
         id = np.id;
         added++;
@@ -3544,7 +3618,7 @@ body.viewer-on { overflow: hidden; }
         if (p.match === 'skip') continue;
         let id = p.match;
         if (!id || !doc.players.some((q) => q.id === id)) {
-          const np = { id: uid('r'), num: '', name: p.name, bats: '' };
+          const np = { id: uid('r'), num: p.num || '', name: p.name, bats: '' };
           doc.players.push(np);
           id = np.id;
         }
