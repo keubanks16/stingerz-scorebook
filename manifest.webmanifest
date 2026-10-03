@@ -1,7 +1,7 @@
 {
-  "name": "GS Baseball Scorebook",
-  "short_name": "GS Scorebook",
-  "description": "Pitch-by-pitch scorekeeping, box scores, stats, spray charts and opponent scouting.",
+  "name": "GS Baseball Hub",
+  "short_name": "GS Hub",
+  "description": "Scorekeeping, live video, stats, scouting and team chat for GS Baseball.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

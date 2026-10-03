@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// GS Baseball Scorebook security rules.
+// GS Baseball Hub security rules.
 // Paste into Firebase console -> Firestore Database -> Rules, then Publish.
 //
 // Roles
@@ -86,6 +86,19 @@ service cloud.firestore {
     match /opponents/{id} {
       allow read: if canView();
       allow write: if isAdmin();
+    }
+    // Team chat: one group conversation for signed-in, approved members (not link-only viewers).
+    match /messages/{id} {
+      allow read: if isApproved() || isAdmin();
+      allow create: if (isApproved() || isAdmin())
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'text', 'coach', 'at'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.name is string && request.resource.data.name.size() <= 60
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000
+        && request.resource.data.coach == isAdmin()
+        && request.resource.data.at == request.time;
+      allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
     }
   }
 }

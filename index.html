@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <style>html{background:#0B2753}:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;min-height:100vh;min-height:100dvh}img{max-width:100%}[hidden]{display:none!important}</style>
-<title>GS Baseball</title>
+<title>GS Baseball Hub</title>
 <meta name="theme-color" content="#0B2753">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="GS Baseball">
+<meta name="apple-mobile-web-app-title" content="GS Hub">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Graduate&display=swap">
 <style>
-/* Layout: phone-first scorebook app. Navy brand bar on top, one scrolling column (max 760px), fixed tab bar at the bottom.
+/* Layout: phone-first team hub (scorebook, video, chat). Navy brand bar on top, one scrolling column (max 760px), fixed tab bar at the bottom.
    Chamfered "varsity" corners, cut like the GS letterforms, mark the scoreboard and the primary actions. */
 :root {
   --ground: #E8ECF2;
@@ -292,7 +292,7 @@ table.st tr:last-child td { border-bottom: 0; }
 
 /* ---------- bottom tabs ---------- */
 .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--surface); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0px); }
-.tabs-in { max-width: 760px; margin: 0 auto; display: grid; grid-template-columns: repeat(5, 1fr); }
+.tabs-in { max-width: 760px; margin: 0 auto; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
 .tabs button { border: 0; background: none; padding: 8px 2px 9px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 12px; font-weight: 600; color: var(--ink-3); position: relative; min-height: 56px; }
 .tabs button svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .tabs button[aria-current="page"] { color: var(--accent); }
@@ -391,6 +391,21 @@ body.cam-on { overflow: hidden; }
 .vrec-bar i { display: block; height: 100%; background: var(--accent); }
 .vrec-acts { gap: 6px; }
 .cam-summary .vrec { border-bottom: 0; }
+.chat { display: flex; flex-direction: column; gap: 4px; }
+.chat-day { align-self: center; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 12px 0 4px; }
+.msg { display: flex; flex-direction: column; align-items: flex-start; max-width: 82%; gap: 3px; margin-top: 8px; }
+.msg.grouped { margin-top: 0; }
+.msg.me { align-self: flex-end; align-items: flex-end; }
+.msg-meta { font-size: 12px; color: var(--ink-3); display: flex; gap: 6px; align-items: center; padding: 0 4px; }
+.msg-meta b { color: var(--ink-2); }
+.msg-meta .chip { height: 18px; font-size: 11px; padding: 0 5px; }
+.bubble { background: var(--surface); border: 1px solid var(--line); color: var(--ink); padding: 8px 12px; border-radius: 16px 16px 16px 4px; font-size: 16px; line-height: 1.35; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.me .bubble { background: var(--accent); color: var(--accent-ink); border-color: transparent; border-radius: 16px 16px 4px 16px; }
+.msg[data-act] { cursor: pointer; }
+body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+.chat-bar { position: fixed; left: 0; right: 0; bottom: calc(57px + env(safe-area-inset-bottom, 0px)); z-index: 29; background: var(--surface); border-top: 1px solid var(--line); padding: 8px max(12px, calc((100% - 760px) / 2 + 12px)); display: flex; gap: 8px; align-items: flex-end; }
+.chat-bar textarea { flex: 1; min-width: 0; resize: none; border: 1px solid var(--line); background: var(--surface-2); border-radius: 20px; padding: 10px 14px; font-size: 16px; line-height: 1.3; max-height: 120px; color: var(--ink); }
+.chat-bar .btn { border-radius: 20px; clip-path: none; min-height: 42px; }
 .toast { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--ground); padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 15px; z-index: 50; max-width: calc(100% - 32px); box-shadow: var(--shadow); }
 .loading { padding: 60px 0; text-align: center; color: var(--ink-2); display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .loading img { height: 60px; width: auto; animation: pulse 1.4s infinite; }
@@ -412,7 +427,7 @@ body.cam-on { overflow: hidden; }
 
 <header class="bar"><div class="bar-in">
   <img class="mark" src="data:image/png;base64,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" alt="GS">
-  <div class="bar-title"><b id="team-name">GS Baseball</b><span>Scorebook</span></div>
+  <div class="bar-title"><b id="team-name">GS Baseball</b><span>Hub</span></div>
   <span class="pill" id="sync" data-s="saved" hidden>Saved</span>
 </div></header>
 
@@ -424,9 +439,11 @@ body.cam-on { overflow: hidden; }
   <button data-act="tab" data-tab="live"><svg viewBox="0 0 24 24"><path d="M12 3.5 20.5 12 12 20.5 3.5 12z"/><circle cx="12" cy="12" r="2.2"/></svg>Live<span class="dot" id="live-dot" hidden></span></button>
   <button data-act="tab" data-tab="stats"><svg viewBox="0 0 24 24"><path d="M5 20V11M10 20V5M15 20v-7M20 20V8"/></svg>Stats</button>
   <button data-act="tab" data-tab="scout"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Scout</button>
+  <button data-act="tab" data-tab="chat" id="chat-tab" hidden><svg viewBox="0 0 24 24"><path d="M4 5.5h16v10H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>Chat<span class="dot" id="chat-dot" hidden></span></button>
   <button data-act="tab" data-tab="team"><svg viewBox="0 0 24 24"><path d="M8 3.5 4 6l-1.5 4.5L6 12v8.5h12V12l3.5-1.5L20 6l-4-2.5c-.5 1.8-2 3-4 3s-3.5-1.2-4-3z"/></svg>Team</button>
 </div></nav>
 
+<form id="chat-bar" class="chat-bar" hidden><textarea id="chat-input" rows="1" maxlength="1000" placeholder="Message the team" aria-label="Message the team"></textarea><button type="submit" class="btn primary" id="chat-send">Send</button></form>
 <div id="sheet-root"></div>
 <div class="toast" id="toast" role="status" hidden></div>
 
@@ -946,6 +963,8 @@ body.cam-on { overflow: hidden; }
         scheduleRender();
       }, () => { X.worker = null; });
     } else if (!(X.isAdmin || X.isCamera) && WorkerSub) { WorkerSub(); WorkerSub = null; X.worker = null; }
+    if (chatAllowed() && !Chat.sub) chatSubscribe();
+    else if (!chatAllowed() && Chat.sub) { Chat.sub(); Chat.sub = null; Chat.list = []; Chat.loaded = false; }
     if (X.isAdmin && !MembersSub) {
       MembersSub = FB.F.onSnapshot(FB.F.collection(FB.fs, 'members'), (q) => {
         X.members = q.docs.map((d) => Object.assign({ uid: d.id }, d.data()));
@@ -972,7 +991,7 @@ body.cam-on { overflow: hidden; }
     try {
       [appMod, FB.A, FB.F] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js')]);
     } catch (e) {
-      $('#view').innerHTML = `<div class="card empty"><img src="${LOGO}" alt=""><h3>Can't reach the scorebook</h3><p>Check your internet connection, then reload.</p></div>`;
+      $('#view').innerHTML = `<div class="card empty"><img src="${LOGO}" alt=""><h3>Can't reach GS Baseball Hub</h3><p>Check your internet connection, then reload.</p></div>`;
       return;
     }
     const app = appMod.initializeApp(cfg);
@@ -1028,10 +1047,10 @@ body.cam-on { overflow: hidden; }
     const name = (X.member && X.member.name) || (X.user && (X.user.displayName || X.user.email)) || '';
     let body, actions;
     if (X.rulesError && !X.owner) {
-      body = 'The database isn’t ready yet. In Firebase, open Firestore Database, Rules, paste the scorebook rules, and Publish. Then reload this page.';
+      body = 'The database isn’t ready yet. In Firebase, open Firestore Database, Rules, paste the firestore.rules file, and Publish. Then reload this page.';
       actions = '';
     } else if (!X.owner) {
-      body = 'Set up your scorebook. The first account created here becomes the admin, so do this before you share the address.';
+      body = 'Set up your team hub. The first account created here becomes the admin, so do this before you share the address.';
       actions = X.user ? `<button class="btn primary" data-act="claim">Make ${esc(X.user.email || 'this account')} the admin</button><button class="btn" data-act="signOut">Sign out</button>` : '<button class="btn primary" data-act="authOpen" data-mode="setup">Create the admin account</button><button class="btn" data-act="authOpen" data-mode="signin">Sign in</button>';
     } else if (!X.user) {
       body = 'Sign in to follow games, box scores and stats. New families can ask for access, and a coach approves it.';
@@ -1046,7 +1065,7 @@ body.cam-on { overflow: hidden; }
       body = 'This account doesn’t have access yet.';
       actions = '<button class="btn primary" data-act="requestAccess">Request access</button><button class="btn" data-act="signOut">Sign out</button>';
     }
-    return `<div class="card empty gate"><div class="logo-tile"><img src="${LOGO}" alt="GS"></div><h3>${esc(Data.team.name || 'GS Baseball')} Scorebook</h3><p>${esc(body)}</p><div class="row" style="justify-content:center">${actions}</div>${X.user ? `<p class="small muted">Signed in as ${esc(X.user.email || '')}</p>` : ''}</div>`;
+    return `<div class="card empty gate"><div class="logo-tile"><img src="${LOGO}" alt="GS"></div><h3>${esc(Data.team.name || 'GS Baseball')} Hub</h3><p>${esc(body)}</p><div class="row" style="justify-content:center">${actions}</div>${X.user ? `<p class="small muted">Signed in as ${esc(X.user.email || '')}</p>` : ''}</div>`;
   }
   function accountHTML() {
     if (Backend.kind !== 'fb') return '';
@@ -1072,6 +1091,81 @@ body.cam-on { overflow: hidden; }
     if (others.length) h += `<div class="card roster">${others.map((m) => { const own = m.uid === X.owner; const chip = own ? 'Owner' : m.status === 'denied' ? 'Declined' : m.role === 'admin' ? 'Coach' : m.role === 'camera' ? 'Camera' : 'Family'; return `<button class="player" data-act="member" data-uid="${esc(m.uid)}"><span class="no" style="font-size:14px">${{ Family: 'FAM', Declined: '—', Camera: 'CAM' }[chip] || 'CO'}</span><span style="min-width:0"><span class="nm">${esc(memberLabel(m))}</span><span class="meta">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}</span></span><span class="chip">${chip}</span></button>`; }).join('')}</div>`;
     return h;
   }
+
+  // ---------- Team chat (one group conversation for everyone approved) ----------
+  const Chat = { sub: null, list: [], loaded: false, delId: null, forceBottom: false, sending: false };
+  const CHAT_SEEN = 'gs-baseball-chat-seen';
+  function chatAllowed() { return Backend.kind === 'fb' && !!Access.user && (Access.isApproved || Access.isAdmin); }
+  const chatSeenKey = () => CHAT_SEEN + ':' + (Access.user ? Access.user.uid : '');
+  function chatSeen() { try { return Number(localStorage.getItem(chatSeenKey())) || 0; } catch (e) { return 0; } }
+  function chatMarkSeen() {
+    const last = Chat.list.length ? Chat.list[Chat.list.length - 1].at : 0;
+    if (last > chatSeen()) { try { localStorage.setItem(chatSeenKey(), String(last)); } catch (e) { /* per-device only */ } }
+  }
+  function chatUnread() {
+    if (!chatAllowed() || !Chat.list.length) return false;
+    const me = Access.user.uid, seen = chatSeen();
+    return Chat.list.some((m) => m.uid !== me && m.at > seen);
+  }
+  function chatSubscribe() {
+    const q = FB.F.query(FB.F.collection(FB.fs, 'messages'), FB.F.orderBy('at', 'desc'), FB.F.limit(300));
+    Chat.sub = FB.F.onSnapshot(q, (snap) => {
+      Chat.list = snap.docs.map((d) => {
+        const x = d.data({ serverTimestamps: 'estimate' }) || {};
+        const at = x.at && typeof x.at.toMillis === 'function' ? x.at.toMillis() : Number(x.at) || Date.now();
+        return { id: d.id, uid: x.uid, name: x.name || 'Team member', text: String(x.text || ''), coach: !!x.coach, at };
+      }).reverse();
+      Chat.loaded = true;
+      scheduleRender();
+    }, () => { Chat.loaded = true; scheduleRender(); });
+  }
+  function chatName() { return (Access.member && Access.member.name) || (Access.user && (Access.user.displayName || String(Access.user.email || '').split('@')[0])) || 'Team member'; }
+  function chatTime(t) { return new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+  function chatDay(t) {
+    const d = new Date(t), now = new Date();
+    const y = new Date(now); y.setDate(now.getDate() - 1);
+    if (d.toDateString() === now.toDateString()) return 'Today';
+    if (d.toDateString() === y.toDateString()) return 'Yesterday';
+    return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+  function renderChat() {
+    if (!chatAllowed()) return `<div class="card empty"><img src="${LOGO}" alt=""><h3>Team chat</h3><p>Sign in with an approved account to see the team chat.</p>${Access.user ? '' : '<button class="btn primary" data-act="authOpen" data-mode="signin">Sign in</button>'}</div>`;
+    if (!Chat.loaded) return '<div class="loading"><div>Loading the team chat…</div></div>';
+    if (!Chat.list.length) return `<div class="card empty"><h3>Team chat</h3><p>One conversation for coaches, players' families and camera crew. Say hi to the team.</p></div>`;
+    const me = Access.user.uid;
+    let h = '<div class="chat">', lastDay = '', prev = null;
+    for (const m of Chat.list) {
+      const day = chatDay(m.at);
+      if (day !== lastDay) { h += `<div class="chat-day">${esc(day)}</div>`; lastDay = day; prev = null; }
+      const mine = m.uid === me;
+      const grouped = prev && prev.uid === m.uid && m.at - prev.at < 5 * 60 * 1000;
+      const canDel = mine || Access.isAdmin;
+      h += `<div class="msg${mine ? ' me' : ''}${grouped ? ' grouped' : ''}"${canDel ? ` data-act="msgTap" data-id="${esc(m.id)}"` : ''}>`;
+      if (!grouped) h += `<div class="msg-meta">${mine ? '' : `<b>${esc(m.name)}</b>${m.coach ? '<span class="chip">Coach</span>' : ''} · `}${esc(chatTime(m.at))}</div>`;
+      h += `<div class="bubble">${esc(m.text)}</div>`;
+      if (Chat.delId === m.id && canDel) h += `<button class="btn sm danger" data-act="msgDelete" data-id="${esc(m.id)}">Delete message</button>`;
+      h += '</div>';
+      prev = m;
+    }
+    return h + '</div>';
+  }
+  async function chatSend() {
+    const box = $('#chat-input');
+    const text = String(box.value || '').trim().slice(0, 1000);
+    if (!text || Chat.sending || !chatAllowed()) return;
+    Chat.sending = true;
+    box.value = '';
+    chatGrow();
+    Chat.forceBottom = true;
+    try {
+      await FB.F.addDoc(FB.F.collection(FB.fs, 'messages'), { uid: Access.user.uid, name: chatName().slice(0, 60), text, coach: !!Access.isAdmin, at: FB.F.serverTimestamp() });
+    } catch (e) {
+      box.value = text; chatGrow();
+      toast(e && e.code === 'permission-denied' ? 'Couldn’t send. Check that the latest security rules are published.' : 'Couldn’t send. Check your connection and try again.');
+    }
+    Chat.sending = false;
+  }
+  function chatGrow() { const box = $('#chat-input'); if (!box) return; box.style.height = 'auto'; box.style.height = Math.min(120, box.scrollHeight) + 'px'; }
 
   // ---------- Claude through your own Cloudflare Worker (GitHub Pages copy) ----------
   const AI_KEY = 'gs-baseball-ai';
@@ -1126,7 +1220,7 @@ body.cam-on { overflow: hidden; }
   }
   try { const t = localStorage.getItem('gs-baseball-tab'); if (t) UI.tab = t; } catch (e) { /* per-viewer convenience only */ }
   const hashTab = (location.hash || '').slice(1);
-  if (['games', 'live', 'stats', 'scout', 'team'].includes(hashTab)) UI.tab = hashTab;
+  if (['games', 'live', 'stats', 'scout', 'team', 'chat'].includes(hashTab)) UI.tab = hashTab;
 
   // ---------- storage backends ----------
   const LS_KEY = 'gs-baseball-v1';
@@ -1410,10 +1504,17 @@ body.cam-on { overflow: hidden; }
       if (b.dataset.tab === UI.tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     }
     $('#live-dot').hidden = !Object.values(Data.games).some((g) => g.status === 'live');
+    if (UI.tab === 'chat' && Backend.kind !== 'fb' && UI.ready) UI.tab = 'games';
+    $('#chat-tab').hidden = !chatAllowed();
+    $('#chat-dot').hidden = !(UI.tab !== 'chat' && chatUnread());
+    const chatOn = UI.tab === 'chat' && chatAllowed();
+    $('#chat-bar').hidden = !chatOn;
+    document.body.classList.toggle('chat-on', chatOn);
+    const nearBottom = chatOn && (Chat.forceBottom || window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 140);
     const v = $('#view');
     const gated = Backend.kind === 'fb' && Access.evaluated && !Access.canView;
     document.body.classList.toggle('gated', gated);
-    if (gated) { v.innerHTML = renderGate(); renderDock(); return; }
+    if (gated) { $('#chat-bar').hidden = true; v.innerHTML = renderGate(); renderDock(); return; }
     if (!UI.ready) { v.innerHTML = `<div class="loading"><img src="${LOGO}" alt=""><div>Loading your team…</div></div>`; return; }
     let h = '';
     try {
@@ -1421,12 +1522,17 @@ body.cam-on { overflow: hidden; }
       else if (UI.tab === 'live') h = renderLive();
       else if (UI.tab === 'stats') h = renderStats();
       else if (UI.tab === 'scout') h = renderScout();
+      else if (UI.tab === 'chat') h = renderChat();
       else h = renderTeam();
     } catch (err) {
       console.error(err);
       h = `<div class="card empty"><h3>Something went wrong showing this screen</h3><p>${esc(err && err.message)}</p></div>`;
     }
     v.innerHTML = h;
+    if (chatOn) {
+      if (nearBottom && Chat.loaded) { Chat.forceBottom = false; window.scrollTo(0, document.documentElement.scrollHeight); }
+      chatMarkSeen();
+    }
     try { renderDock(); } catch (err) { console.error(err); }
     if (Cam.open) camBug();
   }
@@ -2276,7 +2382,7 @@ body.cam-on { overflow: hidden; }
       case 'stream_token': return 'Cloudflare rejected the Stream API token. Check that CF_STREAM_TOKEN has Account, Stream, Edit permission.';
       case 'stream_error': return 'Cloudflare Stream couldn\u2019t start the stream. Check that Stream is turned on in your Cloudflare account.' + (e && e.message ? ' (' + e.message + ')' : '');
       case 'whip': return 'The video connection to Cloudflare failed. Check the signal and try again.';
-      case 'camera': return 'The scorebook can\u2019t use the camera. In Settings, Safari, Camera and Microphone, choose Allow, then try again.';
+      case 'camera': return 'The Hub can\u2019t use the camera. In Settings, Safari, Camera and Microphone, choose Allow, then try again.';
       case 'rate_limited': return 'Claude is busy or your usage limit was reached. Try again in a bit.';
       case 'session_expired': return 'Sign in to Claude again, then retry.';
       case 'invalid_json': case 'empty_completion': case 'refused':
@@ -2392,6 +2498,7 @@ body.cam-on { overflow: hidden; }
     tab(d) {
       UI.tab = d.tab;
       if (d.tab === 'games') UI.gameId = null;
+      if (d.tab === 'chat') { Chat.forceBottom = true; Chat.delId = null; render(); return; }
       try { localStorage.setItem('gs-baseball-tab', d.tab); } catch (e) { /* ignore */ }
       render();
       window.scrollTo(0, 0);
@@ -2664,6 +2771,15 @@ body.cam-on { overflow: hidden; }
       sh.opp = R.players.filter((p) => rosterKey(p)).map((p) => ({ id: uid('o'), num: p.num || '', name: p.name || '', bats: p.bats || '' }));
       renderSheet();
     },
+    msgTap(d, el, ev) {
+      if (ev.target.closest('button')) return;
+      Chat.delId = Chat.delId === d.id ? null : d.id;
+      render();
+    },
+    async msgDelete(d) {
+      Chat.delId = null;
+      try { await FB.F.deleteDoc(FB.F.doc(FB.fs, 'messages', d.id)); } catch (e) { toast('Couldn\u2019t delete that message.'); }
+    },
     authOpen(d) { openSheet({ type: 'auth', mode: d.mode || 'signin', name: '', email: '', password: '', note: '' }); },
     authMode(d) { const sh = UI.sheet; sh.mode = d.mode; sh.err = ''; sh.msg = ''; renderSheet(); },
     async authSubmit() {
@@ -2694,14 +2810,14 @@ body.cam-on { overflow: hidden; }
         toast(sh.mode === 'setup' ? 'Admin account ready' : 'Request sent to the coaches');
       } catch (e) {
         sh.busy = false;
-        sh.err = e && e.code === 'already-claimed' ? 'This scorebook already has an admin. Sign in instead.' : authErrorText(e);
+        sh.err = e && e.code === 'already-claimed' ? 'This hub already has an admin. Sign in instead.' : authErrorText(e);
         if (UI.sheet === sh) renderSheet();
       }
     },
     async signOut() { try { await FB.A.signOut(FB.auth); toast('Signed out'); } catch (e) { toast('Could not sign out. Try again.'); } },
     async claim() {
       try { await claimAdmin('', ''); toast('You’re the admin'); }
-      catch (e) { toast(e && e.code === 'already-claimed' ? 'This scorebook already has an admin.' : authErrorText(e)); }
+      catch (e) { toast(e && e.code === 'already-claimed' ? 'This hub already has an admin.' : authErrorText(e)); }
     },
     async requestAccess() {
       const u = FB.auth && FB.auth.currentUser;
@@ -3196,7 +3312,7 @@ body.cam-on { overflow: hidden; }
           const g = meta.gid && Data.games[meta.gid];
           let title = Data.team.name + ' ' + (g ? camGameName(g) : meta.title || 'game');
           if (meta.part > 1) title += ' (part ' + meta.part + ')';
-          const desc = g ? (g.home ? Data.team.name + ' vs ' + g.opponent : Data.team.name + ' at ' + g.opponent) + (g.location ? ', ' + g.location : '') + ', ' + longDate(g.date) + '. Recorded with the ' + Data.team.name + ' scorebook.' : 'Recorded with the scorebook.';
+          const desc = g ? (g.home ? Data.team.name + ' vs ' + g.opponent : Data.team.name + ' at ' + g.opponent) + (g.location ? ', ' + g.location : '') + ', ' + longDate(g.date) + '. Recorded with GS Baseball Hub.' : 'Recorded with GS Baseball Hub.';
           const r = await ytXhr('POST', 'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status',
             Object.assign({ 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Length': String(total), 'X-Upload-Content-Type': type }, auth()),
             JSON.stringify({ snippet: { title: title.slice(0, 100), description: desc.slice(0, 4900), categoryId: '17' }, status: { privacyStatus: 'unlisted' } }));
@@ -3385,7 +3501,7 @@ body.cam-on { overflow: hidden; }
         try { await RecDB.remove(d.rid); } catch (e) { toast('Could not delete it.'); }
         delete Recs.files[d.rid];
         await loadRecs();
-        toast('Video deleted from the scorebook');
+        toast('Video deleted from this phone');
       }, true);
     },
     ytStart(d) {
@@ -3451,7 +3567,12 @@ body.cam-on { overflow: hidden; }
     if (el.dataset && el.dataset.scan && el.files && el.files.length) { const files = Array.from(el.files); el.value = ''; runScan(files); return; }
     if (el.dataset && el.dataset.bind && UI.sheet) setPath(UI.sheet, el.dataset.bind, el.value);
   });
-  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && UI.sheet) closeSheet(); });
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && UI.sheet) closeSheet();
+    if (ev.key === 'Enter' && !ev.shiftKey && ev.target && ev.target.id === 'chat-input' && !('ontouchstart' in window)) { ev.preventDefault(); chatSend(); }
+  });
+  document.addEventListener('submit', (ev) => { if (ev.target && ev.target.id === 'chat-bar') { ev.preventDefault(); chatSend(); } });
+  document.addEventListener('input', (ev) => { if (ev.target && ev.target.id === 'chat-input') chatGrow(); });
 
   // ---------- boot ----------
   function subscribe(db) {

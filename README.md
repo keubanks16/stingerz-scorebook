@@ -1,6 +1,6 @@
-# GS Baseball Scorebook
+# GS Baseball Hub
 
-Score games pitch by pitch, keep box scores and season stats, chart spray charts, and scout opponents. It runs at **https://scorebook.stingerz-baseball.com**, with coach logins and view-only access for families.
+The team's hub: score games pitch by pitch, keep box scores and season stats, chart spray charts, scout opponents, stream games, and chat as a team. It runs at **https://scorebook.stingerz-baseball.com**, with coach logins and view-only access for families.
 
 ## Who can do what
 
@@ -10,12 +10,18 @@ Score games pitch by pitch, keep box scores and season stats, chart spray charts
 | Follow games live, box scores, stats, scouting | Yes | Yes | Yes |
 | Watch the live video with the scoreboard on top | Yes | Yes | Yes |
 | Stream from the built-in camera, upload game video | Yes | Yes | No |
+| Team chat (read and post) | Yes | Yes | Yes |
+| Delete anyone's chat message | Yes | No | No |
 | Approve families, add coaches and camera operators, change who can watch | Yes | No | No |
 
 - The **owner** is the first account created on the site. The owner is always an admin.
 - New people tap **Request access**. A coach approves them on **Team → Families & coaches**, then taps their name to make them a coach or a **camera operator** if needed.
 - **Who can watch** (same screen): **Approved families**, where parents create an account and a coach approves it, or **Anyone with the link**, with no sign-in needed to watch.
 - The database itself enforces these rules (`firestore.rules`). Hiding buttons isn't the only protection. After updating `firestore.rules` here, paste it into Firebase again and **Publish**.
+
+## Team chat
+
+The **Chat** tab is one group conversation for everyone with an approved account: coaches, families and camera operators. People watching through "Anyone with the link" without signing in don't see it. Coaches' messages show a **Coach** tag. Tap your own message to delete it; coaches can delete any message. A red dot on the Chat tab means there are new messages. The chat keeps the latest 300 messages on screen.
 
 ## First-time setup
 
