@@ -1289,10 +1289,10 @@ body.viewer-on { overflow: hidden; }
   // ---------- Tournament fees ----------
   // fees/{id}: a tournament fee (amount in cents, who owes it). fees/{id}/pay/{playerId}: that
   // player's payment: 'claimed' (the family says they paid with Venmo or Cash App, a coach
-  // confirms) or 'paid'. Card payments are recorded by the Worker after Stripe confirms them.
+  // confirms) or 'paid'.
   // The owner, and anyone the owner turns on, sees everything; a family sees only their own player.
-  const Fees = { list: {}, pays: {}, cfg: null, subs: null, paySubs: new Map(), mode: '', loaded: false, pending: null, busy: '', status: null, returnSession: '', verifying: false };
-  const PAY_NAME = { venmo: 'Venmo', cashapp: 'Cash App', card: 'Card' };
+  const Fees = { list: {}, pays: {}, cfg: null, subs: null, paySubs: new Map(), mode: '', loaded: false, pending: null, busy: '' };
+  const PAY_NAME = { venmo: 'Venmo', cashapp: 'Cash App' };
   function feesAllowed() { return Backend.kind === 'fb' && !!Access.user && (Access.isApproved || Access.isOwner); }
   function feeAccess() { return feesAllowed() && (Access.isOwner || (Access.isApproved && !!Access.member && Access.member.fees === true)); }
   function myPlayers() { return Access.isApproved && Access.member && Array.isArray(Access.member.players) ? Access.member.players : []; }
@@ -1303,16 +1303,14 @@ body.viewer-on { overflow: hidden; }
   const feeName = (n) => { const t = String(n || '').trim().split(/\s+/); return t.length > 1 ? t[0] + ' ' + t[t.length - 1][0] + '.' : t[0] || ''; };
   function payOf(feeId, pid) { return (Fees.pays[feeId] || {})[pid] || null; }
   function feeSummary(f) {
-    let paid = 0, claimed = 0, got = 0, cardN = 0, cardAmt = 0;
+    let paid = 0, claimed = 0, got = 0;
     for (const pid of f.players || []) {
       const p = payOf(f.id, pid);
-      if (p && p.status === 'paid') { paid++; got += Number(p.amount) || f.amount; if (p.method === 'card') { cardN++; cardAmt += Number(p.amount) || f.amount; } }
+      if (p && p.status === 'paid') { paid++; got += Number(p.amount) || f.amount; }
       else if (p && p.status === 'claimed') claimed++;
     }
     const n = (f.players || []).length;
-    // Stripe's standard US price: 2.9% + 30¢ per card payment.
-    const cardFee = Math.round(cardAmt * 0.029) + cardN * 30;
-    return { n, paid, claimed, got, due: n * f.amount, cardN, cardFee };
+    return { n, paid, claimed, got, due: n * f.amount };
   }
   // Keeps the fee data in sync with who's signed in and what they're allowed to see.
   function feesSync() {
@@ -1330,11 +1328,10 @@ body.viewer-on { overflow: hidden; }
           Fees.list = next; Fees.loaded = true;
           paySync(); scheduleRender();
         }, () => { Fees.loaded = true; scheduleRender(); }),
-        FB.F.onSnapshot(FB.F.doc(FB.fs, 'config', 'pay'), (s) => { const x = s.exists() ? s.data() : null; Fees.cfg = x ? { venmo: String(x.venmo || ''), cashapp: String(x.cashapp || ''), card: x.card === true } : { venmo: '', cashapp: '', card: false }; scheduleRender(); }, () => { Fees.cfg = { venmo: '', cashapp: '', card: false }; })
+        FB.F.onSnapshot(FB.F.doc(FB.fs, 'config', 'pay'), (s) => { const x = s.exists() ? s.data() : null; Fees.cfg = x ? { venmo: String(x.venmo || ''), cashapp: String(x.cashapp || '') } : { venmo: '', cashapp: '' }; scheduleRender(); }, () => { Fees.cfg = { venmo: '', cashapp: '' }; })
       ];
     }
     paySync();
-    if (Fees.returnSession && !Fees.verifying) payVerify();
   }
   // Fee managers watch every fee's payments; a family watches only their own players' docs.
   function paySync() {
@@ -1371,7 +1368,6 @@ body.viewer-on { overflow: hidden; }
     const done = all.filter((x) => x.pay && x.pay.status === 'paid');
     let h = `<h2 class="sec" id="your-fees">Your fees</h2>`;
     for (const { f, pid, pay } of open) {
-      const key = f.id + '/' + pid;
       const due = fmtDue(f.due);
       let body;
       if (pay && pay.status === 'claimed') {
@@ -1380,9 +1376,8 @@ body.viewer-on { overflow: hidden; }
         const btns = [];
         if (cfg.venmo) btns.push(`<a class="btn primary full" href="${esc(venmoLink(f, pid))}" target="_blank" rel="noopener" data-paylink="venmo" data-fee="${esc(f.id)}" data-pid="${esc(pid)}">Pay with Venmo</a>`);
         if (cfg.cashapp) btns.push(`<a class="btn full ${btns.length ? 'paybtn' : 'primary'}" href="${esc(cashLink(f))}" target="_blank" rel="noopener" data-paylink="cashapp" data-fee="${esc(f.id)}" data-pid="${esc(pid)}">Pay with Cash App</a>`);
-        if (cfg.card && workerUrl()) btns.push(`<button class="btn full ${btns.length ? 'paybtn' : 'primary'}" data-act="payCard" data-fee="${esc(f.id)}" data-pid="${esc(pid)}" ${Fees.busy === key ? 'disabled' : ''}>${Fees.busy === key ? 'Opening checkout…' : 'Pay ' + fmtMoney(f.amount) + ' with card or Apple Pay'}</button>`);
         const note = esc(f.name + ' · ' + feeName(playerName(pid)));
-        body = btns.length ? btns.join('') + `<div class="small muted">${cfg.venmo ? 'Venmo opens with the amount and note filled in. ' : ''}${cfg.cashapp ? 'In Cash App, type “' + note + '” in the note.' : ''}</div>` + (cfg.venmo || cfg.cashapp ? `<div class="hr"></div><div class="row"><span class="grow small">Already paid with ${cfg.venmo && cfg.cashapp ? 'Venmo or Cash App' : cfg.venmo ? 'Venmo' : 'Cash App'}?</span><button class="btn sm" data-act="payClaim" data-fee="${esc(f.id)}" data-pid="${esc(pid)}">I paid</button></div>` : '')
+        body = btns.length ? btns.join('') + `<div class="small muted">${cfg.venmo ? 'Venmo opens with the amount and note filled in. ' : ''}${cfg.cashapp ? 'In Cash App, type “' + note + '” in the note.' : ''}</div><div class="hr"></div><div class="row"><span class="grow small">Already paid with ${cfg.venmo && cfg.cashapp ? 'Venmo or Cash App' : cfg.venmo ? 'Venmo' : 'Cash App'}?</span><button class="btn sm" data-act="payClaim" data-fee="${esc(f.id)}" data-pid="${esc(pid)}">I paid</button></div>`
           : '<div class="small muted">Your coach hasn’t set up payments yet.</div>';
       }
       h += `<section class="card fee"><div class="fee-top"><div class="grow"><b>${esc(f.name)}</b><span class="small">${esc([f.when, f.where].filter(Boolean).join(' · '))}</span></div>${due ? `<span class="due">Due ${esc(due)}</span>` : ''}</div>
@@ -1417,10 +1412,10 @@ body.viewer-on { overflow: hidden; }
     else h += `<div class="stack" style="gap:10px">${fees.map(feeCardHTML).join('')}</div>`;
     if (Access.isOwner) {
       const c = Fees.cfg || {};
-      const ways = [c.venmo ? 'Venmo @' + c.venmo.replace(/^@/, '') : '', c.cashapp ? 'Cash App $' + c.cashapp.replace(/^\$/, '') : '', c.card ? 'Card & Apple Pay' : ''].filter(Boolean);
+      const ways = [c.venmo ? 'Venmo @' + c.venmo.replace(/^@/, '') : '', c.cashapp ? 'Cash App $' + c.cashapp.replace(/^\$/, '') : ''].filter(Boolean);
       const who = Access.members.filter((m) => m.status === 'approved' && m.fees === true && m.uid !== Access.owner).map(memberLabel);
       h += `<section class="card stack fee-set" style="padding:14px">
-        <div class="row"><div class="grow"><b>How families pay</b><div class="small muted">${ways.length ? esc(ways.join(' · ')) : 'Not set up yet. Add your Venmo or Cash App, or turn on card payments.'}</div></div><button class="btn sm${ways.length ? '' : ' primary'}" data-act="paySetup">${ways.length ? 'Change' : 'Set up'}</button></div>
+        <div class="row"><div class="grow"><b>How families pay</b><div class="small muted">${ways.length ? esc(ways.join(' · ')) : 'Not set up yet. Add your Venmo or Cash App.'}</div></div><button class="btn sm${ways.length ? '' : ' primary'}" data-act="paySetup">${ways.length ? 'Change' : 'Set up'}</button></div>
         <div class="hr"></div>
         <div class="row"><div class="grow"><b>Who can see fees</b><div class="small muted">${esc(['You'].concat(who).join(', '))}</div></div><button class="btn sm" data-act="feeWho">Change</button></div></section>`;
     }
@@ -1435,7 +1430,6 @@ body.viewer-on { overflow: hidden; }
     let h = `<div class="row" style="margin-bottom:4px"><button class="btn ghost sm" data-act="feeBack">‹ Fees</button><span class="grow"></span><button class="btn sm" data-act="feeEdit" data-id="${esc(f.id)}">Edit</button></div>
       <section class="card sum"><div class="fee-top"><div class="grow"><b style="font-size:22px">${esc(f.name)}</b><span class="small">${esc(fmtMoney(f.amount))} per player${due ? ' · due ' + esc(due) : ''}${f.when || f.where ? ' · ' + esc([f.when, f.where].filter(Boolean).join(' · ')) : ''}</span></div></div>
       <div class="sum-nums"><div><b>${s.paid} of ${s.n}</b><span>paid</span></div><div><b>${esc(fmtMoney(s.got))} of ${esc(fmtMoney(s.due))}</b><span>collected</span></div></div>${feeBar(s)}
-      ${s.cardN ? `<div class="small muted">Card fees about ${esc(fmtMoney(s.cardFee))} · about <b style="color:var(--ink)">${esc(fmtMoney(s.got - s.cardFee))}</b> after fees</div>` : ''}
       ${s.claimed ? `<div class="small" style="color:#C08A0A;font-weight:700">${s.claimed} say${s.claimed === 1 ? 's' : ''} they paid. Check your ${Fees.cfg && Fees.cfg.venmo && Fees.cfg.cashapp ? 'Venmo or Cash App' : Fees.cfg && Fees.cfg.cashapp ? 'Cash App' : 'Venmo'}, then tap Confirm.</div>` : ''}
       ${s.n - s.paid - s.claimed > 0 && workerUrl() ? `<div><button class="btn sm" data-act="feeRemind" data-id="${esc(f.id)}" ${Fees.busy === 'remind' ? 'disabled' : ''}>${Fees.busy === 'remind' ? 'Sending…' : 'Remind everyone who hasn’t paid'}</button></div>` : ''}</section>
       <section class="card rows">${rows.map(({ pid, p, pay }) => {
@@ -1445,22 +1439,6 @@ body.viewer-on { overflow: hidden; }
       }).join('') || '<p class="muted small" style="margin:10px 0">Nobody owes this fee. Tap Edit to choose players.</p>'}</section>
       <p class="small muted" style="margin:2px 4px">Tap a player to mark them paid, confirm, or send a reminder.${Access.isAdmin ? ' Link families to players by tapping their account under Team, Families & coaches.' : ''}</p>`;
     return h;
-  }
-  // Coming back from Stripe checkout: ask the Worker to check the payment and record it.
-  async function payVerify() {
-    const sid = Fees.returnSession;
-    if (!sid || Fees.verifying || !workerUrl() || !Access.user) return;
-    Fees.verifying = true;
-    try {
-      const r = await workerPost({ task: 'pay-verify', session: sid });
-      Fees.returnSession = '';
-      if (r.ok && r.d.paid) toast('Payment received. Thank you!');
-      else if (r.ok) toast('Your card payment is still processing. It will show as paid once it goes through.');
-      else toast('We couldn’t check your card payment yet. It will show as paid once Stripe confirms it.');
-    } catch (e) { toast('We couldn’t check your card payment yet. It will show as paid once Stripe confirms it.'); }
-    Fees.verifying = false;
-    UI.tab = 'team';
-    render();
   }
   // Coming back from Venmo or Cash App: ask whether they finished paying.
   document.addEventListener('visibilitychange', () => {
@@ -1853,10 +1831,6 @@ body.viewer-on { overflow: hidden; }
   try { const t = localStorage.getItem('gs-baseball-tab'); if (t) UI.tab = t; } catch (e) { /* per-viewer convenience only */ }
   const hashTab = (location.hash || '').slice(1);
   if (['games', 'live', 'stats', 'scout', 'team', 'chat', 'iq'].includes(hashTab)) UI.tab = hashTab;
-  try {
-    const paidSession = new URLSearchParams(location.search).get('paid');
-    if (paidSession && /^cs_[A-Za-z0-9_]+$/.test(paidSession)) { Fees.returnSession = paidSession; UI.tab = 'team'; history.replaceState(null, '', location.pathname + '#team'); }
-  } catch (e) { /* not coming back from checkout */ }
 
   // ---------- storage backends ----------
   const LS_KEY = 'gs-baseball-v1';
@@ -3096,16 +3070,10 @@ body.viewer-on { overflow: hidden; }
         <div class="row"><button class="btn primary" data-act="feeSave">${sh.id ? 'Save' : 'Add fee'}</button>${sh.id ? '<button class="btn danger" data-act="feeDelete">Delete fee</button>' : '<button class="btn" data-act="close">Cancel</button>'}</div>`;
     },
     paySetup(sh) {
-      const st = sh.status;
-      const stTxt = !st ? '' : st.busy ? 'Checking…' : st.err ? st.err : !st.card ? 'Your Worker doesn’t have STRIPE_SECRET_KEY yet. Add it first (see the setup steps).' : `Card payments are ready${st.mode === 'test' ? ' in <b>test mode</b> (no real money moves)' : ''}.${st.webhook ? '' : ' Add the Stripe webhook too, so payments show up even if a family closes the page early.'}`;
       return head('How families pay') + `
-        <p class="small muted" style="margin:0">Families see a button for each way you turn on here. Only your fee list shows who has paid.</p>
+        <p class="small muted" style="margin:0">Families see a pay button for each one you fill in. Only your fee list shows who has paid.</p>
         <label><span class="field-lbl">Venmo username</span>${inp('venmo', sh.venmo, 'placeholder="your-venmo-name" autocomplete="off" autocapitalize="off" spellcheck="false"')}</label>
         <label><span class="field-lbl">Cash App $cashtag</span>${inp('cashapp', sh.cashapp, 'placeholder="$yourcashtag" autocomplete="off" autocapitalize="off" spellcheck="false"')}</label>
-        <div><span class="field-lbl">Card &amp; Apple Pay (Stripe)</span>${segB('paySetCard', sh.card ? 'on' : 'off', [['off', 'Off'], ['on', 'On']])}</div>
-        <div class="small muted">Stripe keeps 2.9% + 30¢ of each card payment and sends the rest to your bank. Card payments are marked paid automatically.</div>
-        ${workerUrl() ? `<div class="row"><button class="btn sm" data-act="payStatusCheck">Check card setup</button></div>` : '<div class="warn-text">Set up the Cloudflare Worker first (Team, Cloudflare Worker).</div>'}
-        ${stTxt ? `<div class="small" style="${st && st.card && !st.err ? 'color:var(--good);font-weight:600' : ''}">${stTxt}</div>` : ''}
         ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
         <div class="row"><button class="btn primary" data-act="paySetupSave">Save</button><button class="btn" data-act="close">Cancel</button></div>`;
     },
@@ -3136,8 +3104,7 @@ body.viewer-on { overflow: hidden; }
       let h = head(esc(p ? (p.num ? '#' + p.num + ' ' : '') + p.name : 'Former player')) + `<div class="small muted" style="margin-top:-8px">${esc(f.name)} · ${esc(fmtMoney(f.amount))}</div>`;
       if (pay && pay.status === 'paid') {
         h += `<p style="margin:0"><span class="fee-chip st-paid">Paid · ${esc(PAY_NAME[pay.method] || '')}</span> ${esc(when(pay))}${pay.note ? ' · ' + esc(pay.note) : ''}</p>`;
-        if (pay.method === 'card') h += Access.isOwner ? `<p class="small muted" style="margin:0">To give this money back, refund it in your Stripe dashboard first, then remove it here.</p><div class="row"><button class="btn danger" data-act="payUnmark">Remove card payment</button></div>` : '<p class="small muted" style="margin:0">Card payments are recorded by Stripe. Only the owner can remove one (after refunding it).</p>';
-        else h += `<div class="row"><button class="btn danger" data-act="payUnmark">Mark not paid</button></div>`;
+        h += `<div class="row"><button class="btn danger" data-act="payUnmark">Mark not paid</button></div>`;
         return h + '<div class="row"><button class="btn" data-act="close">Close</button></div>';
       }
       if (pay && pay.status === 'claimed') h += `<p style="margin:0"><span class="fee-chip st-says">Says paid · ${esc(PAY_NAME[pay.method] || '')}</span> ${esc(when(pay))}</p><p class="small muted" style="margin:0">Check your ${esc(PAY_NAME[pay.method] || '')} for ${esc(fmtMoney(f.amount))}, then confirm.</p>
@@ -3993,21 +3960,6 @@ body.viewer-on { overflow: hidden; }
         if (await feeWrite(() => FB.F.deleteDoc(FB.F.doc(FB.fs, 'fees', f.id)), 'Fee deleted')) { UI.feeId = null; render(); }
       }, true);
     },
-    async payCard(d) {
-      const key = d.fee + '/' + d.pid;
-      if (Fees.busy) return;
-      Fees.busy = key; render();
-      let msg = '';
-      try {
-        const r = await workerPost({ task: 'pay-card', fee: d.fee, player: d.pid, back: location.origin + location.pathname });
-        if (r.ok && r.d.url) { location.href = r.d.url; return; }
-        const c = r.d.error;
-        msg = c === 'already_paid' ? 'This fee is already paid.' : c === 'card_off' || c === 'card_not_configured' ? 'Card payments aren’t turned on right now. Ask your coach.' : c === 'not_approved' || c === 'not_allowed' ? 'Your account isn’t linked to this player. Ask a coach.' : c === 'signed_out' ? 'Sign in again, then try paying.' : 'Couldn’t open checkout. Check your connection and try again.';
-      } catch (e) { msg = 'Couldn’t open checkout. Check your connection and try again.'; }
-      Fees.busy = '';
-      render();
-      toast(msg);
-    },
     payClaim(d) { openSheet({ type: 'payClaim', fee: d.fee, pid: d.pid, method: '', back: false }); },
     async payClaimSave(d) {
       const sh = UI.sheet;
@@ -4040,23 +3992,14 @@ body.viewer-on { overflow: hidden; }
       const pay = payOf(f.id, sh.pid);
       const go = async () => { await feeWrite(() => FB.F.deleteDoc(payDoc(f.id, sh.pid)), 'Marked not paid'); };
       if (pay && pay.status === 'claimed') { closeSheet(); go(); return; }
-      confirmSheet('Mark ' + feeName(playerName(sh.pid)) + ' not paid?', pay && pay.method === 'card' ? 'Only do this after refunding the payment in Stripe.' : 'They’ll show as not paid again.', pay && pay.method === 'card' ? 'Remove card payment' : 'Mark not paid', go, true);
+      confirmSheet('Mark ' + feeName(playerName(sh.pid)) + ' not paid?', 'They’ll show as not paid again.', 'Mark not paid', go, true);
     },
     async feeRemind(d) { await sendFeeReminder(d.id, null); },
     async feeRemindOne() { const sh = UI.sheet; closeSheet(); await sendFeeReminder(sh.fee, [sh.pid]); },
     paySetup() {
       if (!Access.isOwner) return;
       const c = Fees.cfg || {};
-      openSheet({ type: 'paySetup', venmo: c.venmo || '', cashapp: c.cashapp ? '$' + c.cashapp.replace(/^\$/, '') : '', card: !!c.card, status: null, err: '' });
-      if (workerUrl()) A.payStatusCheck();
-    },
-    paySetCard(d) { UI.sheet.card = d.v === 'on'; renderSheet(); },
-    async payStatusCheck() {
-      const sh = UI.sheet;
-      sh.status = { busy: true }; renderSheet();
-      try { const r = await workerPost({ task: 'pay-status' }); sh.status = r.ok ? r.d : { err: r.d.error === 'not_configured' ? 'Your Worker needs FIREBASE_SERVICE_ACCOUNT first.' : 'Your Worker didn’t answer. Paste the latest worker.js into Cloudflare.' }; }
-      catch (e) { sh.status = { err: 'Couldn’t reach your Worker.' }; }
-      if (UI.sheet === sh) renderSheet();
+      openSheet({ type: 'paySetup', venmo: c.venmo || '', cashapp: c.cashapp ? '$' + c.cashapp.replace(/^\$/, '') : '', err: '' });
     },
     async paySetupSave() {
       const sh = UI.sheet;
@@ -4064,8 +4007,7 @@ body.viewer-on { overflow: hidden; }
       const cashapp = String(sh.cashapp || '').trim().replace(/^https?:\/\/cash\.app\//i, '').replace(/^\$/, '').replace(/[/?#].*$/, '');
       if (venmo && !/^[A-Za-z0-9_-]{2,40}$/.test(venmo)) { sh.err = 'That Venmo username doesn’t look right. Use letters, numbers, - or _.'; return renderSheet(); }
       if (cashapp && !/^[A-Za-z0-9_-]{1,30}$/.test(cashapp)) { sh.err = 'That $cashtag doesn’t look right.'; return renderSheet(); }
-      if (sh.card && sh.status && sh.status.card === false) { sh.err = 'Add STRIPE_SECRET_KEY to your Worker before turning on cards.'; return renderSheet(); }
-      if (await feeWrite(() => FB.F.setDoc(FB.F.doc(FB.fs, 'config', 'pay'), { venmo, cashapp, card: !!sh.card }), 'Saved')) closeSheet();
+      if (await feeWrite(() => FB.F.setDoc(FB.F.doc(FB.fs, 'config', 'pay'), { venmo, cashapp }), 'Saved')) closeSheet();
     },
     feeWho() { if (Access.isOwner) openSheet({ type: 'feeWho' }); },
     async feeWhoToggle(d) {
@@ -5340,7 +5282,6 @@ body.viewer-on { overflow: hidden; }
   function maybeReady() {
     if (Data.loaded.team && Data.loaded.games && Data.loaded.opps) UI.ready = true;
     if (UI.ready && Backend.kind === 'fb' && Access.evaluated && !restoreUnsynced.done) { restoreUnsynced.done = true; restoreUnsynced(); }
-    if (UI.ready && Fees.returnSession && !Fees.verifying && feesAllowed()) payVerify();
     scheduleRender();
     if (UI.sheet && UI.sheet.type === 'playerCard') renderSheet();
   }

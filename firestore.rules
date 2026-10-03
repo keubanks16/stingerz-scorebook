@@ -111,14 +111,13 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
-    // Where families send money: the owner's Venmo and Cash App, and whether card payments are on.
+    // Where families send money: the owner's Venmo and Cash App.
     match /config/pay {
       allow read: if isApproved() || isAdmin();
       allow write: if isOwner()
-        && request.resource.data.keys().hasOnly(['venmo', 'cashapp', 'card'])
+        && request.resource.data.keys().hasOnly(['venmo', 'cashapp'])
         && request.resource.data.venmo is string && request.resource.data.venmo.size() <= 40
-        && request.resource.data.cashapp is string && request.resource.data.cashapp.size() <= 40
-        && request.resource.data.card is bool;
+        && request.resource.data.cashapp is string && request.resource.data.cashapp.size() <= 40;
     }
 
     // Tournament fees. Families can read a fee (name, amount, due date) so they can pay it.
@@ -130,23 +129,21 @@ service cloud.firestore {
         && request.resource.data.players is list;
       allow delete: if feeAccess();
 
-      // One doc per player who has paid or says they paid. Card payments are written only by
-      // the Worker after Stripe confirms them (it uses the service account, which skips these rules).
+      // One doc per player who has paid or says they paid.
       match /pay/{pid} {
         allow read: if feeAccess() || pid in myPlayers();
         allow create, update: if feeAccess()
           && request.resource.data.keys().hasOnly(['status', 'method', 'amount', 'by', 'at', 'confirmedBy', 'confirmedAt', 'note'])
           && request.resource.data.status in ['paid', 'claimed']
-          && request.resource.data.method in ['venmo', 'cashapp']
-          && (resource == null || resource.data.method != 'card');
+          && request.resource.data.method in ['venmo', 'cashapp'];
         // A family can only say they paid (a coach confirms), for their own player.
         allow create: if pid in myPlayers()
           && request.resource.data.keys().hasOnly(['status', 'method', 'amount', 'by', 'at'])
           && request.resource.data.status == 'claimed'
           && request.resource.data.method in ['venmo', 'cashapp']
           && request.resource.data.by == request.auth.uid;
-        // A card payment stays recorded unless the owner removes it (after refunding it in Stripe).
-        allow delete: if isOwner() || (feeAccess() && resource.data.method != 'card')
+        // Fee managers can undo any payment; a family can only take back their own "I paid".
+        allow delete: if feeAccess()
           || (pid in myPlayers() && resource.data.status == 'claimed');
       }
     }

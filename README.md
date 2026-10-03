@@ -25,28 +25,19 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 
 ## Tournament fees
 
-Families pay tournament fees from the app with **Venmo**, **Cash App**, or **card and Apple Pay** (through Stripe). There's no cash option.
+Families pay tournament fees from the app with **Venmo** or **Cash App**. There's no cash option.
 
-- **Families** see their own player's fee on the Team tab (and a reminder on the Games tab) with a button for each way to pay. Venmo opens with the amount and note filled in; Cash App opens with the amount (they type the note). After paying with Venmo or Cash App they tap **I paid**, and the Hub also asks when they come back to it. Card payments are marked paid automatically.
+- **Families** see their own player's fee on the Team tab (and a reminder on the Games tab) with a button for each way to pay. Venmo opens with the amount and note filled in; Cash App opens with the amount (they type the note). After paying they tap **I paid**, and the Hub also asks when they come back to it.
 - **You** see every tournament under **Team → Fees**: who has paid and how, who says they paid (tap **Confirm** after you see it in your Venmo or Cash App), and who hasn't. Tap a player to mark them paid with Venmo or Cash App, mark them not paid, or send a reminder. **Remind everyone who hasn't paid** sends a phone notification to linked families who turned notifications on.
 - **Who can see fees:** only you (the owner) and the people you turn on under **Team → Fees → Who can see fees**. Other coaches don't see fees unless you turn them on. Families only ever see their own player.
 
 **Setup**
 
 1. In Firebase, paste the latest `firestore.rules` and **Publish** (required for fees).
-2. Paste the latest `worker.js` into your Cloudflare Worker and **Deploy** (needed for card payments and reminders).
+2. Paste the latest `worker.js` into your Cloudflare Worker and **Deploy** (needed for fee reminders).
 3. In the Hub: **Team → Fees → How families pay → Set up**. Enter your Venmo username and/or Cash App $cashtag.
 4. Link each family to their player: **Team → Families & coaches**, tap the family, then tap their player.
 5. Add a tournament: **Team → Fees → + Tournament** (name, amount per player, due date, who owes it).
-
-**Card and Apple Pay (optional)**
-
-1. Create a Stripe account at [stripe.com](https://stripe.com), verify your identity and add the bank account payouts should go to.
-2. In Stripe, open **Developers → API keys** and copy the **Secret key**. In your Worker, add it as the secret `STRIPE_SECRET_KEY`.
-3. In Stripe, open **Developers → Webhooks → Add endpoint**. Use your Worker address followed by `/stripe-webhook` (for example `https://gs-scorebook-ai.yourname.workers.dev/stripe-webhook`) and choose the events `checkout.session.completed` and `checkout.session.async_payment_succeeded`. Copy the endpoint's **Signing secret** into the Worker secret `STRIPE_WEBHOOK_SECRET`. (Without it, card payments still record when the family returns to the Hub after paying; the webhook also catches anyone who closes the page early.)
-4. In the Hub: **How families pay → Card & Apple Pay → On**, then **Check card setup**.
-
-Try it first with Stripe's **test mode** keys (`sk_test_…`) and the test card 4242 4242 4242 4242 with any future date and any CVC; the Hub says "test mode" while no real money moves. Then switch the Worker secret to your live key. Stripe keeps 2.9% + 30¢ of each card payment ($1.61 on a $45 fee); the fee list shows about how much went to card fees. Card numbers are entered on Stripe's own checkout page and never touch the Hub. To refund a card payment, refund it in Stripe, then remove it from the player in the Hub (owner only).
 
 ## Scouting and imported spray charts
 
@@ -189,7 +180,7 @@ Videos go to the channel of the Google account that signs in, and that account m
 
 ## Cloudflare Worker
 
-Roster photo scanning, scouting reports, the built-in camera, chat photos, card payments and phone notifications go through your Cloudflare Worker ([`worker.js`](worker.js)), which keeps your keys off this public site. Its **Settings → Variables and Secrets**:
+Roster photo scanning, scouting reports, the built-in camera, chat photos, fee reminders and phone notifications go through your Cloudflare Worker ([`worker.js`](worker.js)), which keeps your keys off this public site. Its **Settings → Variables and Secrets**:
 
 | Name | Type | What it's for |
 | --- | --- | --- |
@@ -198,8 +189,6 @@ Roster photo scanning, scouting reports, the built-in camera, chat photos, card 
 | `CF_STREAM_TOKEN` | Secret | Built-in camera (Account · Stream · Edit token) |
 | `CF_ACCOUNT_ID` | Text | Built-in camera (your Cloudflare account ID) |
 | `FIREBASE_SERVICE_ACCOUNT` | Secret | Phone notifications, chat photos and tournament fees (see [Notifications](#notifications)) |
-| `STRIPE_SECRET_KEY` | Secret | Card payments for tournament fees (see [Tournament fees](#tournament-fees)) |
-| `STRIPE_WEBHOOK_SECRET` | Secret | Optional. Signing secret of the Stripe webhook at `<worker>/stripe-webhook` |
 | `ALLOWED_ORIGIN` | Text | Optional. Defaults to `https://scorebook.stingerz-baseball.com,https://keubanks16.github.io` |
 
 In the scorebook, each coach's phone needs **Team → Cloudflare Worker → Set up**: paste the Worker address and access code, tap **Test connection**, then **Save**.
