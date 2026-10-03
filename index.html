@@ -381,6 +381,16 @@ body.cam-on { overflow: hidden; }
 .cam-go { min-width: 140px; }
 .cam-end { background: #D9342B; color: #FFFFFF; border-color: transparent; min-width: 160px; }
 .cam-summary { width: 100%; max-width: 560px; background: var(--surface); color: var(--ink); border-radius: 10px; }
+.vrec { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.vrec:last-child { border-bottom: 0; }
+.vrec-top { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vrec-top .nm { font-weight: 700; font-size: 16px; }
+.vrec-top .meta { font-size: 14px; color: var(--ink-2); }
+.vrec-yt { font-size: 14px; font-weight: 600; color: var(--good); }
+.vrec-bar { display: block; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin-top: 4px; }
+.vrec-bar i { display: block; height: 100%; background: var(--accent); }
+.vrec-acts { gap: 6px; }
+.cam-summary .vrec { border-bottom: 0; }
 .toast { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--ground); padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 15px; z-index: 50; max-width: calc(100% - 32px); box-shadow: var(--shadow); }
 .loading { padding: 60px 0; text-align: center; color: var(--ink-2); display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .loading img { height: 60px; width: auto; animation: pulse 1.4s infinite; }
@@ -876,7 +886,8 @@ body.cam-on { overflow: hidden; }
   // ---------- Firebase: logins, roles and cloud sync (website copy) ----------
   const FB_VERSION = '12.19.0';
   const FB = { A: null, F: null, auth: null, fs: null };
-  const Access = { evaluated: false, authKnown: false, setupLoaded: false, accessLoaded: false, memberLoaded: true, rulesError: false, user: null, member: null, owner: null, publicView: false, members: [], isOwner: false, isApproved: false, isAdmin: false, canView: false };
+  const Access = { evaluated: false, authKnown: false, setupLoaded: false, accessLoaded: false, memberLoaded: true, rulesError: false, user: null, member: null, owner: null, publicView: false, members: [], isOwner: false, isApproved: false, isAdmin: false, isCamera: false, canView: false, worker: null };
+  let WorkerSub = null;
   let DataSubs = null, MemberSub = null, MembersSub = null;
   function fsErr(e) {
     const c = e && e.code;
@@ -909,6 +920,7 @@ body.cam-on { overflow: hidden; }
     X.isOwner = !!uid && X.owner === uid;
     X.isApproved = !!(uid && X.member && X.member.status === 'approved');
     X.isAdmin = X.isOwner || (X.isApproved && X.member.role === 'admin');
+    X.isCamera = X.isApproved && !X.isAdmin && X.member.role === 'camera';
     X.canView = X.publicView || X.isApproved || X.isAdmin;
     X.evaluated = true;
     UI.readOnly = !X.isAdmin;
@@ -923,6 +935,17 @@ body.cam-on { overflow: hidden; }
       Data.team = defaultTeam(); Data.games = {}; Data.opponents = {};
       UI.gameId = null; UI.liveId = null;
     }
+    if ((X.isAdmin || X.isCamera) && !WorkerSub) {
+      WorkerSub = FB.F.onSnapshot(FB.F.doc(FB.fs, 'config', 'worker'), (snap) => {
+        const d = snap.exists() ? snap.data() : null;
+        X.worker = d && d.url && d.code ? { url: d.url, code: d.code } : null;
+        const local = localAiCfg();
+        if (!X.worker && X.isAdmin && local) FB.F.setDoc(FB.F.doc(FB.fs, 'config', 'worker'), { url: local.url, code: local.code }).catch(() => {});
+        const cfg = loadAiCfg();
+        if (cfg) Caps.sample = makeWorkerAI(cfg);
+        scheduleRender();
+      }, () => { X.worker = null; });
+    } else if (!(X.isAdmin || X.isCamera) && WorkerSub) { WorkerSub(); WorkerSub = null; X.worker = null; }
     if (X.isAdmin && !MembersSub) {
       MembersSub = FB.F.onSnapshot(FB.F.collection(FB.fs, 'members'), (q) => {
         X.members = q.docs.map((d) => Object.assign({ uid: d.id }, d.data()));
@@ -1030,7 +1053,7 @@ body.cam-on { overflow: hidden; }
     const X = Access;
     let h = '<h2 class="sec">Account</h2><section class="card stack" style="padding:14px">';
     if (X.user) {
-      const role = X.isOwner ? 'Admin (team owner)' : X.isAdmin ? 'Coach (admin)' : X.isApproved ? 'Family (view only)' : 'Waiting for approval';
+      const role = X.isOwner ? 'Admin (team owner)' : X.isAdmin ? 'Coach (admin)' : X.isCamera ? 'Camera operator (streams games)' : X.isApproved ? 'Family (view only)' : 'Waiting for approval';
       h += `<div class="row"><div class="grow"><b>${esc((X.member && X.member.name) || X.user.displayName || X.user.email)}</b><div class="small muted">${esc(X.user.email || '')} · ${esc(role)}</div></div><button class="btn sm" data-act="signOut">Sign out</button></div>`;
     } else {
       h += '<div class="row"><span class="grow">Coaches sign in here to score games.</span><button class="btn sm primary" data-act="authOpen" data-mode="signin">Sign in</button></div>';
@@ -1046,13 +1069,14 @@ body.cam-on { overflow: hidden; }
       <div><span class="field-lbl">Who can watch games</span>${segB('setWatch', X.publicView ? 'public' : 'approved', [['approved', 'Approved families'], ['public', 'Anyone with the link']])}</div>
       <p class="small muted" style="margin:0">${X.publicView ? 'Anyone who opens the address can follow games and stats without signing in. Only coaches can change anything.' : 'Parents create an account and wait for a coach to approve it. Only approved families see games and stats.'}</p></section>`;
     if (pending.length) h += `<h2 class="sec">Waiting for approval (${pending.length})</h2><div class="card roster">${pending.map((m) => `<div class="player" style="cursor:default"><span class="no" style="font-size:14px">NEW</span><span style="min-width:0"><span class="nm">${esc(memberLabel(m))}</span><span class="meta">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}</span></span><span class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm primary" data-act="memberSet" data-uid="${esc(m.uid)}" data-status="approved">Approve</button><button class="btn sm" data-act="memberSet" data-uid="${esc(m.uid)}" data-status="denied">Deny</button></span></div>`).join('')}</div>`;
-    if (others.length) h += `<div class="card roster">${others.map((m) => { const own = m.uid === X.owner; const chip = own ? 'Owner' : m.status === 'denied' ? 'Declined' : m.role === 'admin' ? 'Coach' : 'Family'; return `<button class="player" data-act="member" data-uid="${esc(m.uid)}"><span class="no" style="font-size:14px">${chip === 'Family' ? 'FAM' : chip === 'Declined' ? '—' : 'CO'}</span><span style="min-width:0"><span class="nm">${esc(memberLabel(m))}</span><span class="meta">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}</span></span><span class="chip">${chip}</span></button>`; }).join('')}</div>`;
+    if (others.length) h += `<div class="card roster">${others.map((m) => { const own = m.uid === X.owner; const chip = own ? 'Owner' : m.status === 'denied' ? 'Declined' : m.role === 'admin' ? 'Coach' : m.role === 'camera' ? 'Camera' : 'Family'; return `<button class="player" data-act="member" data-uid="${esc(m.uid)}"><span class="no" style="font-size:14px">${{ Family: 'FAM', Declined: '—', Camera: 'CAM' }[chip] || 'CO'}</span><span style="min-width:0"><span class="nm">${esc(memberLabel(m))}</span><span class="meta">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}</span></span><span class="chip">${chip}</span></button>`; }).join('')}</div>`;
     return h;
   }
 
   // ---------- Claude through your own Cloudflare Worker (GitHub Pages copy) ----------
   const AI_KEY = 'gs-baseball-ai';
-  function loadAiCfg() { try { const c = JSON.parse(localStorage.getItem(AI_KEY) || 'null'); return c && c.url && c.code ? c : null; } catch (e) { return null; } }
+  function localAiCfg() { try { const c = JSON.parse(localStorage.getItem(AI_KEY) || 'null'); return c && c.url && c.code ? c : null; } catch (e) { return null; } }
+  function loadAiCfg() { return (Backend.kind === 'fb' && Access.worker) || localAiCfg(); }
   function saveAiCfg(c) { try { if (c) localStorage.setItem(AI_KEY, JSON.stringify(c)); else localStorage.removeItem(AI_KEY); return true; } catch (e) { return false; } }
   function normAiCfg(sh) {
     const url = String(sh.url || '').trim().replace(/\/+$/, '');
@@ -1741,6 +1765,7 @@ body.cam-on { overflow: hidden; }
       </div>`;
     } else {
       h += `<div class="follow-note card" style="padding:12px 14px"><span class="pill" data-s="follow" style="background:var(--accent-soft);color:var(--ink)">Live</span><span>Updates as the scorer records each pitch.</span></div>`;
+      if (Access.isCamera && UI.standalone && Backend.kind === 'fb') h += `<button class="btn primary block" data-act="camOpen">${Data.stream && Data.stream.live && Data.stream.gid === g.id ? 'Camera (live)' : 'Stream video'}</button>`;
     }
     const groups = playItems(g, s);
     const recent = [];
@@ -1915,9 +1940,14 @@ body.cam-on { overflow: hidden; }
     }
     if (UI.standalone && canEdit()) {
       const c = loadAiCfg();
-      h += `<h2 class="sec">Cloudflare Worker</h2><section class="card stack" style="padding:14px"><p style="margin:0">${c ? 'Connected on this phone. Roster photo scanning, scouting reports and live video are on.' : 'Not set up on this phone. Connect your Worker to scan roster photos, get scouting reports and stream games.'}</p><div><button class="btn${c ? '' : ' primary'}" data-act="aiSetup">${c ? 'Change connection' : 'Set up'}</button></div></section>`;
-      h += recordingsHTML();
+      const shared = Backend.kind === 'fb';
+      h += `<h2 class="sec">Cloudflare Worker</h2><section class="card stack" style="padding:14px"><p style="margin:0">${c ? (shared ? 'Connected for every coach and camera operator. Roster photo scanning, scouting reports and live video are on.' : 'Connected on this phone. Roster photo scanning, scouting reports and live video are on.') : 'Not set up. Connect your Worker to scan roster photos, get scouting reports and stream games.'}</p><div><button class="btn${c ? '' : ' primary'}" data-act="aiSetup">${c ? 'Change connection' : 'Set up'}</button></div></section>`;
+      if (shared) {
+        const y = ytCfg();
+        h += `<h2 class="sec">YouTube uploads</h2><section class="card stack" style="padding:14px"><p style="margin:0">${y ? `On. ${y.auto !== false ? 'Game videos upload to YouTube when a stream ends.' : 'Upload game videos from the camera phone with Upload to YouTube.'} ${y.attach ? 'Replays are added to the game page.' : 'Replays aren\u2019t added to game pages yet.'}` : 'Not set up. Upload game videos to your YouTube channel straight from the camera phone.'}</p><div><button class="btn${y ? '' : ' primary'}" data-act="ytSetup">${y ? 'Change' : 'Set up'}</button></div></section>`;
+      }
     }
+    if (UI.standalone && (canEdit() || Access.isCamera)) h += recordingsHTML();
     h += `<h2 class="sec">Your data</h2><section class="card stack" style="padding:14px">`;
     if (Backend.kind === 'db') h += `<p style="margin:0">Games and the roster are saved with this page in your Claude account, so they sync across your devices. Share the page and families can follow games live as you score.</p>`;
     else if (Backend.kind === 'fb') h += `<p style="margin:0">Games, rosters and stats are saved to your team's online database and sync to every coach's phone. Families see each pitch live. Export a backup now and then for your own records.</p>`;
@@ -2093,7 +2123,8 @@ body.cam-on { overflow: hidden; }
       else {
         if (m.status !== 'approved') acts += `<button class="btn primary" data-act="memberSet" data-uid="${esc(m.uid)}" data-status="approved">Approve as family</button>`;
         if (m.role !== 'admin' || m.status !== 'approved') acts += `<button class="btn" data-act="memberRole" data-uid="${esc(m.uid)}" data-role="admin">Make a coach (admin)</button>`;
-        if (m.role === 'admin' && m.status === 'approved' && !me) acts += `<button class="btn" data-act="memberRole" data-uid="${esc(m.uid)}" data-role="parent">Change to family (view only)</button>`;
+        if (m.role !== 'camera' || m.status !== 'approved') acts += `<button class="btn" data-act="memberRole" data-uid="${esc(m.uid)}" data-role="camera">Make a camera operator (streams games, can\u2019t score)</button>`;
+        if (m.role !== 'parent' && m.status === 'approved' && !me) acts += `<button class="btn" data-act="memberRole" data-uid="${esc(m.uid)}" data-role="parent">Change to family (view only)</button>`;
         if (!me) acts += `<button class="btn danger" data-act="memberRemove" data-uid="${esc(m.uid)}">Remove access</button>`;
       }
       return head(esc(memberLabel(m))) + `<div class="small muted" style="margin-top:-8px">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}</div><div class="stack">${acts}</div>`;
@@ -2114,6 +2145,15 @@ body.cam-on { overflow: hidden; }
         <label><span class="field-lbl">YouTube channel</span>${inp('url', sh.url, 'type="url" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="youtube.com/channel/UC\u2026"')}</label>${hint}
         <p class="small muted" style="margin:0">Find the ID in YouTube Studio: Settings, Channel, Advanced settings. The channel link only finds <b>Public</b> streams. For an Unlisted stream, paste that game\u2019s video link under the game\u2019s Edit details instead.</p>
         <div class="row"><button class="btn primary" data-act="videoSave">Save</button>${Data.team.video ? '<button class="btn danger" data-act="videoClear">Remove</button>' : '<button class="btn" data-act="close">Cancel</button>'}</div>`;
+    },
+    yt(sh) {
+      return head('YouTube uploads') + `<p class="small muted" style="margin:0">When a stream ends, the camera phone uploads the game video to the YouTube channel of the Google account that signs in. <a href="https://github.com/keubanks16/stingerz-scorebook#youtube-uploads" target="_blank" rel="noopener">Setup steps</a></p>
+        <label><span class="field-lbl">Google OAuth client ID</span>${inp('clientId', sh.clientId, 'autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="1234-abc.apps.googleusercontent.com"')}</label>
+        <div><span class="field-lbl">Upload automatically when a stream ends</span>${segB('ytAuto', sh.auto ? 'on' : 'off', [['on', 'On'], ['off', 'Off']])}</div>
+        <div><span class="field-lbl">Add the replay to the game page</span>${segB('ytAttach', sh.attach ? 'on' : 'off', [['on', 'On'], ['off', 'Off']])}</div>
+        <p class="small muted" style="margin:0">Leave this off until Google approves your app. Before that, YouTube locks uploads as private: you can watch them in YouTube Studio, but families can\u2019t.</p>
+        ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
+        <div class="row"><button class="btn primary" data-act="ytSave">Save</button>${Data.team.yt ? '<button class="btn danger" data-act="ytClear">Turn off</button>' : '<button class="btn" data-act="close">Cancel</button>'}</div>`;
     },
     teamEdit(sh) {
       return head('Team settings') + `<label><span class="field-lbl">Team name</span>${inp('f.name', sh.f.name)}</label>
@@ -2681,7 +2721,7 @@ body.cam-on { overflow: hidden; }
       if (UI.sheet && UI.sheet.type === 'member') closeSheet();
     },
     async memberRole(d) {
-      try { await FB.F.updateDoc(FB.F.doc(FB.fs, 'members', d.uid), { role: d.role, status: 'approved' }); toast(d.role === 'admin' ? 'Now a coach with admin rights' : 'Now a family account'); }
+      try { await FB.F.updateDoc(FB.F.doc(FB.fs, 'members', d.uid), { role: d.role, status: 'approved' }); toast(d.role === 'admin' ? 'Now a coach with admin rights' : d.role === 'camera' ? 'Now a camera operator' : 'Now a family account'); }
       catch (e) { toast(authErrorText(e)); }
       if (UI.sheet && UI.sheet.type === 'member') closeSheet();
     },
@@ -2705,13 +2745,21 @@ body.cam-on { overflow: hidden; }
       const sh = UI.sheet;
       const cfg = normAiCfg(sh);
       if (!cfg) { sh.test = { err: 'Enter the Worker address (it starts with https://) and the access code.' }; return renderSheet(); }
-      if (!saveAiCfg(cfg)) { sh.test = { err: 'This browser blocked saving the connection.' }; return renderSheet(); }
+      if (Backend.kind === 'fb' && Access.isAdmin) {
+        Access.worker = cfg;
+        FB.F.setDoc(FB.F.doc(FB.fs, 'config', 'worker'), { url: cfg.url, code: cfg.code }).catch(() => toast('The connection is saved on this phone, but sharing it with other coaches failed. Check that the latest security rules are published.'));
+        saveAiCfg(cfg);
+      } else if (!saveAiCfg(cfg)) { sh.test = { err: 'This browser blocked saving the connection.' }; return renderSheet(); }
       Caps.sample = makeWorkerAI(cfg);
       closeSheet();
       render();
       toast('Claude connection saved');
     },
-    aiDisconnect() { saveAiCfg(null); Caps.sample = null; closeSheet(); render(); toast('Claude connection removed'); },
+    aiDisconnect() {
+      saveAiCfg(null); Caps.sample = null;
+      if (Backend.kind === 'fb' && Access.isAdmin) { Access.worker = null; FB.F.deleteDoc(FB.F.doc(FB.fs, 'config', 'worker')).catch(() => {}); }
+      closeSheet(); render(); toast('Worker connection removed');
+    },
     videoSetup() { openSheet({ type: 'video', url: Data.team.video || '' }); },
     videoSave() {
       const sh = UI.sheet;
@@ -2875,19 +2923,38 @@ body.cam-on { overflow: hidden; }
   const mb = (n) => (n >= 1e9 ? (n / 1e9).toFixed(2) + ' GB' : Math.max(0.1, n / 1e6).toFixed(n >= 1e8 ? 0 : 1) + ' MB');
   const dur = (ms) => { const m = Math.max(0, Math.round(ms / 60000)); return m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + ' min'; };
   function recRowHTML(r) {
+    const rid = esc(r.rid);
     const live = Cam.rec && Cam.rec.rid === r.rid;
     const file = Recs.files[r.rid];
-    const act = live ? '<span class="chip live">REC</span>'
-      : Recs.busy[r.rid] ? '<span class="small muted">Preparing…</span>'
-      : file ? `<button class="btn sm primary" data-act="recSave" data-rid="${esc(r.rid)}">Save to phone</button>`
-      : `<button class="btn sm" data-act="recPrepare" data-rid="${esc(r.rid)}">Get video</button>`;
-    return `<div class="player" style="cursor:default"><span class="no" style="font-size:14px">REC</span><span style="min-width:0"><span class="nm">${esc(r.title || 'Game video')}</span><span class="meta">${esc(new Date(r.startedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))} · ${dur((r.endedAt || Date.now()) - r.startedAt)} · ${mb(r.bytes || 0)}</span></span><span class="row" style="gap:6px">${act}${live ? '' : `<button class="btn sm danger" data-act="recDelete" data-rid="${esc(r.rid)}" aria-label="Delete recording">Delete</button>`}</span></div>`;
+    const job = YT.jobs[r.rid] || {};
+    const uploading = job.state === 'uploading';
+    let status = '';
+    if (live) status = '<span class="chip live">REC</span>';
+    else if (r.yt) status = `<span class="vrec-yt">On YouTube · <a href="https://youtu.be/${esc(r.yt.id)}" target="_blank" rel="noopener">Open</a></span>`;
+    else if (uploading) status = `<span class="vrec-yt">Uploading to YouTube… ${job.pct || 0}%</span><span class="vrec-bar"><i style="width:${job.pct || 0}%"></i></span>`;
+    else if (job.err) status = `<span class="warn-text">${esc(job.err)}</span>`;
+    const acts = [];
+    if (!live) {
+      const g = r.gid && Data.games[r.gid];
+      const link = r.yt ? 'https://youtu.be/' + r.yt.id : '';
+      if (r.yt && g && g.video !== link && (canEdit() || Access.isCamera)) acts.push(`<button class="btn sm" data-act="ytReplay" data-rid="${rid}">Use as replay</button>`);
+      if (!r.yt && !uploading && ytCfg()) acts.push(`<button class="btn sm primary" data-act="ytStart" data-rid="${rid}">${job.state === 'paused' || job.state === 'error' || r.ytUrl ? 'Continue upload' : 'Upload to YouTube'}</button>`);
+      if (Recs.busy[r.rid]) acts.push('<span class="small muted">Preparing…</span>');
+      else if (file) acts.push(`<button class="btn sm${ytCfg() ? '' : ' primary'}" data-act="recSave" data-rid="${rid}">Save to phone</button>`);
+      else acts.push(`<button class="btn sm" data-act="recPrepare" data-rid="${rid}">Get video</button>`);
+      if (!uploading) acts.push(`<button class="btn sm danger" data-act="recDelete" data-rid="${rid}" aria-label="Delete recording">Delete</button>`);
+    }
+    return `<div class="vrec"><div class="vrec-top"><span class="nm">${esc(r.title || 'Game video')}</span><span class="meta">${esc(new Date(r.startedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))} · ${dur((r.endedAt || Date.now()) - r.startedAt)} · ${mb(r.bytes || 0)}</span>${status}</div>${acts.length ? `<div class="row vrec-acts">${acts.join('')}</div>` : ''}</div>`;
   }
   function recordingsHTML() {
     if (Backend.kind !== 'fb' || !window.indexedDB) return '';
     if (Recs.list === null) { loadRecs(); return ''; }
     if (!Recs.list.length) return '';
-    return `<h2 class="sec">Game videos on this phone</h2><div class="card roster">${Recs.list.map(recRowHTML).join('')}</div><p class="small muted" style="margin:0">Get video, then Save to phone, then upload it to YouTube as Unlisted and paste the link in the game’s Edit details. Delete it here afterward to free up space.</p>`;
+    const y = ytCfg();
+    if (y) ytLoad().catch(() => {});
+    const note = y ? `Videos upload to YouTube${y.auto !== false ? ' when the stream ends' : ' with Upload to YouTube'}, or use Get video and Save to phone. ${y.attach ? '' : 'Until Google approves your app, uploads are private to your channel: you can watch them in YouTube Studio, families can\u2019t. '}Delete a video here once it\u2019s uploaded or saved, to free up space.`
+      : 'Get video, then Save to phone, then upload it to YouTube as Unlisted and paste the link in the game\u2019s Edit details. Delete it here afterward to free up space.';
+    return `<h2 class="sec">Game videos on this phone</h2><div class="card">${Recs.list.map(recRowHTML).join('')}</div><p class="small muted" style="margin:0">${note}</p>`;
   }
 
   // Camera phone
@@ -2927,6 +2994,7 @@ body.cam-on { overflow: hidden; }
     stEl.dataset.s = Cam.state;
     const msg = $('#cam-msg');
     let m = Cam.err;
+    if (!m && Cam.state === 'preview' && Data.stream && Data.stream.live && Data.stream.gid === Cam.gid && !(camSaved() && camSaved().uid === Data.stream.uid)) m = 'Another phone is already streaming this game. Going live here replaces that stream for families.';
     if (!m && Cam.state === 'preview') m = 'Keep this screen open for the whole game. Locking the phone or switching apps pauses the stream. Plug into a battery pack.';
     if (!m && Cam.state === 'paused') m = 'The camera stopped when the screen locked or another app opened. Tap Resume to go back on air.';
     msg.hidden = !m; msg.textContent = m;
@@ -3002,9 +3070,12 @@ body.cam-on { overflow: hidden; }
     try { mr = new MediaRecorder(Cam.stream, Object.assign(type ? { mimeType: type } : {}, { videoBitsPerSecond: 2000000 })); } catch (e) { return; }
     const g = Data.games[Cam.gid];
     const rid = 'r' + Date.now().toString(36);
-    const meta = { rid, gid: Cam.gid, title: g ? (g.home ? 'vs ' : '@ ') + g.opponent + ' ' + g.date : 'Game video', startedAt: Date.now(), endedAt: 0, type: mr.mimeType || type || 'video/mp4', bytes: 0, parts: 0 };
-    Cam.rec = { rid, mr, seq: 0, bytes: 0, meta };
+    const part = (Cam.sessionRids || []).length + 1;
+    const meta = { rid, gid: Cam.gid, part, title: (g ? (g.home ? 'vs ' : '@ ') + g.opponent + ' ' + g.date : 'Game video') + (part > 1 ? ' (part ' + part + ')' : ''), startedAt: Date.now(), endedAt: 0, type: mr.mimeType || type || 'video/mp4', bytes: 0, parts: 0 };
+    let doneRes;
+    Cam.rec = { rid, mr, seq: 0, bytes: 0, meta, chain: Promise.resolve(), done: new Promise((r) => { doneRes = r; }) };
     Cam.lastRid = rid;
+    (Cam.sessionRids = Cam.sessionRids || []).push(rid);
     try { await RecDB.putMeta(meta); if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) { Cam.rec = null; return; }
     const rec = Cam.rec;
     mr.ondataavailable = (e) => {
@@ -3012,18 +3083,179 @@ body.cam-on { overflow: hidden; }
       const seq = rec.seq++;
       rec.bytes += e.data.size;
       meta.bytes = rec.bytes; meta.parts = rec.seq;
-      RecDB.putChunk(rid, seq, e.data).then(() => RecDB.putMeta(meta)).catch(() => { Cam.err = 'This phone is out of space for the recording. The stream keeps going.'; camRender(); });
+      const data = e.data;
+      rec.chain = rec.chain.then(() => RecDB.putChunk(rid, seq, data)).then(() => RecDB.putMeta(meta)).catch(() => { Cam.err = 'This phone is out of space for the recording. The stream keeps going.'; camRender(); });
     };
-    mr.onstop = () => { meta.endedAt = Date.now(); RecDB.putMeta(meta).finally(loadRecs); };
+    mr.onstop = () => { meta.endedAt = Date.now(); rec.chain = rec.chain.then(() => RecDB.putMeta(meta)).catch(() => {}).finally(() => { loadRecs(); doneRes(); }); };
     mr.start(10000);
     loadRecs();
   }
   function recStop() {
     const r = Cam.rec;
     Cam.rec = null;
-    if (r && r.mr.state !== 'inactive') { try { r.mr.stop(); } catch (e) { /* stopped */ } }
+    if (!r) return Promise.resolve();
+    if (r.mr.state !== 'inactive') { try { r.mr.stop(); } catch (e) { return r.chain; } }
+    else return r.chain;
+    return Promise.race([r.done, sleep(15000)]);
   }
   function camGameName(g) { return (g.home ? 'vs ' : '@ ') + g.opponent + ' · ' + g.date; }
+
+  // ---------- YouTube upload (Google sign-in + resumable upload) ----------
+  const YT = { loading: null, client: null, clientId: '', token: null, exp: 0, pending: null, jobs: {} };
+  function ytCfg() { const y = Data.team && Data.team.yt; return UI.standalone && Backend.kind === 'fb' && y && y.clientId ? y : null; }
+  function ytLoad() {
+    if (window.google && google.accounts && google.accounts.oauth2) return Promise.resolve();
+    if (YT.loading) return YT.loading;
+    YT.loading = new Promise((res, rej) => {
+      const sc = document.createElement('script');
+      sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true;
+      sc.onload = () => res();
+      sc.onerror = () => { YT.loading = null; rej({ code: 'yt_load' }); };
+      document.head.appendChild(sc);
+    });
+    return YT.loading;
+  }
+  function ytClient() {
+    const y = ytCfg();
+    if (!y || !(window.google && google.accounts && google.accounts.oauth2)) return null;
+    if (!YT.client || YT.clientId !== y.clientId) {
+      YT.clientId = y.clientId;
+      YT.client = google.accounts.oauth2.initTokenClient({
+        client_id: y.clientId,
+        scope: 'https://www.googleapis.com/auth/youtube.upload',
+        callback: (r) => {
+          const p = YT.pending; YT.pending = null;
+          if (r && r.access_token) { YT.token = r.access_token; YT.exp = Date.now() + (Number(r.expires_in) || 3600) * 1000; if (p) p.res(YT.token); }
+          else if (p) p.rej({ code: 'yt_auth', message: r && r.error });
+        },
+        error_callback: (e) => { const p = YT.pending; YT.pending = null; if (p) p.rej({ code: 'yt_popup', message: e && e.type }); }
+      });
+    }
+    return YT.client;
+  }
+  // Call this directly inside a tap: Google's sign-in window only opens from a tap.
+  function ytToken() {
+    if (YT.token && YT.exp - Date.now() > 10 * 60 * 1000) return Promise.resolve(YT.token);
+    const c = ytClient();
+    if (!c) { ytLoad().catch(() => {}); return Promise.reject({ code: 'yt_not_ready' }); }
+    if (YT.pending) YT.pending.rej({ code: 'yt_popup' });
+    return new Promise((res, rej) => { YT.pending = { res, rej }; c.requestAccessToken({ prompt: '' }); });
+  }
+  function ytErrText(e) {
+    const c = e && e.code;
+    const m = (e && e.message) || '';
+    if (c === 'yt_not_ready') return 'YouTube is still loading. Tap Upload to YouTube in a moment.';
+    if (c === 'yt_load') return 'Couldn’t reach Google. Check your connection, then tap Upload to YouTube.';
+    if (c === 'yt_popup') return 'The Google sign-in window closed. Tap Upload to YouTube to try again.';
+    if (c === 'yt_auth') return 'Google sign-in didn’t finish. Tap Upload to YouTube to try again.';
+    if (/youtubeSignupRequired/i.test(m)) return 'That Google account doesn’t have a YouTube channel yet. Create one, then try again.';
+    if (/accessNotConfigured|has not been used|is disabled/i.test(m)) return 'Turn on YouTube Data API v3 in Google Cloud for this project, then try again.';
+    if (/quota|uploadLimitExceeded/i.test(m)) return 'YouTube’s upload limit for today was reached. Try again tomorrow.';
+    if (c === 'yt_network') return 'The upload stopped because the connection dropped. Tap Continue upload to pick up where it left off.';
+    if (c === 'empty') return 'The recording is empty.';
+    if (c === 'open') return 'Couldn’t open the recording on this phone.';
+    return 'YouTube upload failed' + (m ? ': ' + m : '.') + ' Tap Continue upload to try again.';
+  }
+  function ytXhr(method, url, headers, body, onProgress) {
+    return new Promise((res) => {
+      const x = new XMLHttpRequest();
+      x.open(method, url, true);
+      for (const k in headers) x.setRequestHeader(k, headers[k]);
+      if (onProgress && x.upload) x.upload.onprogress = (ev) => onProgress(ev.loaded);
+      x.onload = () => res({ status: x.status, header: (h) => x.getResponseHeader(h), text: x.responseText });
+      x.onerror = () => res({ status: 0, header: () => null, text: '' });
+      x.onabort = x.onerror;
+      x.send(body === undefined ? null : body);
+    });
+  }
+  function ytApiMsg(r) { try { const j = JSON.parse(r.text); const er = j && j.error; if (!er) return ''; const reason = er.errors && er.errors[0] && er.errors[0].reason; return (reason ? reason + ': ' : '') + (er.message || ''); } catch (e) { return ''; } }
+  function ytNext(r) { const m = /bytes=0-(\d+)/.exec(r.header('Range') || ''); return m ? Number(m[1]) + 1 : 0; }
+  function ytVideo(r) { try { const j = JSON.parse(r.text); return j && j.id ? j : null; } catch (e) { return null; } }
+  function ytJob(rid, patch) { YT.jobs[rid] = Object.assign(YT.jobs[rid] || {}, patch); scheduleRender(); if (Cam.open) camRender(); }
+  const ytChunk = () => window.GS_YT_CHUNK || 8 * 1024 * 1024;
+  async function ytUpload(rid) {
+    if (YT.jobs[rid] && YT.jobs[rid].state === 'uploading') return;
+    let meta = (Recs.list || []).find((x) => x.rid === rid);
+    if (!meta) { try { meta = (await RecDB.listMeta()).find((x) => x.rid === rid); } catch (e) { meta = null; } }
+    if (!meta || meta.yt) return;
+    meta = Object.assign({}, meta);
+    if (!YT.token || YT.exp < Date.now() + 60000) { ytJob(rid, { state: 'paused', err: 'Tap Continue upload to sign in to YouTube.' }); return; }
+    ytJob(rid, { state: 'uploading', pct: 0, err: '' });
+    const auth = () => ({ Authorization: 'Bearer ' + YT.token });
+    const wasLive = Cam.wantLive;
+    camWake(true);
+    try {
+      let blob;
+      try { const parts = await RecDB.chunks(rid); blob = new Blob(parts.map((c) => c.blob), { type: meta.type || 'video/mp4' }); } catch (e) { throw { code: 'open' }; }
+      const total = blob.size;
+      if (!total) throw { code: 'empty' };
+      const type = String(meta.type || 'video/mp4').split(';')[0];
+      let restarted = false, video = null;
+      while (!video) {
+        if (!meta.ytUrl || meta.ytTotal !== total) {
+          const g = meta.gid && Data.games[meta.gid];
+          let title = Data.team.name + ' ' + (g ? camGameName(g) : meta.title || 'game');
+          if (meta.part > 1) title += ' (part ' + meta.part + ')';
+          const desc = g ? (g.home ? Data.team.name + ' vs ' + g.opponent : Data.team.name + ' at ' + g.opponent) + (g.location ? ', ' + g.location : '') + ', ' + longDate(g.date) + '. Recorded with the ' + Data.team.name + ' scorebook.' : 'Recorded with the scorebook.';
+          const r = await ytXhr('POST', 'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status',
+            Object.assign({ 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Length': String(total), 'X-Upload-Content-Type': type }, auth()),
+            JSON.stringify({ snippet: { title: title.slice(0, 100), description: desc.slice(0, 4900), categoryId: '17' }, status: { privacyStatus: 'unlisted' } }));
+          if (r.status === 401) throw { code: 'yt_auth' };
+          const loc = r.header('Location');
+          if (r.status !== 200 || !loc) throw { code: r.status === 0 ? 'yt_network' : 'yt_failed', message: ytApiMsg(r) };
+          meta.ytUrl = loc; meta.ytTotal = total;
+          await RecDB.putMeta(meta);
+        }
+        let r = await ytXhr('PUT', meta.ytUrl, Object.assign({ 'Content-Range': 'bytes */' + total }, auth()));
+        if (r.status === 200 || r.status === 201) { video = ytVideo(r); break; }
+        if (r.status === 401) throw { code: 'yt_auth' };
+        if (r.status === 404 || r.status === 410) { if (restarted) throw { code: 'yt_failed', message: 'The upload session expired.' }; restarted = true; meta.ytUrl = null; continue; }
+        if (r.status !== 308) throw { code: r.status === 0 ? 'yt_network' : 'yt_failed', message: ytApiMsg(r) };
+        let offset = ytNext(r), fails = 0, expired = false;
+        ytJob(rid, { pct: Math.floor((offset / total) * 100) });
+        while (!video) {
+          const start = offset, end = Math.min(offset + ytChunk(), total);
+          r = await ytXhr('PUT', meta.ytUrl, Object.assign({ 'Content-Range': 'bytes ' + start + '-' + (end - 1) + '/' + total }, auth()), blob.slice(start, end),
+            (n) => ytJob(rid, { pct: Math.min(99, Math.floor(((start + n) / total) * 100)) }));
+          if (r.status === 308) { offset = ytNext(r); fails = 0; ytJob(rid, { pct: Math.min(99, Math.floor((offset / total) * 100)) }); continue; }
+          if (r.status === 200 || r.status === 201) { video = ytVideo(r); if (!video) throw { code: 'yt_failed', message: 'YouTube didn’t return the video.' }; break; }
+          if (r.status === 401) throw { code: 'yt_auth' };
+          if (r.status === 404 || r.status === 410) { expired = true; break; }
+          if (r.status === 0 || r.status >= 500) {
+            if (++fails > 6) throw { code: 'yt_network' };
+            await sleep(Math.min(30000, 1000 * 2 ** fails));
+            const q = await ytXhr('PUT', meta.ytUrl, Object.assign({ 'Content-Range': 'bytes */' + total }, auth()));
+            if (q.status === 308) offset = ytNext(q);
+            else if (q.status === 200 || q.status === 201) video = ytVideo(q);
+            else if (q.status === 401) throw { code: 'yt_auth' };
+            continue;
+          }
+          throw { code: 'yt_failed', message: ytApiMsg(r) };
+        }
+        if (expired) { if (restarted) throw { code: 'yt_failed', message: 'The upload session expired.' }; restarted = true; meta.ytUrl = null; }
+      }
+      meta.yt = { id: video.id, at: Date.now() };
+      delete meta.ytUrl; delete meta.ytTotal;
+      await RecDB.putMeta(meta);
+      ytJob(rid, { state: 'done', pct: 100, err: '' });
+      toast('Uploaded to YouTube');
+      const y = ytCfg();
+      if (y && y.attach && meta.gid && Data.games[meta.gid] && !Data.games[meta.gid].video) await ytSetReplay(meta.gid, video.id);
+    } catch (e) {
+      if (e && e.code === 'yt_auth') { YT.token = null; ytJob(rid, { state: 'paused', err: 'YouTube sign-in expired. Tap Continue upload.' }); }
+      else { try { await RecDB.putMeta(meta); } catch (e2) { /* keep going */ } ytJob(rid, { state: 'error', err: ytErrText(e) }); }
+    }
+    if (!wasLive && !Cam.wantLive) camWake(false);
+    await loadRecs();
+  }
+  async function ytSetReplay(gid, id) {
+    try {
+      await FB.F.updateDoc(FB.F.doc(FB.fs, 'games', gid), { video: 'https://youtu.be/' + id, updatedAt: Date.now() });
+      toast('Replay added to the game page');
+    } catch (e) {
+      toast(e && e.code === 'permission-denied' ? 'Couldn’t add the replay. Check that the latest security rules are published.' : 'Couldn’t add the replay link.');
+    }
+  }
 
   Object.assign(A, {
     async camOpen() {
@@ -3031,6 +3263,7 @@ body.cam-on { overflow: hidden; }
       if (!g) { toast('Start the game first, then stream it.'); return; }
       if (!loadAiCfg()) { toast('Connect your Cloudflare Worker first, under Team.'); return; }
       Cam.open = true; Cam.gid = g.id; Cam.err = ''; Cam.confirmEnd = false;
+      if (ytCfg()) ytLoad().catch(() => {});
       if (!Cam.wantLive) Cam.state = 'starting';
       camEl().hidden = false;
       document.body.classList.add('cam-on');
@@ -3060,6 +3293,7 @@ body.cam-on { overflow: hidden; }
       const g = Data.games[Cam.gid];
       if (!cfg || !g || !Cam.stream) return;
       Cam.err = ''; Cam.state = 'connecting'; Cam.wantLive = true; camRender();
+      if (!Cam.startedAt) Cam.sessionRids = [];
       try {
         const saved = camSaved();
         if (saved && saved.gid === g.id && Data.stream && Data.stream.live && Data.stream.uid === saved.uid) {
@@ -3093,11 +3327,14 @@ body.cam-on { overflow: hidden; }
     },
     async camEnd() {
       if (!Cam.confirmEnd) { Cam.confirmEnd = true; camRender(); setTimeout(() => { Cam.confirmEnd = false; camRender(); }, 4000); return; }
+      // Ask Google for upload permission inside this tap, so the upload can start by itself.
+      const y = ytCfg();
+      const tokP = y && y.auto !== false ? ytToken().then(() => null, (e) => e) : null;
       Cam.confirmEnd = false; Cam.wantLive = false;
       clearTimeout(Cam.retry); clearInterval(Cam.timer);
       if (Cam.pc) { try { Cam.pc.close(); } catch (e) { /* closed */ } }
       endSession(Cam.session); Cam.pc = null; Cam.session = null;
-      recStop();
+      const recDone = recStop();
       const cfg = loadAiCfg();
       if (cfg && Cam.uid) workerCall(cfg, 'live-end', { uid: Cam.uid }).catch(() => {});
       if (Data.stream && Data.stream.uid === Cam.uid) { Data.stream = Object.assign({}, Data.stream, { live: false, endedAt: Date.now() }); Saver.put('team/stream', Data.stream); }
@@ -3107,8 +3344,16 @@ body.cam-on { overflow: hidden; }
       if (Cam.stream) Cam.stream.getTracks().forEach((t) => t.stop());
       Cam.stream = null;
       Cam.state = 'ended';
-      setTimeout(loadRecs, 600);
       camRender();
+      const rids = (Cam.sessionRids || []).slice();
+      Cam.sessionRids = [];
+      await recDone;
+      await loadRecs();
+      if (tokP) {
+        const err = await tokP;
+        if (err) { const t = ytErrText(err); if (t) toast(t); return; }
+        for (const rid of rids) await ytUpload(rid);
+      }
     },
     async recPrepare(d) {
       const r = Recs.list && Recs.list.find((x) => x.rid === d.rid);
@@ -3143,6 +3388,28 @@ body.cam-on { overflow: hidden; }
         toast('Video deleted from the scorebook');
       }, true);
     },
+    ytStart(d) {
+      const p = ytToken();
+      p.then(() => ytUpload(d.rid), (e) => { const t = ytErrText(e); if (t) toast(t); });
+    },
+    async ytReplay(d) {
+      const r = Recs.list && Recs.list.find((x) => x.rid === d.rid);
+      if (r && r.yt && r.gid) { await ytSetReplay(r.gid, r.yt.id); render(); if (Cam.open) camRender(); }
+    },
+    ytSetup() { const y = Data.team.yt || {}; openSheet({ type: 'yt', clientId: y.clientId || '', auto: y.auto !== false, attach: !!y.attach }); },
+    ytAuto(d) { UI.sheet.auto = d.v === 'on'; renderSheet(); },
+    ytAttach(d) { UI.sheet.attach = d.v === 'on'; renderSheet(); },
+    ytSave() {
+      const sh = UI.sheet;
+      const id = String(sh.clientId || '').trim();
+      if (!/^[\w.-]+\.apps\.googleusercontent\.com$/.test(id)) { sh.err = 'Paste the OAuth client ID from Google Cloud. It ends in .apps.googleusercontent.com.'; return renderSheet(); }
+      Data.team.yt = { clientId: id, auto: !!sh.auto, attach: !!sh.attach };
+      saveTeam();
+      YT.client = null;
+      ytLoad().catch(() => {});
+      closeSheet(); render(); toast('YouTube uploads saved');
+    },
+    ytClear() { delete Data.team.yt; saveTeam(); YT.client = null; YT.token = null; closeSheet(); render(); toast('YouTube uploads turned off'); },
     dockUnmute() { const v = $('#dock-video'); if (v) { v.muted = false; v.play().catch(() => {}); } const b = $('#dock-unmute'); if (b) b.hidden = true; }
   });
 

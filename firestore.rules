@@ -6,6 +6,8 @@ rules_version = '2';
 // Roles
 //   Owner   the first account to claim config/setup; always an admin.
 //   Coach   members/{uid} with role 'admin' and status 'approved'; can change everything.
+//   Camera  members/{uid} with role 'camera' and status 'approved'; views, streams games,
+//           and can attach a replay link to a game. Can't score or change anything else.
 //   Family  members/{uid} with role 'parent' and status 'approved'; view only.
 // Who can watch
 //   config/access.publicView == true   anyone with the link can view, no sign-in.
@@ -25,6 +27,7 @@ service cloud.firestore {
       return signedIn() && exists(docPath('members', request.auth.uid)) && myMember().status == 'approved';
     }
     function isAdmin() { return isOwner() || (isApproved() && myMember().role == 'admin'); }
+    function isCamera() { return isApproved() && myMember().role == 'camera'; }
     function publicView() {
       return exists(docPath('config', 'access')) && get(docPath('config', 'access')).data.publicView == true;
     }
@@ -46,6 +49,13 @@ service cloud.firestore {
         && request.resource.data.publicView is bool;
     }
 
+    // Cloudflare Worker address and access code, shared with coaches and camera operators.
+    match /config/worker {
+      allow read: if isAdmin() || isCamera();
+      allow create, update: if isAdmin() && request.resource.data.keys().hasOnly(['url', 'code']);
+      allow delete: if isAdmin();
+    }
+
     // Accounts. A person may only ask for family access for themselves; coaches decide everything else.
     match /members/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
@@ -61,9 +71,17 @@ service cloud.firestore {
       allow read: if canView();
       allow write: if isAdmin();
     }
+    // Which game is streaming from the built-in camera. Camera operators may update it too.
+    match /team/stream {
+      allow create, update: if isCamera()
+        && request.resource.data.keys().hasOnly(['gid', 'uid', 'whep', 'live', 'startedAt', 'endedAt']);
+    }
     match /games/{id} {
       allow read: if canView();
       allow write: if isAdmin();
+      // Camera operators may only attach the replay link.
+      allow update: if isCamera()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['video', 'updatedAt']);
     }
     match /opponents/{id} {
       allow read: if canView();

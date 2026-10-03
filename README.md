@@ -4,18 +4,18 @@ Score games pitch by pitch, keep box scores and season stats, chart spray charts
 
 ## Who can do what
 
-| | Coaches (admins) | Families |
-|---|---|---|
-| Score games, edit rosters, scan rosters | Yes | No |
-| Follow games live, box scores, stats, scouting | Yes | Yes |
-| Watch the live video with the scoreboard on top | Yes | Yes |
-| Stream from the built-in camera | Yes | No |
-| Approve families, add coaches, change who can watch | Yes | No |
+| | Coaches (admins) | Camera operators | Families |
+|---|---|---|---|
+| Score games, edit rosters, scan rosters | Yes | No | No |
+| Follow games live, box scores, stats, scouting | Yes | Yes | Yes |
+| Watch the live video with the scoreboard on top | Yes | Yes | Yes |
+| Stream from the built-in camera, upload game video | Yes | Yes | No |
+| Approve families, add coaches and camera operators, change who can watch | Yes | No | No |
 
 - The **owner** is the first account created on the site. The owner is always an admin.
-- Coaches approve families, or make another account a coach, on **Team → Families & coaches**.
+- New people tap **Request access**. A coach approves them on **Team → Families & coaches**, then taps their name to make them a coach or a **camera operator** if needed.
 - **Who can watch** (same screen): **Approved families**, where parents create an account and a coach approves it, or **Anyone with the link**, with no sign-in needed to watch.
-- The database itself enforces these rules (`firestore.rules`). Hiding buttons isn't the only protection.
+- The database itself enforces these rules (`firestore.rules`). Hiding buttons isn't the only protection. After updating `firestore.rules` here, paste it into Firebase again and **Publish**.
 
 ## First-time setup
 
@@ -51,9 +51,33 @@ A second phone streams straight from the scorebook. Families watch inside the sc
 
 **Saving the game:** Cloudflare doesn't record these streams, so the camera phone records the game itself in 10-second pieces. After the game, on the camera phone: **Get video → Save to phone** (from the end screen, or **Team → Game videos on this phone**), upload it to YouTube as **Unlisted**, and paste the link under the game's **Edit details**. Then delete it from the scorebook to free up space. A 2-hour game takes about 2 GB.
 
-### YouTube
+**Camera operators** can do all of this on their own phone: sign in, then **Live → Stream video**. The Cloudflare Worker connection is shared with them automatically, so they don't need the access code.
 
-Free, saves every game, and anyone with the link can watch. YouTube runs 10 to 30 seconds behind, so each viewer can set **Score delay** under the video to keep the scoreboard from spoiling plays.
+## YouTube uploads
+
+When a built-in camera stream ends, the camera phone can upload the game video to YouTube by itself, and add the replay to the game page.
+
+**Google's review comes first.** YouTube locks every video uploaded by a new app as **private** until Google reviews the app. You can watch private videos in YouTube Studio or the YouTube app (**You → Your videos**) and download them there, but families can't, and videos uploaded before approval stay locked. Apply for the review right after setup.
+
+**One-time setup** (Google Cloud, easiest on a computer)
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) and pick the **stingerz-scorebook** project at the top (the same project as Firebase).
+2. **APIs & Services → Library**, search **YouTube Data API v3**, and tap **Enable**.
+3. **Google Auth Platform** (or **APIs & Services → OAuth consent screen**) → **Get started**. App name `GS Baseball Scorebook`, your email, audience **External**, then **Create**.
+4. **Audience → Test users → Add users**: add the Google account that owns your YouTube channel, plus anyone else who will upload.
+5. **Data access → Add or remove scopes**: tick `.../auth/youtube.upload` and save.
+6. **Clients → Create client**: type **Web application**, name `Scorebook`, and under **Authorized JavaScript origins** add `https://scorebook.stingerz-baseball.com`. Create it and copy the **Client ID**.
+7. In the scorebook: **Team → YouTube uploads → Set up**, paste the Client ID, and save. Leave **Add the replay to the game page** off for now.
+8. Apply for the review at [support.google.com/youtube/contact/yt_api_form](https://support.google.com/youtube/contact/yt_api_form). Explain that it's a youth baseball team's own scorebook that uploads game video only to the team's own channel, non-commercial, at https://scorebook.stingerz-baseball.com. Reviews have taken from a few days to a few months.
+9. Once Google approves, turn on **Add the replay to the game page**.
+
+**Each game:** when the camera phone taps **End stream**, Google asks which account to use (the first time, it warns the app isn't verified; tap **Continue**, since it's your own app). Pick the channel's account and the upload starts. Keep the screen on until it says **On YouTube**. If it stops, tap **Continue upload** and it picks up where it left off. Uploads use about 1 GB per hour of video, so use Wi-Fi if you can. You can also upload later from **Team → Game videos on this phone**.
+
+Videos go to the channel of the Google account that signs in, and that account must be on the test-user list. If a camera operator films, they sign in with the team channel's Google account.
+
+### YouTube live streaming
+
+Instead of the built-in camera, you can stream to YouTube from a streaming app. Free, saves every game, and anyone with the link can watch. YouTube runs 10 to 30 seconds behind, so each viewer can set **Score delay** under the video to keep the scoreboard from spoiling plays.
 
 1. **Get your channel ID.** In YouTube Studio: **Settings → Channel → Advanced settings**. It starts with `UC`.
 2. **Add it to the scorebook.** **Team → Live video → Set up**.
