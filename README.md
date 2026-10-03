@@ -21,7 +21,7 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 
 ## Team chat
 
-The **Chat** tab is one group conversation for everyone with an approved account: coaches, families and camera operators. People watching through "Anyone with the link" without signing in don't see it. Coaches' messages show a **Coach** tag. Tap your own message to delete it; coaches can delete any message. A red dot on the Chat tab means there are new messages. The chat keeps the latest 300 messages on screen.
+The **Chat** tab is one group conversation for everyone with an approved account: coaches, families and camera operators. People watching through "Anyone with the link" without signing in don't see it. Coaches' messages show a **Coach** tag. To delete a message, tap it and then tap **Delete message**. Anyone can delete their own messages; coaches can delete any message. A hint under the latest message says so until you've deleted one. A red dot on the Chat tab means there are new messages. The chat keeps the latest 300 messages on screen.
 
 ## Notifications
 
