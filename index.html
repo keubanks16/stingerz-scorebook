@@ -447,7 +447,7 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
 <div id="sheet-root"></div>
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script>window.GS_FIREBASE = {"apiKey": "AIzaSyBfTjGdAr9nXPEp30X7c9Ot01fT5oGV7_0", "authDomain": "stingerz-scorebook.firebaseapp.com", "projectId": "stingerz-scorebook", "storageBucket": "stingerz-scorebook.firebasestorage.app", "messagingSenderId": "667344236029", "appId": "1:667344236029:web:9f1372d2e6d96321587d94"};</script>
+<script>window.GS_FIREBASE = {"apiKey": "AIzaSyBfTjGdAr9nXPEp30X7c9Ot01fT5oGV7_0", "authDomain": "stingerz-scorebook.firebaseapp.com", "projectId": "stingerz-scorebook", "storageBucket": "stingerz-scorebook.firebasestorage.app", "messagingSenderId": "667344236029", "appId": "1:667344236029:web:9f1372d2e6d96321587d94", "vapidKey": "BL5bz0Z2pYw73rODslcmUSpM2AW56foHvq9NKud8OxpHI3M0rcMBszRYSuiSvx9XJAP8LKFAUrAJBliJrboYkEg"};</script>
 <script>/* GS Baseball scoring engine: replays a game's event log into game state and stats. */
 (function (root) {
   'use strict';
@@ -902,7 +902,7 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
 
   // ---------- Firebase: logins, roles and cloud sync (website copy) ----------
   const FB_VERSION = '12.19.0';
-  const FB = { A: null, F: null, auth: null, fs: null };
+  const FB = { A: null, F: null, auth: null, fs: null, app: null, cfg: null };
   const Access = { evaluated: false, authKnown: false, setupLoaded: false, accessLoaded: false, memberLoaded: true, rulesError: false, user: null, member: null, owner: null, publicView: false, members: [], isOwner: false, isApproved: false, isAdmin: false, isCamera: false, canView: false, worker: null };
   let WorkerSub = null;
   let DataSubs = null, MemberSub = null, MembersSub = null;
@@ -960,10 +960,12 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
         if (!X.worker && X.isAdmin && local) FB.F.setDoc(FB.F.doc(FB.fs, 'config', 'worker'), { url: local.url, code: local.code }).catch(() => {});
         const cfg = loadAiCfg();
         if (cfg) Caps.sample = makeWorkerAI(cfg);
+        if (X.isAdmin && X.worker && Data.loaded.team && Data.team.notifyUrl !== X.worker.url) { Data.team.notifyUrl = X.worker.url; saveTeam(); }
         scheduleRender();
       }, () => { X.worker = null; });
     } else if (!(X.isAdmin || X.isCamera) && WorkerSub) { WorkerSub(); WorkerSub = null; X.worker = null; }
     if (chatAllowed() && !Chat.sub) chatSubscribe();
+    if (chatAllowed() && pushLocal() && !Push.listening && 'Notification' in window && Notification.permission === 'granted') pushMessaging().catch(() => {});
     else if (!chatAllowed() && Chat.sub) { Chat.sub(); Chat.sub = null; Chat.list = []; Chat.loaded = false; }
     if (X.isAdmin && !MembersSub) {
       MembersSub = FB.F.onSnapshot(FB.F.collection(FB.fs, 'members'), (q) => {
@@ -995,6 +997,7 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
       return;
     }
     const app = appMod.initializeApp(cfg);
+    FB.app = app; FB.cfg = cfg;
     FB.auth = FB.A.getAuth(app);
     try { FB.fs = FB.F.initializeFirestore(app, { localCache: FB.F.persistentLocalCache({ tabManager: FB.F.persistentMultipleTabManager() }) }); }
     catch (e) { FB.fs = FB.F.getFirestore(app); }
@@ -1159,6 +1162,7 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
     Chat.forceBottom = true;
     try {
       await FB.F.addDoc(FB.F.collection(FB.fs, 'messages'), { uid: Access.user.uid, name: chatName().slice(0, 60), text, coach: !!Access.isAdmin, at: FB.F.serverTimestamp() });
+      pingNotify();
     } catch (e) {
       box.value = text; chatGrow();
       toast(e && e.code === 'permission-denied' ? 'Couldn’t send. Check that the latest security rules are published.' : 'Couldn’t send. Check your connection and try again.');
@@ -1166,6 +1170,63 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
     Chat.sending = false;
   }
   function chatGrow() { const box = $('#chat-input'); if (!box) return; box.style.height = 'auto'; box.style.height = Math.min(120, box.scrollHeight) + 'px'; }
+
+  // ---------- Phone notifications (Firebase Cloud Messaging) ----------
+  const PUSH_KEY = 'gs-baseball-push';
+  const Push = { M: null, messaging: null, busy: false, listening: false };
+  function pushLocal() { try { const v = JSON.parse(localStorage.getItem(PUSH_KEY) || 'null'); return v && Access.user && v.uid === Access.user.uid ? v : null; } catch (e) { return null; } }
+  function pushSaveLocal(v) { try { if (v) localStorage.setItem(PUSH_KEY, JSON.stringify(v)); else localStorage.removeItem(PUSH_KEY); } catch (e) { /* per-device only */ } }
+  const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isInstalled = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  function pushState() {
+    if (!(FB.cfg && FB.cfg.vapidKey)) return 'not_setup';
+    if (isIOS() && !isInstalled()) return 'install';
+    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported';
+    if (Notification.permission === 'denied') return 'blocked';
+    if (pushLocal() && Notification.permission === 'granted') return 'on';
+    return 'off';
+  }
+  async function pushMessaging() {
+    if (!Push.M) Push.M = await import('https://www.gstatic.com/firebasejs/' + FB_VERSION + '/firebase-messaging.js');
+    if (!Push.messaging) Push.messaging = Push.M.getMessaging(FB.app);
+    if (!Push.listening) {
+      Push.listening = true;
+      Push.M.onMessage(Push.messaging, (m) => {
+        const n = (m && m.notification) || {};
+        if (UI.tab === 'chat' && /^chat/.test((m.fcmOptions && m.fcmOptions.link) || '')) return;
+        if (n.title) toast(n.title + (n.body ? ': ' + n.body : ''));
+      });
+    }
+    return Push.messaging;
+  }
+  async function sha256hex(t) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)); return Array.from(new Uint8Array(b)).map((x) => x.toString(16).padStart(2, '0')).join(''); }
+  async function pushWrite(v) {
+    await FB.F.setDoc(FB.F.doc(FB.fs, 'pushTokens', v.id), { uid: Access.user.uid, token: v.token, chat: v.chat, scores: v.scores, at: Date.now() });
+  }
+  function pushHTML() {
+    if (!(UI.standalone && chatAllowed())) return '';
+    const stt = pushState();
+    const v = pushLocal();
+    let body = '';
+    if (stt === 'not_setup') body = '<p style="margin:0">Notifications aren’t set up for the team yet.</p>';
+    else if (stt === 'install') body = '<p style="margin:0">On iPhone, notifications only work from the Home Screen app. In Safari, tap <b>Share → Add to Home Screen</b>, open <b>GS Hub</b> from your Home Screen, sign in, and turn notifications on here.</p>';
+    else if (stt === 'unsupported') body = '<p style="margin:0">This browser can’t show notifications. On iPhone, use the Home Screen app (iOS 16.4 or later).</p>';
+    else if (stt === 'blocked') body = '<p style="margin:0">Notifications are blocked for this app. Turn them on in your phone’s Settings → Notifications → GS Hub, then come back here.</p>';
+    else if (stt === 'off') body = `<p style="margin:0">Get chat messages, game starts, runs and final scores on your lock screen, even when the app is closed.</p><div><button class="btn primary" data-act="pushOn" ${Push.busy ? 'disabled' : ''}>${Push.busy ? 'Turning on…' : 'Turn on notifications'}</button></div>`;
+    else body = `<p style="margin:0">On for this phone.</p>
+      <div><span class="field-lbl">Team chat</span>${segB('pushChat', v.chat ? 'on' : 'off', [['on', 'On'], ['off', 'Off']])}</div>
+      <div><span class="field-lbl">Game updates</span>${segB('pushScores', v.scores, [['runs', 'Runs & final'], ['all', 'Every half-inning'], ['off', 'Off']])}</div>
+      <p class="small muted" style="margin:0">Each game update replaces the last one, so your lock screen works like a live scoreboard.</p>
+      <div><button class="btn sm" data-act="pushOff">Turn off on this phone</button></div>`;
+    return `<h2 class="sec">Notifications</h2><section class="card stack" style="padding:14px">${body}</section>`;
+  }
+  async function pushRemove() {
+    const v = pushLocal();
+    if (!v) return;
+    pushSaveLocal(null);
+    try { await FB.F.deleteDoc(FB.F.doc(FB.fs, 'pushTokens', v.id)); } catch (e) { /* already gone */ }
+    try { const m = await pushMessaging(); await Push.M.deleteToken(m); } catch (e) { /* best effort */ }
+  }
 
   // ---------- Claude through your own Cloudflare Worker (GitHub Pages copy) ----------
   const AI_KEY = 'gs-baseball-ai';
@@ -1295,7 +1356,22 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
     }
   };
   const saveTeam = () => Saver.put('team/main', Data.team);
-  function saveGame(g) { g.updatedAt = Date.now(); Saver.put('games/' + g.id, g); }
+  function saveGame(g) {
+    g.updatedAt = Date.now();
+    try { const s = st(g); g.sum = { a: s.score.away, h: s.score.home, i: s.inning, half: s.half, o: s.outs, us: s.us }; } catch (e) { /* summary is optional */ }
+    Saver.put('games/' + g.id, g);
+    pingNotify();
+  }
+  // Ask the Worker to look for score changes now instead of waiting for its once-a-minute check.
+  let pingT = 0;
+  function pingNotify() {
+    if (Backend.kind !== 'fb') return;
+    clearTimeout(pingT);
+    pingT = setTimeout(() => {
+      const url = (loadAiCfg() || {}).url || Data.team.notifyUrl;
+      if (url) fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"task":"notify-check"}' }).catch(() => {});
+    }, 2500);
+  }
   async function removePath(path, what) {
     const e = Saver.q.get(path);
     if (e) clearTimeout(e.t);
@@ -2053,6 +2129,7 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
         h += `<h2 class="sec">YouTube uploads</h2><section class="card stack" style="padding:14px"><p style="margin:0">${y ? `On. ${y.auto !== false ? 'Game videos upload to YouTube when a stream ends.' : 'Upload game videos from the camera phone with Upload to YouTube.'} ${y.attach ? 'Replays are added to the game page.' : 'Replays aren\u2019t added to game pages yet.'}` : 'Not set up. Upload game videos to your YouTube channel straight from the camera phone.'}</p><div><button class="btn${y ? '' : ' primary'}" data-act="ytSetup">${y ? 'Change' : 'Set up'}</button></div></section>`;
       }
     }
+    h += pushHTML();
     if (UI.standalone && (canEdit() || Access.isCamera)) h += recordingsHTML();
     h += `<h2 class="sec">Your data</h2><section class="card stack" style="padding:14px">`;
     if (Backend.kind === 'db') h += `<p style="margin:0">Games and the roster are saved with this page in your Claude account, so they sync across your devices. Share the page and families can follow games live as you score.</p>`;
@@ -2771,6 +2848,29 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
       sh.opp = R.players.filter((p) => rosterKey(p)).map((p) => ({ id: uid('o'), num: p.num || '', name: p.name || '', bats: p.bats || '' }));
       renderSheet();
     },
+    async pushOn() {
+      if (Push.busy) return;
+      let perm = 'default';
+      try { perm = await Notification.requestPermission(); } catch (e) { perm = 'denied'; }
+      if (perm !== 'granted') { render(); toast(perm === 'denied' ? 'Notifications are blocked. Turn them on in your phone\u2019s Settings.' : 'Notifications weren\u2019t turned on.'); return; }
+      Push.busy = true; render();
+      try {
+        const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        const m = await pushMessaging();
+        const token = await Push.M.getToken(m, { vapidKey: FB.cfg.vapidKey, serviceWorkerRegistration: reg });
+        if (!token) throw new Error('no token');
+        const v = { uid: Access.user.uid, id: await sha256hex(token), token, chat: true, scores: 'runs' };
+        await pushWrite(v);
+        pushSaveLocal(v);
+        toast('Notifications are on');
+      } catch (e) {
+        toast(e && e.code === 'permission-denied' ? 'Couldn\u2019t save. Check that the latest security rules are published.' : 'Couldn\u2019t turn on notifications. Try again in a moment.');
+      }
+      Push.busy = false; render();
+    },
+    async pushOff() { await pushRemove(); render(); toast('Notifications are off on this phone'); },
+    async pushChat(d) { const v = pushLocal(); if (!v) return; v.chat = d.v === 'on'; pushSaveLocal(v); render(); try { await pushWrite(v); } catch (e) { toast('Couldn\u2019t save that setting.'); } },
+    async pushScores(d) { const v = pushLocal(); if (!v) return; v.scores = d.v; pushSaveLocal(v); render(); try { await pushWrite(v); } catch (e) { toast('Couldn\u2019t save that setting.'); } },
     msgTap(d, el, ev) {
       if (ev.target.closest('button')) return;
       Chat.delId = Chat.delId === d.id ? null : d.id;
@@ -2814,7 +2914,7 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
         if (UI.sheet === sh) renderSheet();
       }
     },
-    async signOut() { try { await FB.A.signOut(FB.auth); toast('Signed out'); } catch (e) { toast('Could not sign out. Try again.'); } },
+    async signOut() { try { await pushRemove(); await FB.A.signOut(FB.auth); toast('Signed out'); } catch (e) { toast('Could not sign out. Try again.'); } },
     async claim() {
       try { await claimAdmin('', ''); toast('You’re the admin'); }
       catch (e) { toast(e && e.code === 'already-claimed' ? 'This hub already has an admin.' : authErrorText(e)); }
@@ -2863,6 +2963,7 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
       if (!cfg) { sh.test = { err: 'Enter the Worker address (it starts with https://) and the access code.' }; return renderSheet(); }
       if (Backend.kind === 'fb' && Access.isAdmin) {
         Access.worker = cfg;
+        Data.team.notifyUrl = cfg.url; saveTeam();
         FB.F.setDoc(FB.F.doc(FB.fs, 'config', 'worker'), { url: cfg.url, code: cfg.code }).catch(() => toast('The connection is saved on this phone, but sharing it with other coaches failed. Check that the latest security rules are published.'));
         saveAiCfg(cfg);
       } else if (!saveAiCfg(cfg)) { sh.test = { err: 'This browser blocked saving the connection.' }; return renderSheet(); }

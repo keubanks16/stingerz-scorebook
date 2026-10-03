@@ -23,6 +23,21 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 
 The **Chat** tab is one group conversation for everyone with an approved account: coaches, families and camera operators. People watching through "Anyone with the link" without signing in don't see it. Coaches' messages show a **Coach** tag. Tap your own message to delete it; coaches can delete any message. A red dot on the Chat tab means there are new messages. The chat keeps the latest 300 messages on screen.
 
+## Notifications
+
+Anyone with an approved account can get phone notifications, even when the Hub is closed: new chat messages, game starts, every run, and final scores. Each game update replaces the one before it, so the lock screen works like a live scoreboard. Each person turns them on under **Team → Notifications** and picks what they want: team chat on or off, and game updates for **Runs & final**, **Every half-inning**, or **Off**.
+
+- **iPhone (iOS 16.4 or later):** notifications only work from the Home Screen app. Open the Hub in Safari → **Share** → **Add to Home Screen**, open **GS Hub** from the Home Screen, sign in, then turn notifications on.
+- **Android:** works in Chrome. Adding it to the home screen is optional.
+
+A true live scoreboard on the iPhone lock screen or Dynamic Island (a Live Activity) needs an App Store app, so the Hub uses replacing notifications instead.
+
+The Cloudflare Worker sends the notifications. It needs:
+
+1. **`FIREBASE_SERVICE_ACCOUNT`** secret: in Firebase, **Project settings → Service accounts → Generate new private key**, then paste the whole downloaded file as the secret's value. Treat that file like a password: don't email it or put it anywhere else.
+2. **A Cron Trigger:** in the Worker, **Settings → Trigger events → Add → Cron Triggers**, every minute (`* * * * *`). The scorebook also nudges the Worker the moment a coach scores a pitch or someone sends a chat message, so most notifications arrive within a few seconds; the cron check catches anything missed.
+3. A coach has saved the Worker under **Team → Cloudflare Worker** at least once, so families' phones know where to nudge it.
+
 ## First-time setup
 
 1. **Turn on GitHub Pages.** In this repo: **Settings → Pages**. Under *Build and deployment*, choose **Deploy from a branch**, **main**, **/ (root)**, then **Save**. The custom domain should fill in as `scorebook.stingerz-baseball.com` from the `CNAME` file.
@@ -96,7 +111,7 @@ Videos go to the channel of the Google account that signs in, and that account m
 
 ## Cloudflare Worker
 
-Roster photo scanning, scouting reports and the built-in camera go through your Cloudflare Worker ([`worker.js`](worker.js)), which keeps your keys off this public site. Its **Settings → Variables and Secrets**:
+Roster photo scanning, scouting reports, the built-in camera and phone notifications go through your Cloudflare Worker ([`worker.js`](worker.js)), which keeps your keys off this public site. Its **Settings → Variables and Secrets**:
 
 | Name | Type | What it's for |
 | --- | --- | --- |
@@ -104,11 +119,12 @@ Roster photo scanning, scouting reports and the built-in camera go through your 
 | `ANTHROPIC_API_KEY` | Secret | Roster photos and scouting reports ([console.anthropic.com](https://console.anthropic.com)) |
 | `CF_STREAM_TOKEN` | Secret | Built-in camera (Account · Stream · Edit token) |
 | `CF_ACCOUNT_ID` | Text | Built-in camera (your Cloudflare account ID) |
+| `FIREBASE_SERVICE_ACCOUNT` | Secret | Phone notifications (see [Notifications](#notifications)) |
 | `ALLOWED_ORIGIN` | Text | Optional. Defaults to `https://scorebook.stingerz-baseball.com,https://keubanks16.github.io` |
 
 In the scorebook, each coach's phone needs **Team → Cloudflare Worker → Set up**: paste the Worker address and access code, tap **Test connection**, then **Save**.
 
-To create the Worker from scratch: in [Cloudflare](https://dash.cloudflare.com), create a Worker from "Hello World", choose **Edit code**, paste [`worker.js`](worker.js), deploy, then add the variables above.
+To create the Worker from scratch: in [Cloudflare](https://dash.cloudflare.com), create a Worker from "Hello World", choose **Edit code**, paste [`worker.js`](worker.js), deploy, then add the variables above and the every-minute Cron Trigger.
 
 ## Put it on a phone's home screen
 
@@ -121,7 +137,8 @@ To create the Worker from scratch: in [Cloudflare](https://dash.cloudflare.com),
 | --- | --- |
 | `index.html` | The whole app in one page, including the Firebase settings |
 | `firestore.rules` | Database security rules: owner, coaches, families, who can watch |
-| `worker.js` | Cloudflare Worker: holds the Claude API key and opens private Cloudflare streams for the camera phone |
+| `worker.js` | Cloudflare Worker: holds the Claude API key, opens private Cloudflare streams for the camera phone, and sends notifications |
+| `firebase-messaging-sw.js` | Shows notifications when the Hub is closed. Must stay at the top level of the site |
 | `CNAME` | Tells GitHub Pages to serve this at scorebook.stingerz-baseball.com |
 | `icons/`, `manifest.webmanifest` | Home-screen icon and app settings |
 

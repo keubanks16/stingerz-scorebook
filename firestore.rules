@@ -87,6 +87,21 @@ service cloud.firestore {
       allow read: if canView();
       allow write: if isAdmin();
     }
+    // Phones that asked for notifications. Each person manages only their own; the Worker reads
+    // them with the service account.
+    match /pushTokens/{id} {
+      allow get: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create: if (isApproved() || isAdmin())
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'token', 'chat', 'scores', 'at'])
+        && request.resource.data.scores in ['off', 'runs', 'all'];
+      allow update: if (isApproved() || isAdmin()) && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'token', 'chat', 'scores', 'at'])
+        && request.resource.data.scores in ['off', 'runs', 'all'];
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
     // Team chat: one group conversation for signed-in, approved members (not link-only viewers).
     match /messages/{id} {
       allow read: if isApproved() || isAdmin();
