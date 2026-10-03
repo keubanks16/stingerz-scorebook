@@ -137,7 +137,7 @@ To create the Worker from scratch: in [Cloudflare](https://dash.cloudflare.com),
 | --- | --- |
 | `index.html` | The whole app in one page, including the Firebase settings |
 | `firestore.rules` | Database security rules: owner, coaches, families, who can watch |
-| `worker.js` | Cloudflare Worker: holds the Claude API key, opens private Cloudflare streams for the camera phone, and sends notifications |
+| `worker.js` | Cloudflare Worker: holds the API key, opens private Cloudflare streams for the camera phone, and sends notifications |
 | `firebase-messaging-sw.js` | Shows notifications when the Hub is closed. Must stay at the top level of the site |
 | `CNAME` | Tells GitHub Pages to serve this at scorebook.stingerz-baseball.com |
 | `icons/`, `manifest.webmanifest` | Home-screen icon and app settings |

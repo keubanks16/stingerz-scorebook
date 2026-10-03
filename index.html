@@ -1237,7 +1237,7 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
     try { const m = await pushMessaging(); await Push.M.deleteToken(m); } catch (e) { /* best effort */ }
   }
 
-  // ---------- Claude through your own Cloudflare Worker (GitHub Pages copy) ----------
+  // ---------- Roster scanning and scouting reports through your own Cloudflare Worker (GitHub Pages copy) ----------
   const AI_KEY = 'gs-baseball-ai';
   function localAiCfg() { try { const c = JSON.parse(localStorage.getItem(AI_KEY) || 'null'); return c && c.url && c.code ? c : null; } catch (e) { return null; } }
   function loadAiCfg() { return (Backend.kind === 'fb' && Access.worker) || localAiCfg(); }
@@ -2106,7 +2106,7 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
     if (st2.text || st2.busy) h += `<div class="ai-out" id="ai-out">${esc(st2.text || 'Thinking…')}</div>`;
     if (st2.err) h += `<div class="warn-text">${esc(st2.err)}</div>`;
     if (st2.busy) h += `<button class="btn sm" data-act="aiStop">Stop</button>`;
-    else h += `<button class="btn" data-act="aiScout" data-key="${esc(key)}">${st2.text ? 'Ask Claude again' : 'Ask Claude for a scouting report'}</button>`;
+    else h += `<button class="btn" data-act="aiScout" data-key="${esc(key)}">${st2.text ? 'Write a new report' : 'Get a scouting report'}</button>`;
     return h + '</div>';
   }
 
@@ -2121,7 +2121,7 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
     if (canEdit()) {
       const rs = Object.entries(Data.opponents).sort((a, b) => a[1].name.localeCompare(b[1].name));
       h += `<h2 class="sec">Opponent rosters <button class="btn ghost sm" data-act="roster">+ Add roster</button></h2>`;
-      if (!rs.length) h += `<div class="card empty" style="padding:20px"><p>${Caps.sample ? 'Take a photo or screenshot of another team\'s roster and Claude reads the names and numbers into it.' : 'Save each opponent\'s roster so lineups and scouting show names, not just numbers.'}</p><button class="btn primary" data-act="roster">+ Add roster</button></div>`;
+      if (!rs.length) h += `<div class="card empty" style="padding:20px"><p>${Caps.sample ? 'Take a photo or screenshot of another team\'s roster and GS Baseball reads the names and numbers into it.' : 'Save each opponent\'s roster so lineups and scouting show names, not just numbers.'}</p><button class="btn primary" data-act="roster">+ Add roster</button></div>`;
       else h += `<div class="card roster">${rs.map(([k, r]) => `<button class="player" data-act="roster" data-key="${esc(k)}"><span class="no" style="font-size:16px">${esc((r.name || '?').slice(0, 3).toUpperCase())}</span><span style="min-width:0"><span class="nm">${esc(r.name)}</span><span class="meta">${r.players.length} player${r.players.length === 1 ? '' : 's'}${r.updatedAt ? ' · updated ' + esc(new Date(r.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) : ''}</span></span><span class="meta">Edit</span></button>`).join('')}</div>`;
     }
     h += accountHTML() + familiesHTML();
@@ -2141,7 +2141,7 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
     h += pushHTML();
     if (UI.standalone && (canEdit() || Access.isCamera)) h += recordingsHTML();
     h += `<h2 class="sec">Your data</h2><section class="card stack" style="padding:14px">`;
-    if (Backend.kind === 'db') h += `<p style="margin:0">Games and the roster are saved with this page in your Claude account, so they sync across your devices. Share the page and families can follow games live as you score.</p>`;
+    if (Backend.kind === 'db') h += `<p style="margin:0">Games and the roster are saved with this page, so they sync across your devices. Share the page and families can follow games live as you score.</p>`;
     else if (Backend.kind === 'fb') h += `<p style="margin:0">Games, rosters and stats are saved to your team's online database and sync to every coach's phone. Families see each pitch live. Export a backup now and then for your own records.</p>`;
     else h += `<p style="margin:0">Games and the roster are saved in this browser on this device. Export a backup now and then so nothing is lost if the browser data is cleared.</p>`;
     h += `<div class="row"><button class="btn" data-act="export">Export backup</button>${canEdit() ? '<button class="btn" data-act="importPick">Import backup</button><input type="file" id="import-file" accept="application/json,.json" hidden>' : ''}</div></section>`;
@@ -2323,8 +2323,8 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
     },
     ai(sh) {
       const t = sh.test;
-      const status = !t ? '' : t.busy ? '<div class="scan"><span class="spin" aria-hidden="true"></span><span>Checking the connection…</span></div>' : t.ok ? '<div class="small" style="color:var(--good);font-weight:600">Connected. Claude answered.</div>' : `<div class="warn-text">${esc(t.err)}</div>`;
-      return head('Cloudflare Worker') + `<p class="small muted" style="margin:0">Roster photo scanning, scouting reports and live video go through your Cloudflare Worker, which keeps your keys off this public site. <a href="https://github.com/keubanks16/stingerz-scorebook#claude-connection" target="_blank" rel="noopener">Setup steps</a></p>
+      const status = !t ? '' : t.busy ? '<div class="scan"><span class="spin" aria-hidden="true"></span><span>Checking the connection…</span></div>' : t.ok ? '<div class="small" style="color:var(--good);font-weight:600">Connected. Your Worker answered.</div>' : `<div class="warn-text">${esc(t.err)}</div>`;
+      return head('Cloudflare Worker') + `<p class="small muted" style="margin:0">Roster photo scanning, scouting reports and live video go through your Cloudflare Worker, which keeps your keys off this public site. <a href="https://github.com/keubanks16/stingerz-scorebook#cloudflare-worker" target="_blank" rel="noopener">Setup steps</a></p>
         <label><span class="field-lbl">Worker address</span>${inp('url', sh.url, 'type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://gs-scorebook-ai.yourname.workers.dev"')}</label>
         <label><span class="field-lbl">Access code</span>${inp('code', sh.code, 'autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="The ACCESS_CODE you set in the Worker"')}</label>
         ${status}
@@ -2458,24 +2458,24 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
       case 'cancelled': return '';
       case 'decode': return "That photo couldn't be opened. Try a screenshot or a JPEG photo.";
       case 'images_unavailable': case 'image_rejected': case 'bad_image': case 'too_many_images': return "That photo couldn't be sent. Try a screenshot, or fewer photos at once.";
-      case 'bad_code': return "The access code doesn't match the one in your Cloudflare Worker. Fix it under Team, Claude connection.";
-      case 'bad_key': return 'Your Cloudflare Worker has a Claude API key that was rejected. Check ANTHROPIC_API_KEY in the Worker.';
-      case 'no_credit': return 'Your Claude API account is out of credit. Add credit at console.anthropic.com.';
+      case 'bad_code': return "The access code doesn't match the one in your Cloudflare Worker. Fix it under Team, Cloudflare Worker.";
+      case 'bad_key': return 'Your Cloudflare Worker has an API key that was rejected. Check the API key in the Worker.';
+      case 'no_credit': return 'The API account behind your Worker is out of credit. Add credit, then try again.';
       case 'origin': return "Your Cloudflare Worker doesn't allow this site. Check ALLOWED_ORIGIN in the Worker.";
-      case 'not_configured': return 'Your Cloudflare Worker is missing ANTHROPIC_API_KEY or ACCESS_CODE.';
+      case 'not_configured': return 'Your Cloudflare Worker is missing its API key or ACCESS_CODE.';
       case 'network': return "Couldn't reach your Cloudflare Worker. Check its address and your connection.";
       case 'stream_not_configured': return 'Your Cloudflare Worker needs CF_STREAM_TOKEN and CF_ACCOUNT_ID before it can stream. Add them and paste the latest worker.js.';
       case 'stream_token': return 'Cloudflare rejected the Stream API token. Check that CF_STREAM_TOKEN has Account, Stream, Edit permission.';
       case 'stream_error': return 'Cloudflare Stream couldn\u2019t start the stream. Check that Stream is turned on in your Cloudflare account.' + (e && e.message ? ' (' + e.message + ')' : '');
       case 'whip': return 'The video connection to Cloudflare failed. Check the signal and try again.';
       case 'camera': return 'The Hub can\u2019t use the camera. In Settings, Safari, Camera and Microphone, choose Allow, then try again.';
-      case 'rate_limited': return 'Claude is busy or your usage limit was reached. Try again in a bit.';
-      case 'session_expired': return 'Sign in to Claude again, then retry.';
+      case 'rate_limited': return 'Too many requests right now, or your usage limit was reached. Try again in a bit.';
+      case 'session_expired': return 'Your session expired. Reload the page, then retry.';
       case 'invalid_json': case 'empty_completion': case 'refused':
-        return scan ? "Couldn't read a roster from that. Try a closer, straight-on shot with the names in view." : 'Claude could not write a report from this data.';
+        return scan ? "Couldn't read a roster from that. Try a closer, straight-on shot with the names in view." : 'A report couldn\u2019t be written from this data.';
       default: break;
     }
-    if (HIDE_CODES.includes(c)) return scan ? 'Reading photos needs your OK for Claude to look at them. Reload the page to be asked again, or type the roster.' : '';
+    if (HIDE_CODES.includes(c)) return scan ? 'Reading photos needs your permission. Reload the page to be asked again, or type the roster.' : '';
     if (what === 'test') return 'The test failed. Check the Worker address and try again.';
     if (what === 'stream') return 'The stream couldn\u2019t start. Check your signal and try again.';
     return scan ? 'Reading the roster failed. Check your connection and try again.' : 'The report could not be finished. Try again.';
@@ -2987,7 +2987,7 @@ body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px
       Caps.sample = makeWorkerAI(cfg);
       closeSheet();
       render();
-      toast('Claude connection saved');
+      toast('Worker connection saved');
     },
     aiDisconnect() {
       saveAiCfg(null); Caps.sample = null;

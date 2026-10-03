@@ -2,8 +2,8 @@
 //
 // The scorebook is a public website, so secret keys can't live in it. This Worker keeps
 // them on Cloudflare and does these jobs for GS Baseball Hub:
-//   roster  read a roster photo with Claude
-//   scout   write a scouting report with Claude
+//   roster  read a roster photo
+//   scout   write a scouting report
 //   live-start / live-end   open and close a private Cloudflare Stream for the camera phone
 //   notifications   every minute (Cron Trigger) and when a coach scores, look for new chat
 //                   messages and score changes and send phone notifications
@@ -92,7 +92,7 @@ export default {
         body: JSON.stringify({ model: env.MODEL || DEFAULT_MODEL, max_tokens: CLAUDE_TASKS[task], messages: [{ role: 'user', content }] })
       });
     } catch (e) {
-      return reply(502, { error: 'upstream', detail: 'Could not reach the Claude API.' });
+      return reply(502, { error: 'upstream', detail: 'Could not reach the AI service.' });
     }
     const data = await r.json().catch(() => null);
     if (!r.ok) {
