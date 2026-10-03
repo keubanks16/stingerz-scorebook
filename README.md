@@ -7,7 +7,7 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 | | Coaches (admins) | Camera operators | Families |
 |---|---|---|---|
 | Score games, edit rosters, scan rosters | Yes | No | No |
-| Import an opponent's spray chart | Yes | No | No |
+| Import a spray chart (your team or an opponent) | Yes | No | No |
 | Follow games live, box scores, stats, scouting | Yes | Yes | Yes |
 | Watch the live video with the scoreboard on top | Yes | Yes | Yes |
 | Stream from the built-in camera, upload game video | Yes | Yes | No |
@@ -23,15 +23,15 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 
 ## Scouting and imported spray charts
 
-The **Scout** tab builds each opponent's spray charts, direction split and positioning tips from every ball in play you chart while scoring. You can also import a spray chart someone else made, such as a season report from another app:
+The **Scout** tab builds each opponent's spray charts, direction split and positioning tips from every ball in play you chart while scoring. The **Stats** tab has the same kind of spray charts for your own hitters, under **Spray charts** below the batting table, and each player's card shows theirs. You can also import a spray chart someone else made, such as a season report from another app, for your team or an opponent:
 
-1. Tap **+ Spray chart** on the Scout tab, or open the opponent's roster under **Team → Opponent rosters** and tap **Import** in the Spray chart box.
+1. For your team, tap **+ Spray chart** in the Stats tab's Spray charts section. For an opponent, tap **+ Spray chart** on the Scout tab, or open their roster under **Team → Opponent rosters** and tap **Import** in the Spray chart box. The import screen's **Whose chart?** switch flips between your team and an opponent.
 2. Pick the screenshot(s). Long screenshots are fine: the Hub cuts them between rows of hitters so every name and number stays sharp.
-3. Check the review. Each hitter shows their balls in play on a small field in the Hub's style, the left/center/right split, the ground ball/line drive/pop up mix, and the roster player they were matched to ("Brigham F" on the chart matches "Brigham" on the roster). A check mark means the dots add up to the chart's own ball-in-play total. Change a match, add a hitter as a new player, or skip one, then tap **Save to scouting**.
+3. Check the review. Each hitter shows their balls in play on a small field in the Hub's style, the left/center/right split, the ground ball/line drive/pop up mix, and the roster player they were matched to ("Brigham F" on the chart matches "Brigham" on the roster). A check mark means the dots add up to the chart's own ball-in-play total. Change a match, add a hitter as a new player, or skip one, then tap **Save to scouting**. On your own team, a name that isn't on your roster starts as **Don't import** (it's usually a spelling difference); pick the right player or choose **Add to your roster**.
 
 Dot colors are read as contact type: **green = pop up, red = ground ball, gold = line drive**, unless the chart has its own color key. These charts don't say whether a ball was a hit or an out, so imported balls show as navy dots marked **Imported chart** instead of the hit, out and error markers. Each dot's spot becomes one of nine places (pitcher, catcher, first, second, short, third, left, center, right).
 
-Imported balls add to scouting; they never replace the games you score. The spray chart, direction split, contact mix (grounders, liners, pop ups) and the tips use both. The batting line (hits, walks, strikeouts) and outfield distances still come only from games you score, because spray charts don't include them. Importing again replaces the earlier import for the same hitters. To remove an import, open the roster and tap **Remove** in the Spray chart box.
+Imported balls add to scouting; they never replace the games you score. The spray chart, direction split, contact mix (grounders, liners, pop ups) and the tips use both. The batting line (hits, walks, strikeouts) and outfield distances still come only from games you score, because spray charts don't include them. Importing again replaces the earlier import for the same hitters. Imported balls never change batting stats. To remove an opponent's import, open their roster and tap **Remove** in the Spray chart box; for your team, tap **Remove** under the Stats tab's spray chart.
 
 ## Team chat
 

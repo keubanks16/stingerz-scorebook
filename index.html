@@ -2267,12 +2267,43 @@ body.viewer-on { overflow: hidden; }
     const ids = Object.keys(src);
     if (!ids.length) {
       h += `<div class="card empty"><h3>No ${mode === 'bat' ? 'batting' : 'pitching'} stats yet</h3><p>Stats build automatically from every game you score.</p></div>`;
-      return h;
+      return h + (mode === 'bat' ? teamSprayHTML() : '');
     }
     const rows = ids.map((id) => { const p = playerById(id); return { id, name: p ? p.name : 'Former player', num: p && p.num ? '#' + p.num : '', s: src[id] }; });
     const total = ids.reduce((t, id) => E.addInto(t, src[id]), mode === 'bat' ? E.emptyBat() : E.emptyPit());
     h += statTable(rows, mode === 'bat' ? BAT_COLS : PIT_COLS(), mode, total);
     h += `<p class="small muted" style="margin:0">Tap a column to sort, or a player for their spray chart and game log.${mode === 'pit' ? ' ERA is per ' + (Data.team.innings || 7) + ' innings.' : ''}</p>`;
+    return h + (mode === 'bat' ? teamSprayHTML() : '');
+  }
+  // Our team's spray charts on the Stats tab: the whole team or one hitter, from scored games
+  // and any imported chart, laid out like the Scout tab.
+  function teamSprayHTML() {
+    const by = teamSpray();
+    const list = [...by.values()].filter((x) => x.pas.length).sort((a, b) => b.pas.length - a.pas.length || (parseInt(a.num, 10) || 999) - (parseInt(b.num, 10) || 999));
+    const canImport = canEdit() && !!Caps.sample;
+    const headBtn = canImport ? ' <button class="btn ghost sm" data-act="sprayOpen" data-who="us">+ Spray chart</button>' : '';
+    if (!list.length) {
+      return canImport ? `<h2 class="sec" id="team-spray">Spray charts${headBtn}</h2><div class="card empty" style="padding:20px"><p>Spray charts fill in from every ball in play you chart. Have a spray chart for your team from another app? Import it.</p><button class="btn primary" data-act="sprayOpen" data-who="us">${CAMERA}<span>Import a spray chart</span></button></div>` : '';
+    }
+    const key = UI.teamSpray && by.has(UI.teamSpray) ? UI.teamSpray : '*';
+    const sel = key === '*' ? null : by.get(key);
+    const pas = sel ? sel.pas : list.flatMap((x) => x.pas);
+    const t = tendencies(pas, sel ? sel.bats : '');
+    const pts = sprayPoints(pas);
+    const title = sel ? [sel.num ? '#' + sel.num : '', sel.name].filter(Boolean).join(' ') : (Data.team.name || 'Our team') + ' hitters';
+    const sp = Data.team.spray && Array.isArray(Data.team.spray.players) && Data.team.spray.players.length ? Data.team.spray : null;
+    let h = `<h2 class="sec" id="team-spray">Spray charts${headBtn}</h2><section class="card stack" style="padding:14px">
+      <div class="row"><div class="grow"><div class="mu-name" style="font-size:21px">${esc(title)}</div><div class="mu-sub">${t.n} ball${t.n === 1 ? '' : 's'} in play${t.imp ? ' · ' + (t.imp === t.n ? 'all' : t.imp) + ' from an imported chart' : ''}</div></div>
+      <div class="seg">${[['dots', 'Dots'], ['heat', 'Heat']].map(([k, l]) => `<button data-act="sprayMode" data-k="${k}" aria-pressed="${UI.sprayMode === k}">${l}</button>`).join('')}</div></div>
+      ${fieldSVG({ points: pts, heat: UI.sprayMode === 'heat', label: 'Spray chart for ' + title })}
+      ${UI.sprayMode === 'heat' ? '<div class="legend"><span>Darker = more balls hit there</span></div>' : legend(pts.some((p) => p.imp && !p.res), pts.some((p) => !p.imp || p.res) || !pts.length)}
+      ${tendHTML(t)}
+      ${sp ? `<div class="row small muted" style="gap:8px"><span class="grow">Imported spray chart${sp.src ? ' “' + esc(sp.src) + '”' : ''}, added ${esc(new Date(sp.at || Date.now()).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}.</span>${canEdit() ? '<button class="btn ghost sm danger" data-act="teamSprayRemove">Remove</button>' : ''}</div>` : ''}
+    </section>`;
+    h += `<div class="card hitters">
+      <button class="hitter" data-act="teamSpray" data-k="*" aria-pressed="${key === '*'}"><span class="no">ALL</span><span><b>Whole team</b><span class="meta">${list.reduce((n, x) => n + x.pas.length, 0)} balls in play</span></span><span class="meta"></span></button>
+      ${list.map((x) => { const tt = tendencies(x.pas, x.bats); const dom = ['L', 'C', 'R'].reduce((m, k) => (tt[k] > tt[m] ? k : m), 'C'); return `<button class="hitter" data-act="teamSpray" data-k="${esc(x.id)}" aria-pressed="${key === x.id}"><span class="no">${esc(x.num || '–')}</span><span style="min-width:0"><b>${esc(x.name)}</b><span class="meta">${tt.n} in play${tt.imp ? ' · ' + (tt.imp === tt.n ? 'imported' : tt.imp + ' imported') : ''}</span></span><span class="meta">${tt.n >= 3 ? { L: 'Left', C: 'Center', R: 'Right' }[dom] + ' ' + pct(tt[dom], tt.n) + '%' : ''}</span></button>`; }).join('')}
+    </div>`;
     return h;
   }
 
@@ -2324,16 +2355,41 @@ body.viewer-on { overflow: hidden; }
         if (!O.hitters.has(hk)) O.hitters.set(hk, { key: hk, num, name, bats: (rp && rp.bats) || '', pas: [], slot: 99 });
         const H = O.hitters.get(hk);
         if (!H.name) H.name = name;
-        for (const d0 of sp1.dots || []) {
-          const d = sprayDotNow(d0, !sp.v);
-          const z = SPRAY_ZONES[d.z];
-          if (!z) continue;
-          const bt = BT_NAME[d.bt] ? d.bt : '', res = SPRAY_RES[d.r] ? d.r : '';
-          for (let i = 0; i < Math.min(99, d.n || 0); i++) H.pas.push({ imp: 1, zone: d.z, dir: z.dir, bt, res, loc: z.at, date });
-        }
+        H.pas.push(...importedPas(sp1, !sp.v, date));
       }
     }
     return opps;
+  }
+  // One imported hitter's dots as balls in play (imp) that sit beside the ones from scored games.
+  function importedPas(sp1, legacy, date) {
+    const out = [];
+    for (const d0 of sp1.dots || []) {
+      const d = sprayDotNow(d0, legacy);
+      const z = SPRAY_ZONES[d.z];
+      if (!z) continue;
+      const bt = BT_NAME[d.bt] ? d.bt : '', res = SPRAY_RES[d.r] ? d.r : '';
+      for (let i = 0; i < Math.min(99, d.n || 0); i++) out.push({ imp: 1, zone: d.z, dir: z.dir, bt, res, loc: z.at, date });
+    }
+    return out;
+  }
+  // Our own hitters: balls in play charted in games we scored, plus any imported spray chart.
+  function teamSpray() {
+    const by = new Map();
+    const get = (id, fallback) => {
+      if (!by.has(id)) { const p = playerById(id); by.set(id, { id, num: p && p.num ? String(p.num) : '', name: p ? p.name : fallback || 'Former player', bats: (p && p.bats) || '', pas: [] }); }
+      return by.get(id);
+    };
+    for (const g of gamesList()) {
+      if (!g.events.length) continue;
+      const s = st(g);
+      for (const pa of s.pas) if (pa.side === s.us && pa.loc) get(pa.ref).pas.push(Object.assign({ date: g.date }, pa));
+    }
+    const sp = Data.team.spray;
+    if (sp && Array.isArray(sp.players)) {
+      const date = todayISO(new Date(sp.at || Date.now()));
+      for (const x of sp.players) if (x && x.id) get(x.id, x.name).pas.push(...importedPas(x, !sp.v, date));
+    }
+    return by;
   }
   // The nine spots an imported chart can put a ball, in this app's field coordinates (home at 50,76).
   const SPRAY_ZONES = {
@@ -2607,23 +2663,30 @@ body.viewer-on { overflow: hidden; }
     },
     spray(sh) {
       const names = [...new Set(Object.values(Data.games).map((g) => g.opponent).concat(Object.values(Data.opponents).map((o) => o.name)))].filter(Boolean).sort();
+      const us = sh.who === 'us';
+      const teamName = Data.team.name || 'Our team';
       let h = head('Import a spray chart');
       if (sh.step !== 'review') {
-        h += sh.fixed
+        if (!sh.fixed) h += `<div><span class="field-lbl">Whose chart?</span>${segB('sprayFor', us ? 'us' : 'opp', [['us', teamName], ['opp', 'An opponent']])}</div>`;
+        if (!us) h += sh.fixed
           ? `<div><span class="field-lbl">Opponent</span><div class="sp-opp">${esc(sh.name)}</div></div>`
           : `<label><span class="field-lbl">Opponent</span>${inp('name', sh.name, 'list="sp-opps" autocomplete="off" placeholder="Team name"')}<datalist id="sp-opps">${names.map((n) => `<option value="${esc(n)}">`).join('')}</datalist></label>`;
-        h += `<p class="small muted" style="margin:0">Use screenshots of a spray chart report that shows each hitter's name and the dots where their balls in play went. GS Baseball reads every hitter, matches them to this team's roster, and adds the balls to the Scout tab. You check everything before it's saved.</p>`;
+        h += us
+          ? `<p class="small muted" style="margin:0">Use screenshots of a spray chart report that shows each hitter's name and the dots where their balls in play went. GS Baseball reads every hitter, matches them to your roster, and adds the balls to your players' spray charts on the Stats tab. You check everything before it's saved.</p>`
+          : `<p class="small muted" style="margin:0">Use screenshots of a spray chart report that shows each hitter's name and the dots where their balls in play went. GS Baseball reads every hitter, matches them to this team's roster, and adds the balls to the Scout tab. You check everything before it's saved.</p>`;
         if (sh.busy) h += `<div class="scan"><span class="spin" aria-hidden="true"></span><span class="grow">Reading every hitter's chart. This can take a minute.${sh.busy.note ? ' ' + esc(sh.busy.note) : ''}</span><button class="btn sm" data-act="sprayStop">Stop</button></div>`;
         else h += `<div><label class="btn primary scan-btn">${CAMERA}<span>Choose spray chart screenshots</span><input class="vh" type="file" accept="image/*" multiple data-spray="1"></label></div>`;
         if (sh.err) h += `<div class="warn-text">${esc(sh.err)}</div>`;
         return h;
       }
-      const R = rosterFor(sh.name);
-      const opts = [['', 'Add as a new player']].concat((R ? R.players : []).filter((p) => rosterKey(p)).map((p) => [p.id, (p.num ? '#' + p.num + ' ' : '') + (p.name || 'No name')]), [['skip', 'Don’t import']]);
+      const R = us ? null : rosterFor(sh.name);
+      const pool = us ? sortedRoster() : R ? R.players : [];
+      const named = pool.filter((p) => rosterKey(p)).map((p) => [p.id, (p.num ? '#' + p.num + ' ' : '') + (p.name || 'No name')]);
+      const opts = us ? [['skip', 'Don’t import']].concat(named, [['', 'Add to your roster']]) : [['', 'Add as a new player']].concat(named, [['skip', 'Don’t import']]);
       const ps = sh.read.players;
       const total = ps.reduce((t, p) => t + sprayTotal(p.dots), 0);
       const off = ps.filter((p) => p.bip != null && p.bip !== sprayTotal(p.dots)).length;
-      h += `<div class="sp-top"><div class="grow" style="min-width:0"><div class="sp-opp">${esc(sh.name)}</div>${sh.read.title ? `<div class="small muted">${esc(sh.read.title)}</div>` : ''}</div><div class="sp-count"><b>${ps.length}</b><span>hitters</span></div><div class="sp-count"><b>${total}</b><span>balls in play</span></div></div>
+      h += `<div class="sp-top"><div class="grow" style="min-width:0"><div class="sp-opp">${esc(us ? teamName : sh.name)}</div>${sh.read.title ? `<div class="small muted">${esc(sh.read.title)}</div>` : ''}</div><div class="sp-count"><b>${ps.length}</b><span>hitters</span></div><div class="sp-count"><b>${total}</b><span>balls in play</span></div></div>
         <div class="sp-key">${sh.read.legend ? 'Colors read from the chart\u2019s own key.' : 'Colors read as <b class="k-pu">green = pop up</b> · <b class="k-gb">red = ground ball</b> · <b class="k-ld">gold = line drive</b>'}</div>
         ${off ? `<div class="warn-text">${off} hitter${off === 1 ? '’s' : 's’'} dots don’t add up to the chart’s total. Check ${off === 1 ? 'it' : 'them'} against the screenshot below.</div>` : `<div class="small" style="color:var(--good);font-weight:600">Every hitter’s dots add up to the chart’s totals.</div>`}
         <div class="sp-list">${ps.map((p, i) => {
@@ -2637,9 +2700,10 @@ body.viewer-on { overflow: hidden; }
             ${stackbar([['L', d.L], ['C', d.C], ['R', d.R]])}
             ${ct.G + ct.L + ct.F + ct.P ? stackbar([['GB', ct.G], ['LD', ct.L], ['FB', ct.F], ['PU', ct.P]]) : ''}
             ${bad ? `<div class="warn-text small">Chart says ${p.bip}, read ${n}.</div>` : ''}
+            ${us && p.match === 'skip' && !p.picked ? '<div class="small muted">Not found on your roster. Pick the player, or add them.</div>' : ''}
             <label class="sp-match"><span class="field-lbl">Roster</span>${sel(`read.players.${i}.match`, p.match, opts, 'aria-label="Roster player for ' + esc(p.name) + '"')}</label></div></div>`;
         }).join('')}</div>
-        <p class="small muted" style="margin:0">Saving replaces any chart you imported before for these hitters. Games you score yourself stay separate and still count.</p>
+        <p class="small muted" style="margin:0">Saving replaces any chart you imported before for these hitters. Games you score yourself stay separate and still count.${us ? ' Imported balls show on the Stats tab and on each player’s card; they don’t change batting stats.' : ''}</p>
         ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
         <div class="row"><button class="btn primary" data-act="spraySave">Save to scouting</button><button class="btn" data-act="sprayRestart">Start over</button></div>`;
       return h;
@@ -2725,14 +2789,17 @@ body.viewer-on { overflow: hidden; }
           log.push({ g, b: s.bat[sh.id], p: s.pit[sh.id], res: mine.map((x) => x.r) });
         }
       }
+      const sp = Data.team.spray;
+      const spx = sp && Array.isArray(sp.players) ? sp.players.find((x) => x && x.id === sh.id) : null;
+      if (spx) pas.push(...importedPas(spx, !sp.v, todayISO(new Date(sp.at || Date.now()))));
       const t = tendencies(pas, p ? p.bats : '');
-      const pts = pas.filter((x) => x.loc).map((x) => ({ loc: x.loc, r: x.r }));
+      const pts = sprayPoints(pas);
       const obp = E.rate(tot.H + tot.BB + tot.HBP, tot.AB + tot.BB + tot.HBP + tot.SF);
       return head(esc(p ? (p.num ? '#' + p.num + ' ' : '') + p.name : 'Player')) + `
         <div class="mu-sub" style="margin-top:-8px">${esc(p ? (p.pos || '') + ' · B/T ' + (p.bats || '?') + '/' + (p.throws || '?') : '')}</div>
         ${tot.PA ? `<div class="board"><span class="lbl">Season batting</span><div class="row" style="gap:18px;margin-top:6px;font-size:16px"><span><b class="num" style="font-family:var(--font-display);font-size:24px;color:var(--carolina)">${E.rate(tot.H, tot.AB)}</b> AVG</span><span class="num">${obp} OBP</span><span class="num">${tot.H}-${tot.AB}</span><span class="num">${tot.HR} HR · ${tot.RBI} RBI</span></div></div>` : ''}
         ${ptot.PC ? `<div class="small"><b>Pitching:</b> ${E.fmtIP(ptot.OUTS)} IP · ${ptot.K} K · ${ptot.BB} BB · ${ptot.H} H · ${ptot.R} R · ${ptot.PC} pitches</div>` : ''}
-        ${pas.length ? `<div class="seg">${[['dots', 'Dots'], ['heat', 'Heat']].map(([k, l]) => `<button data-act="sprayMode" data-k="${k}" aria-pressed="${UI.sprayMode === k}">${l}</button>`).join('')}</div>${fieldSVG({ points: pts, heat: UI.sprayMode === 'heat' })}${UI.sprayMode === 'heat' ? '' : legend()}${tendHTML(t)}` : '<p class="muted">No plate appearances yet.</p>'}
+        ${pas.length ? `<div class="seg">${[['dots', 'Dots'], ['heat', 'Heat']].map(([k, l]) => `<button data-act="sprayMode" data-k="${k}" aria-pressed="${UI.sprayMode === k}">${l}</button>`).join('')}</div>${fieldSVG({ points: pts, heat: UI.sprayMode === 'heat' })}${UI.sprayMode === 'heat' ? '' : legend(pts.some((x) => x.imp && !x.res), pts.some((x) => !x.imp || x.res) || !pts.length)}${tendHTML(t)}` : '<p class="muted">No plate appearances yet.</p>'}
         ${log.length ? `<div><span class="field-lbl">Game log</span><div class="plays">${log.slice().reverse().map((x) => `<div class="play"><span class="tag">${esc(parseDate(x.g.date).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }))}</span><span>${x.g.home ? 'vs' : '@'} ${esc(x.g.opponent)} · ${x.b && x.b.PA ? x.b.H + '-' + x.b.AB : ''} ${esc(x.res.join(', '))}${x.p && x.p.PC ? ` · pitched ${E.fmtIP(x.p.OUTS)} IP, ${x.p.PC} P` : ''}</span><span></span></div>`).join('')}</div></div>` : ''}`;
     }
   };
@@ -2970,8 +3037,9 @@ body.viewer-on { overflow: hidden; }
   async function runSprayRead(files) {
     const sh = UI.sheet;
     if (!sh || sh.type !== 'spray' || !Caps.sample || !files.length) return;
+    const us = sh.who === 'us';
     const name = String(sh.name || '').trim();
-    if (!name) { sh.err = 'Enter the opponent first.'; renderSheet(); return; }
+    if (!us && !name) { sh.err = 'Enter the opponent first.'; renderSheet(); return; }
     const ctl = new AbortController();
     sh.busy = { ctl, note: '' };
     sh.err = '';
@@ -2999,9 +3067,10 @@ body.viewer-on { overflow: hidden; }
       if (UI.sheet !== sh) return;
       sh.busy = null;
       if (!all.players.length) { sh.err = 'Couldn’t find any hitters in that chart. Try a screenshot where each hitter’s name and dots are clear.'; renderSheet(); return; }
-      const R = rosterFor(name);
-      const match = sprayMatch(all.players, R ? R.players : []);
-      all.players.forEach((p, i) => { p.match = match[i]; });
+      const R = us ? null : rosterFor(name);
+      const match = sprayMatch(all.players, us ? Data.team.players : R ? R.players : []);
+      // On our own team an unmatched name is more likely a spelling difference than a new player.
+      all.players.forEach((p, i) => { p.match = match[i] || (us ? 'skip' : ''); });
       sh.read = all;
       sh.step = 'review';
     } catch (e) {
@@ -3019,6 +3088,37 @@ body.viewer-on { overflow: hidden; }
     const n = sp ? sp.players.reduce((t, p) => t + sprayTotal(p.dots || []), 0) : 0;
     return `<div class="sp-box"><div class="grow" style="min-width:0"><b>Spray chart</b><span class="small muted">${sp ? `${sp.players.length} hitters · ${n} balls in play · added ${esc(new Date(sp.at || Date.now()).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}` : 'Import a spray chart screenshot to fill in scouting for this team.'}</span></div>
       <div class="row" style="gap:6px">${Caps.sample ? `<button class="btn sm" data-act="sprayOpen" data-key="${esc(key)}">${sp ? 'Import again' : 'Import'}</button>` : ''}${sp ? '<button class="btn sm danger" data-act="sprayRemove">Remove</button>' : ''}</div></div>`;
+  }
+  function spraySaveTeam(sh) {
+    if (!sh.read) return;
+    const team = Data.team;
+    const prev = team.spray && Array.isArray(team.spray.players) ? team.spray.players : [];
+    const keep = new Map(prev.map((p) => [p.id, p]));
+    let n = 0, added = 0;
+    for (const p of sh.read.players) {
+      if (p.match === 'skip') continue;
+      let id = p.match;
+      if (!id || !playerById(id)) {
+        const np = { id: uid('p'), num: '', name: p.name, pos: '', bats: '', throws: '' };
+        team.players.push(np);
+        id = np.id;
+        added++;
+      }
+      keep.set(id, { id, name: p.name, bip: p.bip, dots: p.dots.map((x) => { const o = { z: x.z, n: x.n }; if (x.bt) o.bt = x.bt; if (x.r) o.r = x.r; return o; }) });
+      n++;
+    }
+    if (!n) { sh.err = 'Pick at least one hitter to import.'; renderSheet(); return; }
+    team.spray = { v: 2, src: sh.read.title || '', at: Date.now(), players: [...keep.values()] };
+    saveTeam();
+    closeSheet();
+    UI.tab = 'stats';
+    UI.statsMode = 'bat';
+    UI.teamSpray = '*';
+    try { localStorage.setItem('gs-baseball-tab', 'stats'); } catch (e) { /* per-viewer convenience only */ }
+    render();
+    const el = document.getElementById('team-spray');
+    if (el) el.scrollIntoView({ block: 'start' }); else window.scrollTo(0, 0);
+    toast(`Added ${n} hitter${n === 1 ? '' : 's'} to your spray charts${added ? ` (${added} new on your roster)` : ''}`);
   }
   function rosterDirty(sh) {
     const R = sh.key && Data.opponents[sh.key];
@@ -3413,12 +3513,24 @@ body.viewer-on { overflow: hidden; }
       let name = '';
       if (d.key && Data.opponents[d.key]) name = Data.opponents[d.key].name;
       else if (UI.tab === 'scout' && UI.scoutOpp) { const O = scoutData().get(UI.scoutOpp); if (O) name = O.name; }
-      openSheet({ type: 'spray', name, fixed: !!d.key, step: 'pick', busy: null, err: '', read: null });
+      const who = d.who === 'us' || (!d.key && !d.who && UI.tab === 'stats') ? 'us' : 'opp';
+      openSheet({ type: 'spray', who, name, fixed: !!d.key, step: 'pick', busy: null, err: '', read: null });
+    },
+    sprayFor(d) { const sh = UI.sheet; if (!sh || sh.busy) return; sh.who = d.v === 'us' ? 'us' : 'opp'; sh.err = ''; renderSheet(); },
+    teamSpray(d) { UI.teamSpray = d.k; render(); },
+    teamSprayRemove() {
+      confirmSheet('Remove the imported spray chart?', 'Your players’ spray charts go back to only the games you score. The roster stays.', 'Remove chart', () => {
+        delete Data.team.spray;
+        saveTeam();
+        render();
+        toast('Spray chart removed');
+      }, true);
     },
     sprayStop() { const b = UI.sheet && UI.sheet.busy; if (b && b.ctl) b.ctl.abort(); },
     sprayRestart() { const sh = UI.sheet; sh.step = 'pick'; sh.read = null; sh.err = ''; renderSheet(); },
     spraySave() {
       const sh = UI.sheet;
+      if (sh.who === 'us') return spraySaveTeam(sh);
       const name = String(sh.name || '').trim();
       if (!name || !sh.read) return;
       const k = oppKey(name);
@@ -4327,7 +4439,7 @@ body.viewer-on { overflow: hidden; }
     if (el.id === 'chat-file' && el.files && el.files[0]) { const f = el.files[0]; el.value = ''; chatPickPhoto(f); return; }
     if (el.dataset && el.dataset.scan && el.files && el.files.length) { const files = Array.from(el.files); el.value = ''; runScan(files); return; }
     if (el.dataset && el.dataset.spray && el.files && el.files.length) { const files = Array.from(el.files); el.value = ''; runSprayRead(files); return; }
-    if (el.dataset && el.dataset.bind && UI.sheet) { setPath(UI.sheet, el.dataset.bind, el.value); if (UI.sheet.type === 'spray' && el.dataset.bind.startsWith('read.')) renderSheet(); }
+    if (el.dataset && el.dataset.bind && UI.sheet) { setPath(UI.sheet, el.dataset.bind, el.value); if (UI.sheet.type === 'spray' && el.dataset.bind.startsWith('read.')) { const m = /^read\.players\.(\d+)\./.exec(el.dataset.bind); if (m && UI.sheet.read.players[+m[1]]) UI.sheet.read.players[+m[1]].picked = true; renderSheet(); } }
   });
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape' && ViewerId) { viewerClose(); return; }
