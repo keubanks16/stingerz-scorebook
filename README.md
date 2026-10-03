@@ -7,6 +7,7 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 | | Coaches (admins) | Camera operators | Families |
 |---|---|---|---|
 | Score games, edit rosters, scan rosters | Yes | No | No |
+| Import an opponent's spray chart | Yes | No | No |
 | Follow games live, box scores, stats, scouting | Yes | Yes | Yes |
 | Watch the live video with the scoreboard on top | Yes | Yes | Yes |
 | Stream from the built-in camera, upload game video | Yes | Yes | No |
@@ -19,6 +20,18 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 - New people tap **Request access**. A coach approves them on **Team → Families & coaches**, then taps their name to make them a coach or a **camera operator** if needed.
 - **Who can watch** (same screen): **Approved families**, where parents create an account and a coach approves it, or **Anyone with the link**, with no sign-in needed to watch.
 - The database itself enforces these rules (`firestore.rules`). Hiding buttons isn't the only protection. After updating `firestore.rules` here, paste it into Firebase again and **Publish**.
+
+## Scouting and imported spray charts
+
+The **Scout** tab builds each opponent's spray charts, direction split and positioning tips from every ball in play you chart while scoring. You can also import a spray chart someone else made, such as a season report from another app:
+
+1. Tap **+ Spray chart** on the Scout tab, or open the opponent's roster under **Team → Opponent rosters** and tap **Import** in the Spray chart box.
+2. Pick the screenshot(s). Long screenshots are fine: the Hub cuts them between rows of hitters so every name and number stays sharp.
+3. Check the review. Each hitter shows their balls in play on a small field in the Hub's style, the left/center/right split, and the roster player they were matched to ("Brigham F" on the chart matches "Brigham" on the roster). A check mark means the dots add up to the chart's own ball-in-play total. Change a match, add a hitter as a new player, or skip one, then tap **Save to scouting**.
+
+Charts are read as **green = hit, red = out, gold = error**, unless the chart has its own color key. Each dot's spot becomes one of nine places (pitcher, catcher, first, second, short, third, left, center, right).
+
+Imported balls add to scouting; they never replace the games you score. Direction, the spray chart and the tips use both. The batting line (hits, walks, strikeouts) and the contact mix (grounders, liners, flies) still come only from games you score, because spray charts don't include them. Importing again replaces the earlier import for the same hitters. To remove an import, open the roster and tap **Remove** in the Spray chart box.
 
 ## Team chat
 

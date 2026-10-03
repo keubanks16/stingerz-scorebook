@@ -255,6 +255,29 @@ table.st tr:last-child td { border-bottom: 0; }
 .legend .lo { border: 1.5px solid var(--ink-2); }
 .legend .lr { background: #F2C94C; }
 
+/* imported spray charts */
+.sp-opp { font-family: var(--font-display); font-size: 19px; line-height: 1.15; color: var(--ink); }
+.sp-top { display: flex; align-items: center; gap: 14px; background: var(--surface-2); border-radius: var(--radius); padding: 12px 14px; }
+.sp-count { text-align: center; flex: none; }
+.sp-count b { display: block; font-family: var(--font-display); font-size: 24px; line-height: 1; color: var(--accent); }
+.sp-count span { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.sp-list { display: grid; gap: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+.sp-row { display: grid; grid-template-columns: 128px 1fr; gap: 12px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--line); }
+.sp-row:first-child { border-top: 0; }
+.sp-row .field { width: 128px; border-radius: 8px; }
+.sp-row.skip { opacity: .45; }
+.sp-info { display: grid; gap: 4px; min-width: 0; }
+.sp-name { font-weight: 700; font-size: 17px; color: var(--ink); }
+.sp-sum { font-size: 14px; color: var(--ink-2); }
+.sp-sum b { color: var(--ink); }
+.sp-ok { color: var(--good); font-weight: 700; }
+.sp-info .stackbar { height: 20px; }
+.sp-info .stackbar span { font-size: 11px; }
+.sp-match { display: grid; gap: 2px; margin-top: 2px; }
+.sp-match .field-lbl { margin: 0; }
+.sp-match .input { padding-top: 6px; padding-bottom: 6px; font-size: 15px; }
+.sp-box { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; background: var(--surface-2); }
+.sp-box b { display: block; color: var(--ink); }
 .tend { display: grid; gap: 10px; }
 .tend-row { display: grid; grid-template-columns: 92px 1fr; gap: 10px; align-items: center; font-size: 14px; }
 .tend-row .lbl { color: var(--ink-2); font-weight: 600; }
@@ -910,7 +933,7 @@ body.viewer-on { overflow: hidden; }
   function parseDate(d) { const [y, m, dd] = String(d || '').split('-').map(Number); return new Date(y || 2026, (m || 1) - 1, dd || 1); }
   function fmtTime(t) { if (!t) return ''; const [h, m] = t.split(':').map(Number); return ((h + 11) % 12) + 1 + ':' + String(m || 0).padStart(2, '0') + (h >= 12 ? ' PM' : ' AM'); }
   function longDate(d) { return parseDate(d).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }); }
-  function todayISO() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function todayISO(when) { const d = when || new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 
   // ---------- data ----------
   const defaultTeam = () => ({ name: 'GS Baseball', pitchLimit: 105, innings: 7, players: [] });
@@ -1691,9 +1714,11 @@ body.viewer-on { overflow: hidden; }
       marks += `<g class="heat" filter="url(#blur${n})" clip-path="url(#all${n})">` + o.points.map((p) => `<circle cx="${p.loc[0]}" cy="${p.loc[1]}" r="6" opacity="${Math.min(0.5, 0.18 + 1.2 / o.points.length)}"/>`).join('') + '</g>';
     } else if (o.points) {
       for (const p of o.points) {
-        const m = E.RESULTS[p.r] || {};
-        const cls = m.hit ? 'dot-hit' : p.r === 'E' || p.r === 'FC' ? 'dot-reach' : 'dot-out';
-        marks += `<circle class="${cls}" cx="${p.loc[0]}" cy="${p.loc[1]}" r="${m.hit ? 1.7 : 1.45}"><title>${esc((m.n || p.r) + (p.label ? ' · ' + p.label : ''))}</title></circle>`;
+        // Imported chart balls carry res (h/o/e) instead of a scored result code.
+        const m = p.res ? {} : E.RESULTS[p.r] || {};
+        const hit = p.res ? p.res === 'h' : !!m.hit;
+        const cls = p.res ? SPRAY_RES[p.res].cls : m.hit ? 'dot-hit' : p.r === 'E' || p.r === 'FC' ? 'dot-reach' : 'dot-out';
+        marks += `<circle class="${cls}" cx="${p.loc[0]}" cy="${p.loc[1]}" r="${((hit ? 1.7 : 1.45) * (o.dot || 1)).toFixed(2)}"${o.dot ? ` style="stroke-width:${((cls === 'dot-out' ? 0.7 : 0.5) * o.dot).toFixed(2)}"` : ''}><title>${esc(p.title || (m.n || p.r) + (p.label ? ' · ' + p.label : ''))}</title></circle>`;
       }
     }
     if (o.marker) marks += `<circle class="marker-ring" cx="${o.marker[0]}" cy="${o.marker[1]}" r="3.4"/><circle class="marker" cx="${o.marker[0]}" cy="${o.marker[1]}" r="1.9"/>`;
@@ -1732,11 +1757,14 @@ body.viewer-on { overflow: hidden; }
   }
 
   // ---------- tendencies ----------
+  // Imported chart balls (imp) count toward direction, but they have no contact type or distance.
   function tendencies(pas, bats) {
-    const fair = pas.filter((p) => p.loc && !E.geo(p.loc).foul);
-    const t = { n: fair.length, all: pas.length, L: 0, C: 0, R: 0, G: 0, Ln: 0, F: 0, P: 0, of: 0, ofFt: 0 };
+    const fair = pas.filter((p) => p.imp || (p.loc && !E.geo(p.loc).foul));
+    const t = { n: fair.length, all: pas.length, L: 0, C: 0, R: 0, G: 0, Ln: 0, F: 0, P: 0, of: 0, ofFt: 0, cn: 0, imp: 0 };
     for (const p of fair) {
-      t[E.third(p.loc)]++;
+      t[p.imp ? p.dir : E.third(p.loc)]++;
+      if (p.imp) { t.imp++; continue; }
+      t.cn++;
       const bt = p.bt || 'G';
       if (bt === 'G') t.G++; else if (bt === 'L') t.Ln++; else if (bt === 'F') t.F++; else t.P++;
       const gg = E.geo(p.loc);
@@ -1748,7 +1776,7 @@ body.viewer-on { overflow: hidden; }
   }
   function tipsFor(t) {
     const tips = [];
-    if (t.n < 4) { tips.push(`Only ${t.n} charted ball${t.n === 1 ? '' : 's'} in play so far. Play straight up and keep charting.`); return tips; }
+    if (t.n < 4) { tips.push(`Only ${t.n} ${t.imp ? '' : 'charted '}ball${t.n === 1 ? '' : 's'} in play so far. Play straight up and keep charting.`); return tips; }
     const side = { L: 'left', R: 'right' };
     const pullSide = t.pullSide || (t.L >= t.R ? 'L' : 'R');
     const oppSide = pullSide === 'L' ? 'R' : 'L';
@@ -1757,9 +1785,11 @@ body.viewer-on { overflow: hidden; }
     if (pullP >= 55) tips.push(`${t.pullSide ? 'Pull hitter' : 'Favors the ' + side[pullSide] + ' side'}: ${pullP}% of balls go to the ${side[pullSide]} side. Shade the infield ${inf} and swing the outfield toward ${side[pullSide]} field.`);
     else if (oppP >= 40) tips.push(`Uses the ${t.pullSide ? 'opposite field' : side[oppSide] + ' side'}: ${oppP}% go to ${side[oppSide]}. Play the outfield straight away or shade toward ${side[oppSide]}.`);
     else tips.push(`Sprays the ball around (${pct(t.L, t.n)}% left, ${pct(t.C, t.n)}% center, ${pct(t.R, t.n)}% right). Play straight up.`);
-    const gb = pct(t.G, t.n), air = pct(t.Ln + t.F, t.n);
-    if (gb >= 55) tips.push(`Ground-ball hitter (${gb}%). Keep the middle infielders at double-play depth with a runner on first.`);
-    else if (air >= 60) tips.push(`Gets the ball in the air (${air}% liners and flies). Play the outfield a few steps deeper.`);
+    if (t.cn >= 4) {
+      const gb = pct(t.G, t.cn), air = pct(t.Ln + t.F, t.cn);
+      if (gb >= 55) tips.push(`Ground-ball hitter (${gb}%). Keep the middle infielders at double-play depth with a runner on first.`);
+      else if (air >= 60) tips.push(`Gets the ball in the air (${air}% liners and flies). Play the outfield a few steps deeper.`);
+    }
     if (t.of >= 3) {
       const avg = Math.round(t.ofFt / t.of);
       if (avg < 210) tips.push(`Outfield balls average about ${avg} ft. The outfield can play shallow.`);
@@ -1776,10 +1806,11 @@ body.viewer-on { overflow: hidden; }
     }).join('') + '</div>';
   }
   function tendHTML(t) {
+    const from = t.imp ? ` (${t.imp === t.n ? 'all' : t.imp} from an imported spray chart)` : '';
     return `<div class="tend">
       <div class="tend-row"><span class="lbl">Direction</span>${stackbar([['L', t.L], ['C', t.C], ['R', t.R]])}</div>
-      <div class="tend-row"><span class="lbl">Contact</span>${stackbar([['GB', t.G], ['LD', t.Ln], ['FB', t.F], ['PU', t.P]])}</div>
-      <div class="small muted">${t.n} charted ball${t.n === 1 ? '' : 's'} in play${t.bats ? ' · bats ' + esc(t.bats) : ''}. L/C/R from the catcher's view.</div>
+      <div class="tend-row"><span class="lbl">Contact</span>${t.cn ? stackbar([['GB', t.G], ['LD', t.Ln], ['FB', t.F], ['PU', t.P]]) : '<span class="small muted">Not in imported charts. It fills in from games you score.</span>'}</div>
+      <div class="small muted">${t.n} ${t.imp ? '' : 'charted '}ball${t.n === 1 ? '' : 's'} in play${from}${t.bats ? ' · bats ' + esc(t.bats) : ''}. L/C/R from the catcher's view.</div>
     </div>`;
   }
 
@@ -2262,42 +2293,108 @@ body.viewer-on { overflow: hidden; }
         H.pas.push(Object.assign({ date: g.date }, pa));
       }
     }
+    // Imported spray charts live on the opponent's roster: per hitter, how many balls went to
+    // each of nine spots (P, C, 1B, 2B, SS, 3B, LF, CF, RF) and whether each was a hit, out or error.
+    for (const R of Object.values(Data.opponents)) {
+      const sp = R.spray;
+      if (!sp || !Array.isArray(sp.players) || !sp.players.length) continue;
+      const k = oppKey(R.name);
+      let O = [...opps.values()].find((x) => oppKey(x.name) === k);
+      const date = todayISO(new Date(sp.at || Date.now()));
+      if (!O) { O = { key: String(R.name || 'Opponent').trim().toLowerCase(), name: String(R.name || 'Opponent').trim(), hitters: new Map(), games: 0, last: date }; opps.set(O.key, O); }
+      if (date > O.last) O.last = date;
+      O.spray = sp;
+      for (const sp1 of sp.players) {
+        const rp = (R.players || []).find((p) => p.id === sp1.id);
+        const num = rp && rp.num ? String(rp.num).trim() : '';
+        const name = (rp && rp.name) || sp1.name || '';
+        const hk = num ? '#' + num : name.trim().toLowerCase();
+        if (!hk) continue;
+        if (!O.hitters.has(hk)) O.hitters.set(hk, { key: hk, num, name, bats: (rp && rp.bats) || '', pas: [], slot: 99 });
+        const H = O.hitters.get(hk);
+        if (!H.name) H.name = name;
+        for (const d of sp1.dots || []) {
+          const z = SPRAY_ZONES[d.z];
+          if (!z || !SPRAY_RES[d.r]) continue;
+          for (let i = 0; i < Math.min(99, d.n || 0); i++) H.pas.push({ imp: 1, zone: d.z, dir: z.dir, res: d.r, loc: z.at, date });
+        }
+      }
+    }
     return opps;
+  }
+  // The nine spots an imported chart can put a ball, in this app's field coordinates (home at 50,76).
+  const SPRAY_ZONES = {
+    P: { at: [50, 65.6], dir: 'C', name: 'the pitcher' },
+    C: { at: [50, 72.2], dir: 'C', name: 'the catcher' },
+    '1B': { at: [59.8, 60.9], dir: 'R', name: 'first base' },
+    '2B': { at: [56.34, 53.89], dir: 'R', name: 'second base' },
+    SS: { at: [43.66, 53.89], dir: 'L', name: 'shortstop' },
+    '3B': { at: [40.2, 60.9], dir: 'L', name: 'third base' },
+    LF: { at: [30, 41.36], dir: 'L', name: 'left field' },
+    CF: { at: [50, 32], dir: 'C', name: 'center field' },
+    RF: { at: [70, 41.36], dir: 'R', name: 'right field' }
+  };
+  const SPRAY_RES = { h: { cls: 'dot-hit', n: 'Hit' }, o: { cls: 'dot-out', n: 'Out' }, e: { cls: 'dot-reach', n: 'Reached on error' } };
+  // Dots for the field drawing. Imported balls at the same spot fan out in a tight spiral around it.
+  function sprayPoints(pas, spread) {
+    const out = [], groups = {};
+    for (const p of pas) {
+      if (p.imp) (groups[p.zone] = groups[p.zone] || []).push(p);
+      else if (p.loc) out.push({ loc: p.loc, r: p.r });
+    }
+    for (const z in groups) {
+      const g = groups[z].slice().sort((a, b) => 'eoh'.indexOf(a.res) - 'eoh'.indexOf(b.res));
+      const c = SPRAY_ZONES[z].at, step = (spread || 1) * Math.min(2, 7.5 / Math.sqrt(g.length));
+      g.forEach((p, i) => {
+        const r = step * Math.sqrt(i), a = i * 2.39996;
+        out.push({ loc: [+(c[0] + r * Math.cos(a)).toFixed(2), +(c[1] + r * Math.sin(a)).toFixed(2)], res: p.res, title: SPRAY_RES[p.res].n + ' to ' + SPRAY_ZONES[z].name + ' (imported chart)' });
+      });
+    }
+    return out;
   }
   const hitterLabel = (H) => [H.num ? '#' + H.num : '', H.name].filter(Boolean).join(' ') || 'Batter ' + (H.slot + 1);
   function lineFor(pas) {
-    const b = { PA: pas.length, AB: 0, H: 0, BB: 0, K: 0, XBH: 0 };
-    for (const p of pas) { const m = E.RESULTS[p.r] || {}; if (m.ab) b.AB++; if (m.hit) b.H++; if (m.walk || p.r === 'HBP') b.BB++; if (m.k) b.K++; if (m.hit && p.r !== '1B') b.XBH++; }
+    const b = { PA: 0, AB: 0, H: 0, BB: 0, K: 0, XBH: 0 };
+    for (const p of pas) { if (p.imp) continue; b.PA++; const m = E.RESULTS[p.r] || {}; if (m.ab) b.AB++; if (m.hit) b.H++; if (m.walk || p.r === 'HBP') b.BB++; if (m.k) b.K++; if (m.hit && p.r !== '1B') b.XBH++; }
     return b;
   }
   function renderScout() {
     const opps = scoutData();
-    if (!opps.size) return `<div class="card empty"><img src="${LOGO}" alt=""><h3>Scouting fills in as you score</h3><p>Every ball in play you chart for an opponent hitter lands here, with spray charts, tendencies and where to position your defense.</p></div>`;
+    const canImport = canEdit() && !!Caps.sample;
+    if (!opps.size) return `<div class="card empty"><img src="${LOGO}" alt=""><h3>Scouting fills in as you score</h3><p>Every ball in play you chart for an opponent hitter lands here, with spray charts, tendencies and where to position your defense.${canImport ? ' Have a spray chart from another app? Import it to start.' : ''}</p>${canImport ? `<button class="btn primary" data-act="sprayOpen">${CAMERA}<span>Import a spray chart</span></button>` : ''}</div>`;
     const list = [...opps.values()].sort((a, b) => b.last.localeCompare(a.last));
     if (!UI.scoutOpp || !opps.has(UI.scoutOpp)) { UI.scoutOpp = list[0].key; UI.scoutKey = '*'; }
     const O = opps.get(UI.scoutOpp);
     const hitters = [...O.hitters.values()].sort((a, b) => b.pas.length - a.pas.length || a.slot - b.slot);
     if (UI.scoutKey !== '*' && !O.hitters.has(UI.scoutKey)) UI.scoutKey = '*';
-    let h = `<h2 class="sec">Opponent</h2><div class="picker" role="group">${list.map((o) => `<button data-act="scoutOpp" data-k="${esc(o.key)}" aria-pressed="${o.key === UI.scoutOpp}">${esc(o.name)}</button>`).join('')}</div>`;
+    let h = `<h2 class="sec">Opponent${canImport ? ' <button class="btn ghost sm" data-act="sprayOpen">+ Spray chart</button>' : ''}</h2><div class="picker" role="group">${list.map((o) => `<button data-act="scoutOpp" data-k="${esc(o.key)}" aria-pressed="${o.key === UI.scoutOpp}">${esc(o.name)}</button>`).join('')}</div>`;
     const allPas = hitters.flatMap((x) => x.pas);
     const sel = UI.scoutKey === '*' ? null : O.hitters.get(UI.scoutKey);
     const pas = sel ? sel.pas : allPas;
     const t = tendencies(pas, sel ? sel.bats : '');
     const line = lineFor(pas);
     const title = sel ? hitterLabel(sel) : O.name + ' lineup';
-    const pts = pas.filter((p) => p.loc).map((p) => ({ loc: p.loc, r: p.r }));
+    const pts = sprayPoints(pas);
+    const parts = [];
+    if (line.PA) parts.push(`${line.H}-for-${line.AB}${line.XBH ? ', ' + line.XBH + ' XBH' : ''} · ${line.BB} BB/HBP · ${line.K} K`);
+    if (O.games) parts.push(`${O.games} game${O.games === 1 ? '' : 's'} scored`);
+    if (t.imp) parts.push(`${t.imp} ball${t.imp === 1 ? '' : 's'} in play from an imported chart`);
+    if (!parts.length) parts.push('No balls in play yet');
     h += `<section class="card stack" style="padding:14px">
-      <div class="row"><div class="grow"><div class="mu-name" style="font-size:21px">${esc(title)}</div><div class="mu-sub">${line.H}-for-${line.AB}${line.XBH ? ', ' + line.XBH + ' XBH' : ''} · ${line.BB} BB/HBP · ${line.K} K · ${O.games} game${O.games === 1 ? '' : 's'}</div></div>
+      <div class="row"><div class="grow"><div class="mu-name" style="font-size:21px">${esc(title)}</div><div class="mu-sub">${parts.join(' · ')}</div></div>
       <div class="seg">${[['dots', 'Dots'], ['heat', 'Heat']].map(([k, l]) => `<button data-act="sprayMode" data-k="${k}" aria-pressed="${UI.sprayMode === k}">${l}</button>`).join('')}</div></div>
       ${fieldSVG({ points: pts, heat: UI.sprayMode === 'heat', label: 'Spray chart for ' + title })}
       ${UI.sprayMode === 'heat' ? '<div class="legend"><span>Darker = more balls hit there</span></div>' : legend()}
       ${tendHTML(t)}
       <div class="tip">${tipsFor(t).map((x) => `<p>${esc(x)}</p>`).join('')}</div>
       ${aiBlock(sel, O, pas, t)}
+      ${O.spray ? `<div class="small muted">Imported spray chart${O.spray.src ? ' “' + esc(O.spray.src) + '”' : ''}, added ${esc(new Date(O.spray.at || Date.now()).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}.</div>` : ''}
     </section>`;
+    const scored = (x) => x.pas.filter((p) => !p.imp).length;
+    const allScored = allPas.filter((p) => !p.imp).length, allImp = allPas.length - allScored;
     h += `<h2 class="sec">Hitters</h2><div class="card hitters">
-      <button class="hitter" data-act="scoutKey" data-k="*" aria-pressed="${UI.scoutKey === '*'}"><span class="no">ALL</span><span><b>Whole lineup</b><span class="meta">${allPas.length} plate appearances</span></span><span class="meta"></span></button>
-      ${hitters.map((x) => { const tt = tendencies(x.pas, x.bats); const dom = ['L', 'C', 'R'].reduce((m, k) => (tt[k] > tt[m] ? k : m), 'C'); const domName = { L: 'Left', C: 'Center', R: 'Right' }[dom]; return `<button class="hitter" data-act="scoutKey" data-k="${esc(x.key)}" aria-pressed="${UI.scoutKey === x.key}"><span class="no">${esc(x.num || x.slot + 1)}</span><span style="min-width:0"><b>${esc(x.name || 'Bats ' + ORDN(x.slot + 1) + ' in the order')}</b><span class="meta">${x.pas.length} PA · ${tt.n} in play${x.bats ? ' · bats ' + esc(x.bats) : ''}</span></span><span class="meta">${tt.n >= 3 ? domName + ' ' + pct(tt[dom], tt.n) + '%' : ''}</span></button>`; }).join('')}
+      <button class="hitter" data-act="scoutKey" data-k="*" aria-pressed="${UI.scoutKey === '*'}"><span class="no">ALL</span><span><b>Whole lineup</b><span class="meta">${[allScored ? allScored + ' plate appearance' + (allScored === 1 ? '' : 's') : '', allImp ? allImp + ' imported balls in play' : ''].filter(Boolean).join(' · ')}</span></span><span class="meta"></span></button>
+      ${hitters.map((x) => { const tt = tendencies(x.pas, x.bats); const dom = ['L', 'C', 'R'].reduce((m, k) => (tt[k] > tt[m] ? k : m), 'C'); const domName = { L: 'Left', C: 'Center', R: 'Right' }[dom]; const pa = scored(x); return `<button class="hitter" data-act="scoutKey" data-k="${esc(x.key)}" aria-pressed="${UI.scoutKey === x.key}"><span class="no">${esc(x.num || (x.slot >= 90 ? '–' : x.slot + 1))}</span><span style="min-width:0"><b>${esc(x.name || 'Bats ' + ORDN(x.slot + 1) + ' in the order')}</b><span class="meta">${pa ? pa + ' PA · ' : ''}${tt.n} in play${x.bats ? ' · bats ' + esc(x.bats) : ''}</span></span><span class="meta">${tt.n >= 3 ? domName + ' ' + pct(tt[dom], tt.n) + '%' : ''}</span></button>`; }).join('')}
     </div>`;
     return h;
   }
@@ -2325,7 +2422,7 @@ body.viewer-on { overflow: hidden; }
       const rs = Object.entries(Data.opponents).sort((a, b) => a[1].name.localeCompare(b[1].name));
       h += `<h2 class="sec">Opponent rosters <button class="btn ghost sm" data-act="roster">+ Add roster</button></h2>`;
       if (!rs.length) h += `<div class="card empty" style="padding:20px"><p>${Caps.sample ? 'Take a photo or screenshot of another team\'s roster and GS Baseball reads the names and numbers into it.' : 'Save each opponent\'s roster so lineups and scouting show names, not just numbers.'}</p><button class="btn primary" data-act="roster">+ Add roster</button></div>`;
-      else h += `<div class="card roster">${rs.map(([k, r]) => `<button class="player" data-act="roster" data-key="${esc(k)}"><span class="no" style="font-size:16px">${esc((r.name || '?').slice(0, 3).toUpperCase())}</span><span style="min-width:0"><span class="nm">${esc(r.name)}</span><span class="meta">${r.players.length} player${r.players.length === 1 ? '' : 's'}${r.updatedAt ? ' · updated ' + esc(new Date(r.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) : ''}</span></span><span class="meta">Edit</span></button>`).join('')}</div>`;
+      else h += `<div class="card roster">${rs.map(([k, r]) => `<button class="player" data-act="roster" data-key="${esc(k)}"><span class="no" style="font-size:16px">${esc((r.name || '?').slice(0, 3).toUpperCase())}</span><span style="min-width:0"><span class="nm">${esc(r.name)}</span><span class="meta">${r.players.length} player${r.players.length === 1 ? '' : 's'}${r.spray && r.spray.players && r.spray.players.length ? ' · spray chart' : ''}${r.updatedAt ? ' · updated ' + esc(new Date(r.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) : ''}</span></span><span class="meta">Edit</span></button>`).join('')}</div>`;
     }
     h += accountHTML() + familiesHTML();
     if (canEdit()) {
@@ -2489,8 +2586,46 @@ body.viewer-on { overflow: hidden; }
         ${scanBlock(sh)}
         <div><span class="field-lbl">Players (${sh.players.filter((p) => rosterKey(p)).length})</span><div class="stack" style="gap:6px">${rows || '<p class="muted small" style="margin:0">No players yet.</p>'}</div>
         <button class="btn ghost sm" data-act="rosterAdd">+ Add player</button></div>
+        ${sh.key ? sprayRosterBox(sh.key) : ''}
         ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
         <div class="row"><button class="btn primary" data-act="saveRosterSheet">Save roster</button>${sh.key ? '<button class="btn danger" data-act="deleteRoster">Delete roster</button>' : '<button class="btn" data-act="close">Cancel</button>'}</div>`;
+    },
+    spray(sh) {
+      const names = [...new Set(Object.values(Data.games).map((g) => g.opponent).concat(Object.values(Data.opponents).map((o) => o.name)))].filter(Boolean).sort();
+      let h = head('Import a spray chart');
+      if (sh.step !== 'review') {
+        h += sh.fixed
+          ? `<div><span class="field-lbl">Opponent</span><div class="sp-opp">${esc(sh.name)}</div></div>`
+          : `<label><span class="field-lbl">Opponent</span>${inp('name', sh.name, 'list="sp-opps" autocomplete="off" placeholder="Team name"')}<datalist id="sp-opps">${names.map((n) => `<option value="${esc(n)}">`).join('')}</datalist></label>`;
+        h += `<p class="small muted" style="margin:0">Use screenshots of a spray chart report that shows each hitter's name and the dots where their balls in play went. GS Baseball reads every hitter, matches them to this team's roster, and adds the balls to the Scout tab. You check everything before it's saved.</p>`;
+        if (sh.busy) h += `<div class="scan"><span class="spin" aria-hidden="true"></span><span class="grow">Reading every hitter's chart. This can take a minute.${sh.busy.note ? ' ' + esc(sh.busy.note) : ''}</span><button class="btn sm" data-act="sprayStop">Stop</button></div>`;
+        else h += `<div><label class="btn primary scan-btn">${CAMERA}<span>Choose spray chart screenshots</span><input class="vh" type="file" accept="image/*" multiple data-spray="1"></label></div>`;
+        if (sh.err) h += `<div class="warn-text">${esc(sh.err)}</div>`;
+        return h;
+      }
+      const R = rosterFor(sh.name);
+      const opts = [['', 'Add as a new player']].concat((R ? R.players : []).filter((p) => rosterKey(p)).map((p) => [p.id, (p.num ? '#' + p.num + ' ' : '') + (p.name || 'No name')]), [['skip', 'Don’t import']]);
+      const ps = sh.read.players;
+      const total = ps.reduce((t, p) => t + sprayTotal(p.dots), 0);
+      const off = ps.filter((p) => p.bip != null && p.bip !== sprayTotal(p.dots)).length;
+      h += `<div class="sp-top"><div class="grow" style="min-width:0"><div class="sp-opp">${esc(sh.name)}</div>${sh.read.title ? `<div class="small muted">${esc(sh.read.title)}</div>` : ''}</div><div class="sp-count"><b>${ps.length}</b><span>hitters</span></div><div class="sp-count"><b>${total}</b><span>balls in play</span></div></div>
+        <div class="legend"><span><i class="lh"></i>Hit${sh.read.legend ? '' : ' (green)'}</span><span><i class="lo"></i>Out${sh.read.legend ? '' : ' (red)'}</span><span><i class="lr"></i>Error${sh.read.legend ? '' : ' (gold)'}</span></div>
+        ${off ? `<div class="warn-text">${off} hitter${off === 1 ? '’s' : 's’'} dots don’t add up to the chart’s total. Check ${off === 1 ? 'it' : 'them'} against the screenshot below.</div>` : `<div class="small" style="color:var(--good);font-weight:600">Every hitter’s dots add up to the chart’s totals.</div>`}
+        <div class="sp-list">${ps.map((p, i) => {
+          const n = sprayTotal(p.dots), d = sprayDirs(p.dots);
+          const bad = p.bip != null && p.bip !== n;
+          const pts = sprayPoints(p.dots.flatMap((x) => Array.from({ length: x.n }, () => ({ imp: 1, zone: x.z, res: x.r }))), 1.7);
+          return `<div class="sp-row${p.match === 'skip' ? ' skip' : ''}">${fieldSVG({ points: pts, dot: 1.8, label: 'Spray chart for ' + p.name })}
+            <div class="sp-info"><div class="sp-name">${esc(p.name)}</div>
+            <div class="sp-sum"><b>${n}</b> in play${p.bip != null && !bad ? ' <span class="sp-ok" title="Matches the chart">\u2713</span>' : ''}</div>
+            ${stackbar([['L', d.L], ['C', d.C], ['R', d.R]])}
+            ${bad ? `<div class="warn-text small">Chart says ${p.bip}, read ${n}.</div>` : ''}
+            <label class="sp-match"><span class="field-lbl">Roster</span>${sel(`read.players.${i}.match`, p.match, opts, 'aria-label="Roster player for ' + esc(p.name) + '"')}</label></div></div>`;
+        }).join('')}</div>
+        <p class="small muted" style="margin:0">Saving replaces any chart you imported before for these hitters. Games you score yourself stay separate and still count.</p>
+        ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
+        <div class="row"><button class="btn primary" data-act="spraySave">Save to scouting</button><button class="btn" data-act="sprayRestart">Start over</button></div>`;
+      return h;
     },
     auth(sh) {
       const titles = { signin: 'Sign in', signup: 'Request access', setup: 'Create the admin account', reset: 'Reset your password' };
@@ -2657,6 +2792,207 @@ body.viewer-on { overflow: hidden; }
     + 'List each player once, ignore coaches and team staff, and never invent a player you cannot read. If the images show no roster, reply with [].\n'
     + 'Example: [{"num":"4","name":"Alex Rivera","bats":""},{"num":"","name":"Sam Cole","bats":"L"}]';
   const HIDE_CODES = ['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed'];
+
+  // ---------- importing a spray chart screenshot ----------
+  // The reader only reports what it sees (spot, count, dot color). Colors become results here, so a
+  // chart's own legend can override the usual green = hit, red = out, gold = error.
+  const SPRAY_PROMPT = 'These images show a baseball spray chart report: one panel per hitter, each with the hitter\'s name, often a summary line such as "13 BIP • 54% Left • 15% Middle • 31% Right", and a field diagram with colored dots. If there are several images they are consecutive pieces of the same report, cut between rows of panels, in top-to-bottom order.\n\n'
+    + 'For every panel, read every dot. Most charts print a number by each dot: how many balls in play went to that spot. If a dot has no number, it counts as 1.\n'
+    + 'Name each dot\'s spot with one of these codes, from the catcher\'s view with home plate at the bottom:\n'
+    + '- "LF", "CF", "RF": in the outfield grass on the left, in the middle, or on the right.\n'
+    + '- "3B": at or just outside the left corner of the infield diamond (third base).\n'
+    + '- "SS": inside the diamond, left of center (between third and second).\n'
+    + '- "2B": inside the diamond, right of center (between second and first).\n'
+    + '- "1B": at or just outside the right corner of the diamond (first base).\n'
+    + '- "P": the middle of the diamond.\n'
+    + '- "C": at the bottom of the diamond, just in front of home plate.\n'
+    + 'If a chart has more spots than these (for example left-center), use the nearest code.\n'
+    + 'Name each dot\'s color as "green", "red", "gold" (also for yellow or orange), "blue" or "gray".\n\n'
+    + 'Reply with only JSON shaped {"title": string, "legend": object, "players": [{"name": string, "bip": number or null, "dots": [{"z": string, "n": number, "c": string}]}]}.\n'
+    + '- title: the small heading over the panels (team, season), or "".\n'
+    + '- legend: if the image explains what the colors mean, map each color to its meaning, for example {"green":"hit","red":"out"}; otherwise {}.\n'
+    + '- name: the hitter\'s name exactly as written. bip: the balls-in-play number from the summary line, or null if there is none.\n'
+    + '- Use one entry per dot and keep the panels in order. Never invent a dot, a number or a hitter you cannot read.\n'
+    + 'Example: {"title":"2026 Fall 8U Tigers","legend":{},"players":[{"name":"Sam C","bip":4,"dots":[{"z":"LF","n":1,"c":"green"},{"z":"SS","n":3,"c":"red"}]}]}';
+  const SPRAY_ALIAS = { P: 'P', PITCHER: 'P', C: 'C', CATCHER: 'C', '1B': '1B', FIRST: '1B', FIRSTBASE: '1B', '2B': '2B', SECOND: '2B', SECONDBASE: '2B', SS: 'SS', SHORTSTOP: 'SS', '3B': '3B', THIRD: '3B', THIRDBASE: '3B', LF: 'LF', LEFTFIELD: 'LF', LCF: 'LF', CF: 'CF', CENTERFIELD: 'CF', RF: 'RF', RIGHTFIELD: 'RF', RCF: 'RF' };
+  function sprayColorMap(legend) {
+    const map = { green: 'h', red: 'o', gold: 'e', yellow: 'e', orange: 'e' };
+    let used = false;
+    if (legend && typeof legend === 'object') {
+      for (const [c, m] of Object.entries(legend)) {
+        const t = String(m || '').toLowerCase(), col = String(c || '').toLowerCase().trim();
+        const r = /error|fielder|\bfc\b|reach/.test(t) ? 'e' : /\bout\b|outs/.test(t) ? 'o' : /hit|safe|single|double|triple|home run/.test(t) ? 'h' : '';
+        if (r && col) { map[col] = r; used = true; }
+      }
+    }
+    return { map, used };
+  }
+  function cleanSpray(raw) {
+    const arr = raw && Array.isArray(raw.players) ? raw.players : Array.isArray(raw) ? raw : [];
+    const { map, used } = sprayColorMap(raw && raw.legend);
+    const out = [];
+    for (const x of arr) {
+      if (!x || typeof x !== 'object') continue;
+      const name = String(x.name == null ? '' : x.name).replace(/\s+/g, ' ').trim().slice(0, 40);
+      if (!name) continue;
+      const dots = [];
+      for (const d of Array.isArray(x.dots) ? x.dots : []) {
+        if (!d || typeof d !== 'object') continue;
+        const z = SPRAY_ALIAS[String(d.z || '').toUpperCase().replace(/[^A-Z0-9]/g, '')];
+        const n = Math.round(Number(d.n == null || d.n === '' ? 1 : d.n));
+        const r = map[String(d.c || '').toLowerCase().trim()] || 'o';
+        if (!z || !(n >= 1 && n <= 99)) continue;
+        const same = dots.find((q) => q.z === z && q.r === r);
+        if (same) same.n = Math.min(99, same.n + n); else dots.push({ z, n, r });
+      }
+      if (!dots.length) continue;
+      const b = x.bip == null || x.bip === '' ? NaN : Math.round(Number(x.bip));
+      out.push({ name, bip: b >= 0 && b < 1000 ? b : null, dots });
+    }
+    return { title: String((raw && raw.title) || '').replace(/\s+/g, ' ').trim().slice(0, 80), players: out, legend: used };
+  }
+  const sprayTotal = (dots) => dots.reduce((t, d) => t + d.n, 0);
+  function sprayDirs(dots) { const t = { L: 0, C: 0, R: 0 }; for (const d of dots) t[SPRAY_ZONES[d.z].dir] += d.n; return t; }
+  const sprayNorm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  // Matches chart names to the roster: exact names first, then a number in the name, then first
+  // name plus last initial ("Ace G" = "Ace Garcia"), or first name alone when one side has no last name.
+  function sprayMatch(players, roster) {
+    const used = new Set();
+    const res = players.map(() => '');
+    const free = () => roster.filter((p) => rosterKey(p) && !used.has(p.id));
+    const take = (i, list) => { if (list.length === 1) { res[i] = list[0].id; used.add(list[0].id); } };
+    players.forEach((p, i) => { const n = sprayNorm(p.name); take(i, free().filter((q) => sprayNorm(q.name) === n)); });
+    players.forEach((p, i) => { if (res[i]) return; const m = p.name.match(/#\s*(\d{1,3})\b|^(\d{1,3})\s/); const num = m && (m[1] || m[2]); if (num) take(i, free().filter((q) => String(q.num || '').trim() === num)); });
+    players.forEach((p, i) => {
+      if (res[i]) return;
+      const nt = sprayNorm(p.name.replace(/#\s*\d+/g, '')).split(' ').filter(Boolean);
+      if (!nt.length) return;
+      take(i, free().filter((q) => {
+        const qt = sprayNorm(q.name).split(' ').filter(Boolean);
+        if (!qt.length || qt[0] !== nt[0]) return false;
+        if (qt.length === 1 || nt.length === 1) return true;
+        return qt[qt.length - 1][0] === nt[nt.length - 1][0];
+      }));
+    });
+    return res;
+  }
+  // Cuts a tall screenshot into pieces at the empty bands between rows of panels, so the reader
+  // sees each piece at full detail and no hitter's panel is split. Pieces are at most ~1.15x as
+  // tall as they are wide; an image with no clean gaps is cut at even heights.
+  async function sprayPieces(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej({ code: 'decode' }); i.src = url; });
+      const s = Math.min(1, 1400 / img.naturalWidth);
+      const w = Math.max(1, Math.round(img.naturalWidth * s)), h = Math.max(1, Math.round(img.naturalHeight * s));
+      const src = document.createElement('canvas');
+      src.width = w; src.height = h;
+      const cx = src.getContext('2d', { willReadFrequently: true });
+      cx.fillStyle = '#FFFFFF';
+      cx.fillRect(0, 0, w, h);
+      cx.drawImage(img, 0, 0, w, h);
+      const maxH = Math.round(Math.max(w * 1.15, 700));
+      const cuts = [0];
+      if (h > maxH * 1.15) {
+        const data = cx.getImageData(0, 0, w, h).data;
+        const flat = new Uint8Array(h);
+        const step = Math.max(1, Math.floor(w / 320));
+        for (let y = 0; y < h; y++) {
+          let lo = 255, hi = 0;
+          for (let x = 0; x < w; x += step) { const i = (y * w + x) * 4; const v = (data[i] * 3 + data[i + 1] * 6 + data[i + 2]) / 10; if (v < lo) lo = v; if (v > hi) hi = v; }
+          flat[y] = hi - lo < 14 ? 1 : 0;
+        }
+        let start = 0;
+        const minGap = Math.max(6, Math.round(w * 0.012));
+        while (h - start > maxH) {
+          const from = start + Math.round(maxH * 0.3), to = Math.min(h - 1, start + maxH);
+          let best = -1, bestLen = 0, run = 0;
+          for (let y = from; y <= to; y++) {
+            run = flat[y] ? run + 1 : 0;
+            if (run && run >= bestLen) { bestLen = run; best = y - Math.floor(run / 2); }
+          }
+          const cut = bestLen >= minGap ? best : to;
+          cuts.push(cut);
+          start = cut;
+        }
+      }
+      cuts.push(h);
+      const out = [];
+      for (let i = 0; i + 1 < cuts.length; i++) {
+        const ph = cuts[i + 1] - cuts[i];
+        if (ph < 8) continue;
+        const c = document.createElement('canvas');
+        c.width = w; c.height = ph;
+        c.getContext('2d').drawImage(src, 0, cuts[i], w, ph, 0, 0, w, ph);
+        out.push(await new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej({ code: 'decode' })), 'image/jpeg', 0.9)));
+      }
+      return out;
+    } finally { URL.revokeObjectURL(url); }
+  }
+  function sprayErrText(e) {
+    const c = e && e.code;
+    if (['invalid_json', 'empty_completion', 'refused'].includes(c)) return 'Couldn’t read that chart. Try a clear screenshot where each hitter’s name and dots are easy to see.';
+    const t = scanError(e);
+    return /roster/i.test(t) ? 'Reading the chart failed. Check your connection and try again.' : t;
+  }
+  async function runSprayRead(files) {
+    const sh = UI.sheet;
+    if (!sh || sh.type !== 'spray' || !Caps.sample || !files.length) return;
+    const name = String(sh.name || '').trim();
+    if (!name) { sh.err = 'Enter the opponent first.'; renderSheet(); return; }
+    const ctl = new AbortController();
+    sh.busy = { ctl, note: '' };
+    sh.err = '';
+    renderSheet();
+    try {
+      const lim = await Caps.sample.limits().catch(() => null);
+      if (!lim || !lim.images) throw { code: 'images_unavailable' };
+      const max = Math.max(1, lim.images.maxCount || 1);
+      const pieces = [];
+      for (const f of files.slice(0, 6)) pieces.push(...(await sprayPieces(f)));
+      if (ctl.signal.aborted) throw { code: 'cancelled' };
+      const all = { title: '', players: [], legend: false };
+      const parts = Math.ceil(pieces.length / max);
+      for (let i = 0; i < pieces.length; i += max) {
+        if (parts > 1) { sh.busy.note = `Part ${i / max + 1} of ${parts}.`; renderSheet(); }
+        const r = cleanSpray(await Caps.sample.json(SPRAY_PROMPT, { images: pieces.slice(i, i + max), signal: ctl.signal }));
+        if (!all.title) all.title = r.title;
+        all.legend = all.legend || r.legend;
+        for (const p of r.players) {
+          const twin = all.players.find((q) => sprayNorm(q.name) === sprayNorm(p.name));
+          if (!twin) all.players.push(p);
+          else if (sprayTotal(p.dots) > sprayTotal(twin.dots)) Object.assign(twin, p);
+        }
+      }
+      if (UI.sheet !== sh) return;
+      sh.busy = null;
+      if (!all.players.length) { sh.err = 'Couldn’t find any hitters in that chart. Try a screenshot where each hitter’s name and dots are clear.'; renderSheet(); return; }
+      const R = rosterFor(name);
+      const match = sprayMatch(all.players, R ? R.players : []);
+      all.players.forEach((p, i) => { p.match = match[i]; });
+      sh.read = all;
+      sh.step = 'review';
+    } catch (e) {
+      if (UI.sheet !== sh) return;
+      sh.busy = null;
+      sh.err = e && e.code === 'cancelled' ? '' : sprayErrText(e);
+    }
+    renderSheet();
+  }
+  // Shown in an opponent's roster sheet: what's been imported for them, with import and remove.
+  function sprayRosterBox(key) {
+    const R = Data.opponents[key];
+    const sp = R && R.spray && Array.isArray(R.spray.players) && R.spray.players.length ? R.spray : null;
+    if (!sp && !Caps.sample) return '';
+    const n = sp ? sp.players.reduce((t, p) => t + sprayTotal(p.dots || []), 0) : 0;
+    return `<div class="sp-box"><div class="grow" style="min-width:0"><b>Spray chart</b><span class="small muted">${sp ? `${sp.players.length} hitters · ${n} balls in play · added ${esc(new Date(sp.at || Date.now()).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}` : 'Import a spray chart screenshot to fill in scouting for this team.'}</span></div>
+      <div class="row" style="gap:6px">${Caps.sample ? `<button class="btn sm" data-act="sprayOpen" data-key="${esc(key)}">${sp ? 'Import again' : 'Import'}</button>` : ''}${sp ? '<button class="btn sm danger" data-act="sprayRemove">Remove</button>' : ''}</div></div>`;
+  }
+  function rosterDirty(sh) {
+    const R = sh.key && Data.opponents[sh.key];
+    const norm = (ps) => JSON.stringify((ps || []).filter((p) => rosterKey(p)).map((p) => [String(p.num || '').replace(/[^0-9]/g, ''), String(p.name || '').trim(), p.bats || '']));
+    return !R || norm(sh.players) !== norm(R.players);
+  }
   function aiErrorText(e, what) {
     const c = e && e.code;
     const scan = what === 'scan';
@@ -3034,10 +3370,67 @@ body.viewer-on { overflow: hidden; }
         const doc = clone(Data.opponents[k]);
         doc.players = mergeRoster(doc.players, players);
         saveRoster(doc);
-      } else saveRoster({ name: sh.key ? Data.opponents[sh.key].name : name, players });
+      } else saveRoster(Object.assign(clone(Data.opponents[sh.key] || {}), { name: sh.key ? Data.opponents[sh.key].name : name, players }));
       closeSheet();
       render();
       toast('Roster saved');
+    },
+    sprayOpen(d) {
+      const from = UI.sheet;
+      if (d.key && from && from.type === 'roster' && rosterDirty(from)) { toast('Save the roster first, then import the spray chart.'); return; }
+      let name = '';
+      if (d.key && Data.opponents[d.key]) name = Data.opponents[d.key].name;
+      else if (UI.tab === 'scout' && UI.scoutOpp) { const O = scoutData().get(UI.scoutOpp); if (O) name = O.name; }
+      openSheet({ type: 'spray', name, fixed: !!d.key, step: 'pick', busy: null, err: '', read: null });
+    },
+    sprayStop() { const b = UI.sheet && UI.sheet.busy; if (b && b.ctl) b.ctl.abort(); },
+    sprayRestart() { const sh = UI.sheet; sh.step = 'pick'; sh.read = null; sh.err = ''; renderSheet(); },
+    spraySave() {
+      const sh = UI.sheet;
+      const name = String(sh.name || '').trim();
+      if (!name || !sh.read) return;
+      const k = oppKey(name);
+      const doc = clone(Data.opponents[k] || { name, players: [] });
+      doc.name = doc.name || name;
+      doc.players = Array.isArray(doc.players) ? doc.players : [];
+      const prev = doc.spray && Array.isArray(doc.spray.players) ? doc.spray.players : [];
+      const keep = new Map(prev.map((p) => [p.id, p]));
+      let n = 0;
+      for (const p of sh.read.players) {
+        if (p.match === 'skip') continue;
+        let id = p.match;
+        if (!id || !doc.players.some((q) => q.id === id)) {
+          const np = { id: uid('r'), num: '', name: p.name, bats: '' };
+          doc.players.push(np);
+          id = np.id;
+        }
+        keep.set(id, { id, name: p.name, bip: p.bip, dots: p.dots.map((x) => ({ z: x.z, n: x.n, r: x.r })) });
+        n++;
+      }
+      if (!n) { sh.err = 'Pick at least one hitter to import.'; renderSheet(); return; }
+      doc.spray = { src: sh.read.title || '', at: Date.now(), players: [...keep.values()] };
+      saveRoster(doc);
+      closeSheet();
+      const O = [...scoutData().values()].find((x) => oppKey(x.name) === k);
+      UI.tab = 'scout';
+      UI.scoutOpp = O ? O.key : null;
+      UI.scoutKey = '*';
+      try { localStorage.setItem('gs-baseball-tab', 'scout'); } catch (e) { /* per-viewer convenience only */ }
+      window.scrollTo(0, 0);
+      render();
+      toast(`Added ${n} hitter${n === 1 ? '' : 's'} to scouting`);
+    },
+    sprayRemove() {
+      const key = UI.sheet && UI.sheet.key;
+      const R = key && Data.opponents[key];
+      if (!R) return;
+      confirmSheet('Remove the imported spray chart?', 'Scouting for ' + R.name + ' goes back to only the games you score. The roster stays.', 'Remove chart', () => {
+        const doc = clone(Data.opponents[key]);
+        delete doc.spray;
+        saveRoster(doc);
+        render();
+        toast('Spray chart removed');
+      }, true);
     },
     deleteRoster() {
       const key = UI.sheet.key;
@@ -3265,9 +3658,13 @@ body.viewer-on { overflow: hidden; }
       const pas = sel ? sel.pas : [...O.hitters.values()].flatMap((x) => x.pas);
       const t = tendencies(pas, sel ? sel.bats : '');
       const line = lineFor(pas);
-      const bip = pas.filter((p) => p.loc).slice(-40).map((p) => `- ${E.zoneName(p.loc)}, ${{ G: 'ground ball', L: 'line drive', F: 'fly ball', P: 'pop up' }[p.bt] || 'contact'}, ${(E.RESULTS[p.r] || {}).n || p.r}, about ${E.geo(p.loc).ft} ft`).join('\n');
-      const other = pas.filter((p) => !p.loc).map((p) => (E.RESULTS[p.r] || {}).n || p.r).join(', ');
-      const prompt = `You are a baseball scouting assistant helping a high school coach. Using only the data below, write a short scouting report on ${sel ? 'this opposing hitter' : 'this opposing lineup as a whole'}: where to position the infield and the outfield, and one pitching note if the data supports it. Use 3 to 5 bullet points that start with "- ". Plain text, no headings, no preamble. If the sample is small, say so in the first bullet.\n\nOpponent: ${O.name}\n${sel ? 'Hitter: ' + hitterLabel(sel) + (sel.bats ? ', bats ' + sel.bats : '') : 'Whole lineup'}\nPlate appearances: ${line.PA}; ${line.H} hits in ${line.AB} at-bats; ${line.BB} walks or HBP; ${line.K} strikeouts.\nBalls in play (field zone from the catcher's view, contact type, result, distance):\n${bip || '(none charted)'}\n${other ? 'Plate appearances without a charted location: ' + other + '\n' : ''}Direction split: left ${pct(t.L, t.n)}%, center ${pct(t.C, t.n)}%, right ${pct(t.R, t.n)}% of ${t.n} charted balls.`;
+      const bip = pas.filter((p) => p.loc && !p.imp).slice(-40).map((p) => `- ${E.zoneName(p.loc)}, ${{ G: 'ground ball', L: 'line drive', F: 'fly ball', P: 'pop up' }[p.bt] || 'contact'}, ${(E.RESULTS[p.r] || {}).n || p.r}, about ${E.geo(p.loc).ft} ft`).join('\n');
+      const other = pas.filter((p) => !p.loc && !p.imp).map((p) => (E.RESULTS[p.r] || {}).n || p.r).join(', ');
+      // Imported chart balls, summarized as counts per spot (they have no contact type or distance).
+      const impCounts = {};
+      for (const p of pas) if (p.imp) { const k = SPRAY_ZONES[p.zone].name + ', ' + SPRAY_RES[p.res].n.toLowerCase(); impCounts[k] = (impCounts[k] || 0) + 1; }
+      const imp = Object.entries(impCounts).sort((x, y) => y[1] - x[1]).map(([k, n]) => `- ${k}: ${n}`).join('\n');
+      const prompt = `You are a baseball scouting assistant helping a high school coach. Using only the data below, write a short scouting report on ${sel ? 'this opposing hitter' : 'this opposing lineup as a whole'}: where to position the infield and the outfield, and one pitching note if the data supports it. Use 3 to 5 bullet points that start with "- ". Plain text, no headings, no preamble. If the sample is small, say so in the first bullet.\n\nOpponent: ${O.name}\n${sel ? 'Hitter: ' + hitterLabel(sel) + (sel.bats ? ', bats ' + sel.bats : '') : 'Whole lineup'}\nPlate appearances: ${line.PA}; ${line.H} hits in ${line.AB} at-bats; ${line.BB} walks or HBP; ${line.K} strikeouts.\nBalls in play from games we scored (field zone from the catcher's view, contact type, result, distance):\n${bip || '(none charted)'}\n${other ? 'Plate appearances without a charted location: ' + other + '\n' : ''}${imp ? 'Balls in play from an imported season spray chart (spot, result: count):\n' + imp + '\n' : ''}Direction split: left ${pct(t.L, t.n)}%, center ${pct(t.C, t.n)}%, right ${pct(t.R, t.n)}% of ${t.n} balls in play.`;
       const ctl = new AbortController();
       UI.ai[key] = { busy: true, text: '', ctl };
       render();
@@ -3894,7 +4291,8 @@ body.viewer-on { overflow: hidden; }
     if (el.id === 'import-file' && el.files && el.files[0]) { doImport(el.files[0]); el.value = ''; return; }
     if (el.id === 'chat-file' && el.files && el.files[0]) { const f = el.files[0]; el.value = ''; chatPickPhoto(f); return; }
     if (el.dataset && el.dataset.scan && el.files && el.files.length) { const files = Array.from(el.files); el.value = ''; runScan(files); return; }
-    if (el.dataset && el.dataset.bind && UI.sheet) setPath(UI.sheet, el.dataset.bind, el.value);
+    if (el.dataset && el.dataset.spray && el.files && el.files.length) { const files = Array.from(el.files); el.value = ''; runSprayRead(files); return; }
+    if (el.dataset && el.dataset.bind && UI.sheet) { setPath(UI.sheet, el.dataset.bind, el.value); if (UI.sheet.type === 'spray' && el.dataset.bind.startsWith('read.')) renderSheet(); }
   });
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape' && ViewerId) { viewerClose(); return; }
