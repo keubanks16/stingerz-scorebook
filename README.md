@@ -53,6 +53,19 @@ A second phone streams straight from the scorebook. Families watch inside the sc
 
 **Camera operators** can do all of this on their own phone: sign in, then **Live → Stream video**. The Cloudflare Worker connection is shared with them automatically, so they don't need the access code.
 
+### YouTube live streaming
+
+Instead of the built-in camera, you can stream to YouTube from a streaming app. Free, saves every game, and anyone with the link can watch. YouTube runs 10 to 30 seconds behind, so each viewer can set **Score delay** under the video to keep the scoreboard from spoiling plays.
+
+1. **Get your channel ID.** In YouTube Studio: **Settings → Channel → Advanced settings**. It starts with `UC`.
+2. **Add it to the scorebook.** **Team → Live video → Set up**.
+3. **Get your stream key.** In YouTube Studio: **Create → Go live → Stream**. Copy the **Stream URL** and **Stream key**, turn on auto-start and auto-stop, and choose **Low latency**.
+4. **Set up a streaming app** such as Larix Broadcaster with the URL `rtmp://a.rtmp.youtube.com/live2/` followed by your key. Streaming this way doesn't need 50 subscribers; going live from the YouTube app does.
+
+Each game, start the stream in the app. **Public** streams appear automatically; for an **Unlisted** stream, paste that game's link under the game's **Edit details**.
+
+When a built-in camera stream is live, the scorebook shows it; otherwise it shows YouTube.
+
 ## YouTube uploads
 
 When a built-in camera stream ends, the camera phone can upload the game video to YouTube by itself, and add the replay to the game page.
@@ -74,19 +87,6 @@ When a built-in camera stream ends, the camera phone can upload the game video t
 **Each game:** when the camera phone taps **End stream**, Google asks which account to use (the first time, it warns the app isn't verified; tap **Continue**, since it's your own app). Pick the channel's account and the upload starts. Keep the screen on until it says **On YouTube**. If it stops, tap **Continue upload** and it picks up where it left off. Uploads use about 1 GB per hour of video, so use Wi-Fi if you can. You can also upload later from **Team → Game videos on this phone**.
 
 Videos go to the channel of the Google account that signs in, and that account must be on the test-user list. If a camera operator films, they sign in with the team channel's Google account.
-
-### YouTube live streaming
-
-Instead of the built-in camera, you can stream to YouTube from a streaming app. Free, saves every game, and anyone with the link can watch. YouTube runs 10 to 30 seconds behind, so each viewer can set **Score delay** under the video to keep the scoreboard from spoiling plays.
-
-1. **Get your channel ID.** In YouTube Studio: **Settings → Channel → Advanced settings**. It starts with `UC`.
-2. **Add it to the scorebook.** **Team → Live video → Set up**.
-3. **Get your stream key.** In YouTube Studio: **Create → Go live → Stream**. Copy the **Stream URL** and **Stream key**, turn on auto-start and auto-stop, and choose **Low latency**.
-4. **Set up a streaming app** such as Larix Broadcaster with the URL `rtmp://a.rtmp.youtube.com/live2/` followed by your key. Streaming this way doesn't need 50 subscribers; going live from the YouTube app does.
-
-Each game, start the stream in the app. **Public** streams appear automatically; for an **Unlisted** stream, paste that game's link under the game's **Edit details**.
-
-When a built-in camera stream is live, the scorebook shows it; otherwise it shows YouTube.
 
 ## Cloudflare Worker
 
