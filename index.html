@@ -656,6 +656,18 @@ body.cam-on { overflow: hidden; }
 .msg.sel .bubble { box-shadow: 0 0 0 2px var(--bad); }
 .msg.sel:not(.me) .bubble, .msg.sel:not(.me) .photo { box-shadow: 0 0 0 2px var(--accent); }
 .msg-acts { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.reacts { display: flex; flex-wrap: wrap; gap: 4px; }
+.react { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font-size: 16px; line-height: 1; cursor: pointer; }
+.react span { font-size: 13px; font-weight: 700; }
+.react.on { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+.react-pick { display: flex; gap: 2px; padding: 3px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; box-shadow: var(--shadow); }
+.react-pick button { width: 46px; height: 46px; border: 0; border-radius: 50%; background: transparent; font-size: 26px; line-height: 1; display: grid; place-items: center; cursor: pointer; }
+.react-pick button[aria-pressed="true"] { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+.react-who { font-size: 13px; color: var(--ink-2); padding: 0 4px; max-width: 100%; overflow-wrap: anywhere; }
+.viewer-react { display: flex; gap: 8px; padding: 12px 16px 0; }
+.viewer-react button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 52px; height: 44px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .22); background: rgba(255, 255, 255, .08); color: #fff; font-size: 20px; line-height: 1; cursor: pointer; }
+.viewer-react button span { font-size: 14px; font-weight: 700; }
+.viewer-react button[aria-pressed="true"] { background: rgba(127, 176, 230, .32); border-color: #7FB0E6; }
 .msg.hushed .bubble, .msg.hushed .photo { opacity: .6; }
 .chat-muted { align-self: flex-start; display: flex; align-items: center; gap: 8px; max-width: 82%; margin-top: 8px; padding: 4px 4px 4px 12px; border: 1px dashed var(--line); border-radius: 16px; color: var(--ink-3); font-size: 13px; }
 .chat-muted svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -1706,6 +1718,9 @@ body.viewer-on { overflow: hidden; }
   const Chat = { sub: null, list: [], loaded: false, delId: null, forceBottom: false, sending: false, pending: null, urls: new Map(), urlBusy: false, urlAgain: false, urlRetry: 0, mute: {}, muteSub: null, muteUid: '', show: new Set() };
   // Every photo ever sent in the chat (Chat.list only holds the latest 300 messages), newest first.
   const Gallery = { sub: null, list: [], loaded: false, err: false, showMuted: false };
+  // Reactions: messages/{id}.react is a map of uid -> one of these codes (one reaction per person).
+  const REACTS = [['up', '👍', 'Thumbs up'], ['down', '👎', 'Thumbs down'], ['heart', '❤️', 'Heart'], ['ball', '⚾️', 'Baseball']];
+  const REACT_EMOJI = Object.fromEntries(REACTS.map(([k, e]) => [k, e]));
   const CHAT_SEEN = 'gs-baseball-chat-seen';
   const CHAT_DELHINT = 'gs-baseball-chat-delhint';
   function chatDelHintDone() { try { return localStorage.getItem(CHAT_DELHINT) === '1'; } catch (e) { return false; } }
@@ -1761,7 +1776,39 @@ body.viewer-on { overflow: hidden; }
     const x = d.data({ serverTimestamps: 'estimate' }) || {};
     const at = x.at && typeof x.at.toMillis === 'function' ? x.at.toMillis() : Number(x.at) || Date.now();
     const ph = x.photo && typeof x.photo.key === 'string' ? { key: x.photo.key, w: Number(x.photo.w) || 0, h: Number(x.photo.h) || 0 } : null;
-    return { id: d.id, uid: x.uid, name: x.name || 'Team member', text: String(x.text || ''), coach: !!x.coach, at, photo: ph };
+    const react = {};
+    if (x.react && typeof x.react === 'object') for (const u in x.react) if (REACT_EMOJI[x.react[u]]) react[u] = x.react[u];
+    return { id: d.id, uid: x.uid, name: x.name || 'Team member', text: String(x.text || ''), coach: !!x.coach, at, photo: ph, react };
+  }
+  // Who someone is, for "who reacted": you, a member's name (coaches have the list), or their name on a chat message.
+  function personName(uid) {
+    if (Access.user && uid === Access.user.uid) return 'You';
+    const mem = (Access.members || []).find((x) => x.uid === uid);
+    if (mem) return memberLabel(mem);
+    for (let i = Chat.list.length - 1; i >= 0; i--) if (Chat.list[i].uid === uid) return Chat.list[i].name;
+    const g = Gallery.list.find((x) => x.uid === uid);
+    return g ? g.name : 'A team member';
+  }
+  function reactCounts(m) {
+    const n = {};
+    for (const u in m.react || {}) n[m.react[u]] = (n[m.react[u]] || 0) + 1;
+    return n;
+  }
+  // The counts under a message. Tapping one adds yours (or takes it back).
+  function reactsHTML(m) {
+    const n = reactCounts(m), mine = (m.react || {})[Access.user.uid];
+    const pills = REACTS.filter(([k]) => n[k]).map(([k, e, l]) => `<button class="react${mine === k ? ' on' : ''}" data-act="react" data-id="${esc(m.id)}" data-r="${k}" aria-pressed="${mine === k}" aria-label="${l}, ${n[k]}${mine === k ? ', including you' : ''}">${e}<span>${n[k]}</span></button>`);
+    return pills.length ? `<div class="reacts">${pills.join('')}</div>` : '';
+  }
+  function reactPickHTML(m, cls) {
+    const mine = (m.react || {})[Access.user.uid];
+    return `<div class="${cls}" role="group" aria-label="React to this message">${REACTS.map(([k, e, l]) => `<button data-act="react" data-id="${esc(m.id)}" data-r="${k}" data-close="1" aria-pressed="${mine === k}" aria-label="${l}">${e}</button>`).join('')}</div>`;
+  }
+  function reactWhoHTML(m) {
+    const by = {};
+    for (const u in m.react || {}) (by[m.react[u]] = by[m.react[u]] || []).push(personName(u));
+    const parts = REACTS.filter(([k]) => by[k]).map(([k, e]) => `${e} ${by[k].sort((a, b) => (a === 'You' ? -1 : b === 'You' ? 1 : a.localeCompare(b))).map(esc).join(', ')}`);
+    return parts.length ? `<div class="react-who">${parts.join(' · ')}</div>` : '';
   }
   function chatSubscribe() {
     const q = FB.F.query(FB.F.collection(FB.fs, 'messages'), FB.F.orderBy('at', 'desc'), FB.F.limit(300));
@@ -1816,8 +1863,10 @@ body.viewer-on { overflow: hidden; }
         h += `<button class="photo" data-act="photoOpen" data-id="${esc(m.id)}" style="aspect-ratio:${ar.toFixed(3)}" aria-label="Open photo from ${esc(m.name)}">${u ? `<img src="${esc(u)}" alt="">` : ''}</button>`;
       }
       if (m.text) h += `<div class="bubble">${esc(m.text)}</div>`;
+      h += reactsHTML(m);
       if (sel) {
         const nm = esc(String(m.name || 'them').slice(0, 30));
+        h += reactPickHTML(m, 'react-pick') + reactWhoHTML(m);
         h += '<div class="msg-acts">'
           + (mine ? '' : hush ? `<button class="btn sm" data-act="msgUnmute" data-id="${esc(m.id)}">Unmute ${nm}</button><button class="btn sm ghost" data-act="muteHide" data-uid="${esc(m.uid)}">Hide</button>` : `<button class="btn sm" data-act="msgMute" data-id="${esc(m.id)}">Mute ${nm}</button>`)
           + (mine || Access.isAdmin ? `<button class="btn sm danger" data-act="msgDelete" data-id="${esc(m.id)}">Delete message</button>` : '')
@@ -1828,7 +1877,7 @@ body.viewer-on { overflow: hidden; }
     }
     flush();
     // Deleting and muting are a tap on the message, which nobody would guess, so say so until they've done one.
-    if (!Chat.delId && !chatDelHintDone()) h += `<div class="chat-hint">${Access.isAdmin ? 'Tap a message to delete it or mute someone' : 'Tap your message to delete it, or someone else’s to mute them'}</div>`;
+    if (!Chat.delId && !chatDelHintDone()) h += `<div class="chat-hint">${Access.isAdmin ? 'Tap a message to react 👍, delete it or mute someone' : 'Tap a message to react 👍, delete yours, or mute someone'}</div>`;
     return h + '</div>';
   }
   async function chatSend() {
@@ -2131,6 +2180,7 @@ body.viewer-on { overflow: hidden; }
         ${prev ? `<button class="viewer-nav prev" data-act="viewerGo" data-id="${esc(prev.id)}" aria-label="Newer photo"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>` : ''}
         ${next ? `<button class="viewer-nav next" data-act="viewerGo" data-id="${esc(next.id)}" aria-label="Older photo"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>` : ''}</div>
       ${m.text ? `<div class="viewer-cap">${esc(m.text)}</div>` : ''}
+      <div class="viewer-react">${viewerReactHTML(m)}</div>
       <div class="viewer-acts">${canDel ? `<button class="del" data-act="msgDelete" data-id="${esc(m.id)}">Delete photo</button>` : ''}<span>Press and hold the photo to save it to your phone.${seq.length > 1 ? ' Swipe for more.' : ''}</span></div>`;
     el.dataset.prev = prev ? prev.id : '';
     el.dataset.next = next ? next.id : '';
@@ -2152,12 +2202,18 @@ body.viewer-on { overflow: hidden; }
     const to = v && (dir > 0 ? v.dataset.next : v.dataset.prev);
     if (to) viewerOpen(to);
   }
+  function viewerReactHTML(m) {
+    const n = reactCounts(m), mine = (m.react || {})[Access.user.uid];
+    return REACTS.map(([k, e, l]) => `<button data-act="react" data-id="${esc(m.id)}" data-r="${k}" aria-pressed="${mine === k}" aria-label="${l}${n[k] ? ', ' + n[k] : ''}">${e}${n[k] ? `<span>${n[k]}</span>` : ''}</button>`).join('');
+  }
   function viewerSync() {
     if (!ViewerId) return;
     const m = photoMsg(ViewerId);
     if (!m || !m.photo) { viewerClose(); return; }
     const u = chatPhotoUrl(m.photo.key), box = $('#viewer .viewer-img');
     if (u && box && !box.querySelector('img')) { const w = box.querySelector('.wait'); if (w) w.outerHTML = `<img src="${esc(u)}" alt="">`; }
+    const rx = $('#viewer .viewer-react');
+    if (rx) rx.innerHTML = viewerReactHTML(m);
   }
   function viewerClose() {
     const v = $('#viewer');
@@ -5094,6 +5150,28 @@ body.viewer-on { overflow: hidden; }
       render();
     },
     msgCancel() { Chat.delId = null; render(); },
+    // One reaction per person: tap a different one to switch, the same one again to take it back.
+    async react(d) {
+      if (!chatAllowed() || !REACT_EMOJI[d.r]) return;
+      const copies = [Chat.list.find((x) => x.id === d.id), Gallery.list.find((x) => x.id === d.id)].filter(Boolean);
+      if (!copies.length) return;
+      const uid = Access.user.uid;
+      const before = copies[0].react[uid];
+      const next = before === d.r ? null : d.r;
+      for (const m of copies) { if (next) m.react[uid] = next; else delete m.react[uid]; }
+      if (d.close) Chat.delId = null;
+      try { localStorage.setItem(CHAT_DELHINT, '1'); } catch (e) { /* per-device only */ }
+      render();
+      viewerSync();
+      try {
+        await FB.F.updateDoc(FB.F.doc(FB.fs, 'messages', d.id), { ['react.' + uid]: next || FB.F.deleteField() });
+      } catch (e) {
+        for (const m of copies) { if (before) m.react[uid] = before; else delete m.react[uid]; }
+        render();
+        viewerSync();
+        toast(e && e.code === 'permission-denied' ? 'Couldn’t save that. The latest security rules need to be published in Firebase.' : 'Couldn’t save that. Check your connection and try again.');
+      }
+    },
     msgMute(d) {
       const m = Chat.list.find((x) => x.id === d.id);
       if (!m) return;

@@ -223,6 +223,14 @@ service cloud.firestore {
         && request.resource.data.coach == isAdmin()
         && request.resource.data.at == request.time;
       allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      // Reactions: react is a map of uid -> 'up' | 'down' | 'heart' | 'ball'. Each person can only
+      // add, change or remove their own, and nothing else about the message changes.
+      allow update: if (isApproved() || isAdmin())
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['react'])
+        && request.resource.data.get('react', {}) is map
+        && request.resource.data.get('react', {}).diff(resource.data.get('react', {})).affectedKeys().hasOnly([request.auth.uid])
+        && (!(request.auth.uid in request.resource.data.get('react', {}))
+          || request.resource.data.react[request.auth.uid] in ['up', 'down', 'heart', 'ball']);
     }
   }
 }

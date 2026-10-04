@@ -113,6 +113,10 @@ Needs the latest `firestore.rules` published, and the latest `worker.js` for the
 
 The **Chat** tab is one group conversation for everyone with an approved account: coaches, families and camera operators. People watching through "Anyone with the link" without signing in don't see it. Coaches' messages show a **Coach** tag. To delete a message, tap it and then tap **Delete message**. Anyone can delete their own messages; coaches can delete any message. A hint under the latest message says so until you've deleted a message or muted someone. A red dot on the Chat tab means there are new messages. The chat keeps the latest 300 messages on screen.
 
+### Reactions
+
+Tap a message, then tap 👍, 👎, ❤️ or ⚾️ in the row that pops up. The counts show under the message; tap one of those to add the same reaction (or take yours back). Each person gets one reaction per message, so picking a different one switches it. When a message is selected, it lists who reacted with what. Photos have the same four buttons in the full-screen view. Reactions don't send notifications. Needs the latest `firestore.rules` published.
+
 ### Muting someone
 
 Anyone can mute anyone in the chat, anytime. Tap one of their messages, then **Mute**. Their messages fold into a quiet "messages from … (muted)" line you can open with **Show**, and you stop getting notifications when they post. Muting only changes what *you* see. They aren't told, they can still post, and everyone else still sees their messages. To unmute, tap one of their messages after **Show**, or go to **Team → Account → Muted in team chat → Manage**. Your mute list follows your account to every phone you sign in on. It needs the latest `firestore.rules` published (and the latest `worker.js` for the notification part).
