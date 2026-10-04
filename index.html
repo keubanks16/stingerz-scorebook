@@ -341,6 +341,69 @@ table.st tr:last-child td { border-bottom: 0; }
 .swing-list svg { width: 26px; height: 26px; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .swing-list b { display: block; font-size: 17px; color: var(--ink); }
 .swing-list span { display: block; margin-top: 2px; font-size: 15px; line-height: 1.35; color: var(--ink-2); }
+.sw-tabs { display: flex; width: 100%; }
+.sw-tabs button { flex: 1; }
+.sw-tabs button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.sw-stage { position: relative; width: 100%; max-height: 72vh; background: #000000; border-radius: 10px; overflow: hidden; touch-action: manipulation; }
+.sw-stage video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.sw-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
+.sw-hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); background: rgba(4, 18, 45, .86); color: #FFFFFF; font-size: 14px; padding: 6px 12px; border-radius: 999px; pointer-events: none; white-space: nowrap; max-width: 92%; overflow: hidden; text-overflow: ellipsis; }
+.sw-phase { position: absolute; left: 10px; top: 10px; background: rgba(4, 18, 45, .86); color: #40D3BE; border: 1px solid #40D3BE; font-size: 12px; font-weight: 700; letter-spacing: .08em; padding: 4px 10px; border-radius: 999px; pointer-events: none; }
+.sw-transport { display: flex; align-items: center; gap: 6px; }
+.sw-transport input[type=range] { flex: 1; min-width: 0; }
+.sw-transport .btn { min-height: 40px; padding: 4px 10px; }
+.sw-transport svg { width: 18px; height: 18px; fill: currentColor; }
+.sw-transport.off { opacity: .5; pointer-events: none; }
+.sw-clock { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sw-prog { display: grid; gap: 6px; }
+.sw-bar { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.sw-bar i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+.sw-break { padding: 14px; display: grid; gap: 12px; }
+.sw-break h3 { margin: 0 0 6px; font-size: 16px; }
+.sw-break h3 small { font-weight: 500; color: var(--ink-2); font-size: 13px; }
+.sw-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 24px; }
+.sw-rows > div { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.sw-rows > div:first-child { border-top: 0; }
+.sw-rows b { font-variant-numeric: tabular-nums; text-align: right; }
+.sw-rows .contact span, .sw-rows .contact b { color: var(--strike); }
+.sw-rows small { color: var(--ink-2); font-weight: 500; margin-left: 4px; }
+.sw-chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.sw-chart .grid { stroke: var(--line); stroke-width: 1; }
+.sw-chart .ev { stroke: var(--ink-3); stroke-dasharray: 3 3; }
+.sw-chart .ev.contact { stroke: var(--strike); }
+.sw-chart text { font-size: 9px; fill: var(--ink-2); text-anchor: middle; font-family: var(--font-body); }
+.sw-chart polyline { fill: none; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
+.sw-chart .hp { stroke: var(--accent); }
+.sw-chart .sh { stroke: #E0A526; }
+.sw-key i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin: 0 4px 0 10px; }
+.sw-key i.hp { background: var(--accent); }
+.sw-key i.sh { background: #E0A526; }
+.sw-call { padding: 14px; display: grid; gap: 10px; }
+.sw-big { font-size: 22px; }
+.sw-big span { color: var(--accent); }
+.sw-sides { display: grid; gap: 6px; }
+.sw-side { display: grid; grid-template-columns: 104px 1fr 42px; align-items: center; gap: 8px; font-size: 14px; }
+.sw-side i { height: 10px; border-radius: 999px; background: var(--accent); display: block; min-width: 2px; }
+.sw-side b { text-align: right; font-variant-numeric: tabular-nums; }
+.sw-field .sw-wedge { fill: #FFE066; }
+.sw-field .sw-wedge.best { fill: #FFD23F; }
+.sw-field .sw-dot { fill: #FFFFFF; stroke: var(--navy); stroke-width: 1.2; }
+.sw-field .sw-dot.ring { fill: none; stroke: #FFFFFF; }
+.sw-field .sw-mark { fill: #FFFFFF; stroke: var(--navy); stroke-width: 1.5; }
+.sw-field .sw-mark-ring { fill: none; stroke: #FFFFFF; stroke-width: 1.2; opacity: .85; }
+.sw-field.tap { cursor: crosshair; }
+.sw-good { color: var(--good); }
+.sw-steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 15px; }
+.sw-more summary { cursor: pointer; font-size: 14px; color: var(--accent); font-weight: 600; }
+.sw-replay { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.sw-replay img, .sw-replay canvas { width: 100%; aspect-ratio: 1; border-radius: 10px; display: block; background: #0B1A33; object-fit: cover; }
+.sw-play { display: grid; grid-template-columns: 84px 1fr; gap: 10px; padding: 10px; align-items: start; }
+.sw-play.off { opacity: .65; }
+.sw-play .thumb { width: 84px; height: 84px; border-radius: 8px; object-fit: cover; background: var(--surface-2); display: block; }
+.sw-play .sw-num { width: 64px; flex: none; }
+.sw-board { max-width: 100%; height: 22px; object-fit: contain; object-position: left; border-radius: 4px; }
+.sw-legend { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+.swing-stats.sw-avg { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .iq-kicker { font-size: 12px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--carolina); }
 .iq-check { padding: 6px 14px; display: grid; }
 .iq-check > div { display: flex; gap: 12px; align-items: center; padding: 9px 0; font-size: 18px; font-weight: 600; color: var(--ink); border-top: 1px solid var(--line); }
@@ -1202,6 +1265,7 @@ body.viewer-on { overflow: hidden; }
     muteSync();
     newsSync();
     feesSync();
+    swingsSync();
     if (chatAllowed() && pushLocal() && !Push.listening && 'Notification' in window && Notification.permission === 'granted') pushMessaging().catch(() => {});
     else if (!chatAllowed() && Chat.sub) { Chat.sub(); Chat.sub = null; Chat.list = []; Chat.loaded = false; }
     if (X.isAdmin && !MembersSub) {
@@ -1515,6 +1579,91 @@ body.viewer-on { overflow: hidden; }
       } else toast(r.d.error === 'not_configured' ? 'Your Worker needs FIREBASE_SERVICE_ACCOUNT to send reminders.' : r.d.error === 'not_allowed' ? 'Only people who can see fees can send reminders.' : 'Couldn’t send reminders. Paste the latest worker.js into Cloudflare and try again.');
     } catch (e) { toast('Couldn’t send reminders. Check your connection.'); }
     Fees.busy = ''; render();
+  }
+
+  // ---------- Swing AI: saved swings ----------
+  // swings/{id}: one analyzed swing or scouted ball in play (the at-bat record the swing model
+  // reads). pid = our player, opp = an opponent roster key (coaches only). swingMedia/{id}: its
+  // snapshot, turn chart and keypoints, loaded only when a report is opened. Coaches see every
+  // swing; a family sees only their linked players' swings.
+  const Swings = { list: [], parts: {}, subs: new Map(), mode: '', loaded: false };
+  function swingsAllowed() { return Backend.kind === 'fb' && !!Access.user && (Access.isAdmin || (Access.isApproved && myPlayers().length > 0)); }
+  function swingsSync() {
+    const mode = !swingsAllowed() ? '' : Access.isAdmin ? 'all' : 'mine:' + myPlayers().join(',');
+    if (mode === Swings.mode) return;
+    for (const u of Swings.subs.values()) u();
+    Swings.subs.clear(); Swings.parts = {}; Swings.list = []; Swings.loaded = false; Swings.mode = mode;
+    if (!mode) return;
+    const take = (key, q) => {
+      Swings.parts[key] = q.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+      Swings.list = [].concat(...Object.values(Swings.parts)).sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0));
+      Swings.loaded = true;
+      scheduleRender();
+    };
+    const fail = () => { Swings.loaded = true; scheduleRender(); };
+    const col = FB.F.collection(FB.fs, 'swings');
+    if (mode === 'all') Swings.subs.set('all', FB.F.onSnapshot(FB.F.query(col, FB.F.orderBy('createdAt', 'desc'), FB.F.limit(1500)), (q) => take('all', q), fail));
+    else for (const pid of myPlayers()) Swings.subs.set(pid, FB.F.onSnapshot(FB.F.query(col, FB.F.where('pid', '==', pid)), (q) => take(pid, q), fail));
+  }
+  // A saved swing's ball in play in this app's field units (1 unit = 5 ft, home at 50,76).
+  const SW_BT = { GB: 'G', LD: 'L', FB: 'F', PU: 'P', BU: 'G' };
+  const SW_RES = { '1B': 'h', '2B': 'h', '3B': 'h', HR: 'h', OUT: 'o', E: 'e', FC: 'e' };
+  function swingLoc(sw) {
+    const o = sw && sw.outcome;
+    if (!o || o.kind !== 'inplay' || !Number.isFinite(Number(o.x)) || !Number.isFinite(Number(o.y))) return null;
+    return [+Math.max(0, Math.min(100, 50 + Number(o.x) / 5)).toFixed(2), +Math.max(6, Math.min(84, 76 - Number(o.y) / 5)).toFixed(2)];
+  }
+  function swingPa(sw, date) {
+    const o = sw.outcome || {}, bt = SW_BT[o.type] || '', res = SW_RES[o.result] || '';
+    const what = [BT_NAME[bt], SPRAY_RES[res] && SPRAY_RES[res].n].filter(Boolean).join(', ') || 'Ball in play';
+    return { sw: 1, loc: swingLoc(sw), bt, res, date, title: what + (sw.source === 'scout' ? ' (scouted from game video)' : ' (Swing AI)') };
+  }
+  // The Hub side of Swing AI, handed to swing/app.js (which draws the page and runs the analysis).
+  const SwingHub = {
+    esc, toast, logo: () => LOGO,
+    user: () => ({ uid: Access.user ? Access.user.uid : '', admin: !!Access.isAdmin, owner: !!Access.isOwner, approved: !!Access.isApproved, players: myPlayers(), name: chatName(), signedIn: !!Access.user, allowed: swingsAllowed(), live: Backend.kind === 'fb' }),
+    team: () => ({ name: Data.team.name || 'GS Baseball', players: sortedRoster() }),
+    opponents: () => Object.entries(Data.opponents).map(([key, r]) => ({ key, name: r.name || 'Opponent', players: r.players || [] })).sort((a, b) => String(a.name).localeCompare(String(b.name))),
+    swings: () => Swings.list,
+    loaded: () => Swings.loaded,
+    newId: () => uid('s'),
+    async save(id, doc, media) {
+      await FB.F.setDoc(FB.F.doc(FB.fs, 'swingMedia', id), media);
+      await FB.F.setDoc(FB.F.doc(FB.fs, 'swings', id), doc);
+    },
+    update: (id, patch) => FB.F.updateDoc(FB.F.doc(FB.fs, 'swings', id), Object.assign({ updatedAt: Date.now() }, patch)),
+    async remove(id) {
+      await FB.F.deleteDoc(FB.F.doc(FB.fs, 'swings', id));
+      await FB.F.deleteDoc(FB.F.doc(FB.fs, 'swingMedia', id)).catch(() => {});
+    },
+    async media(id) { const d = await FB.F.getDoc(FB.F.doc(FB.fs, 'swingMedia', id)); return d.exists() ? d.data() : null; },
+    back: () => A.swingBack(),
+    rerender: () => scheduleRender(),
+    oppKey: (name) => oppKey(name),
+    // The team's AI (through the Cloudflare Worker) reads the GameChanger scoreboard when scouting.
+    ai: () => (Access.isAdmin && Caps.sample && typeof Caps.sample.json === 'function' ? Caps.sample : null),
+  };
+  const SwingUI = { mod: null, loading: null, err: '', mounted: false };
+  // The Swing AI page keeps its own video and drawing, so the rest of the app's redraws only
+  // ask it to refresh instead of replacing it.
+  function renderSwingPage(v) {
+    let root = v.querySelector(':scope > #swing-root');
+    if (!root) { v.innerHTML = '<div id="swing-root" class="stack"></div>'; root = v.firstElementChild; SwingUI.mounted = false; }
+    if (SwingUI.mod) {
+      if (!SwingUI.mounted) { root.innerHTML = ''; SwingUI.mod.mount(root, SwingHub, { from: UI.swingFrom || 'stats' }); SwingUI.mounted = true; }
+      else SwingUI.mod.update();
+      return;
+    }
+    root.innerHTML = `<div class="row"><button class="btn ghost sm" data-act="swingBack">‹ ${UI.swingFrom === 'iq' ? 'Instincts' : 'Stats'}</button></div>
+      <section class="iq-hero"><img src="${LOGO}" alt=""><div><div class="iq-kicker">Swing AI</div><h2>Swing AI</h2><p>${SwingUI.err ? esc(SwingUI.err) : 'Loading…'}</p></div></section>`;
+    if (!SwingUI.loading && !SwingUI.err) {
+      SwingUI.loading = import('./swing/app.js').then((m) => { SwingUI.mod = m; SwingUI.mounted = false; render(); })
+        .catch((e) => { console.error(e); SwingUI.loading = null; SwingUI.err = 'Swing AI couldn’t load. Check your connection and try again.'; render(); });
+    }
+  }
+  function swingLeave() {
+    if (SwingUI.mod && SwingUI.mounted) { try { SwingUI.mod.unmount(); } catch (e) { console.error(e); } }
+    SwingUI.mounted = false;
   }
 
   // ---------- Team chat (one group conversation for everyone approved) ----------
@@ -2240,9 +2389,9 @@ body.viewer-on { overflow: hidden; }
           continue;
         }
         // Imported chart balls carry res (h/o/e) instead of a scored result code.
-        const m = p.res || p.imp ? {} : E.RESULTS[p.r] || {};
+        const m = p.res || p.imp || p.sw ? {} : E.RESULTS[p.r] || {};
         const hit = p.res ? p.res === 'h' : !!m.hit;
-        const cls = p.res ? SPRAY_RES[p.res].cls : p.imp ? 'dot-imp' : m.hit ? 'dot-hit' : p.r === 'E' || p.r === 'FC' ? 'dot-reach' : 'dot-out';
+        const cls = p.res ? SPRAY_RES[p.res].cls : p.imp || p.sw ? 'dot-imp' : m.hit ? 'dot-hit' : p.r === 'E' || p.r === 'FC' ? 'dot-reach' : 'dot-out';
         marks += `<circle class="${cls}" cx="${p.loc[0]}" cy="${p.loc[1]}" r="${((hit ? 1.7 : p.imp && !p.res ? 1.55 : 1.45) * (o.dot || 1)).toFixed(2)}"${o.dot ? ` style="stroke-width:${((cls === 'dot-out' ? 0.7 : 0.5) * o.dot).toFixed(2)}"` : ''}><title>${esc(p.title || (m.n || p.r) + (p.label ? ' · ' + p.label : ''))}</title></circle>`;
       }
     }
@@ -2452,30 +2601,11 @@ body.viewer-on { overflow: hidden; }
     const idx = card.a.map((_, i) => i);
     R.choices = card.a[0] === '1st base' && card.a[3] === 'Home' ? idx : iqShuffle(idx);
   }
-  // ---------- Swing AI (coming soon) ----------
-  // A preview page: the swing breakdown clip and what the analyzer will show. Opened from a card
-  // on the Stats and Instincts tabs (the bottom bar is full), or straight from #swing.
+  // ---------- Swing AI ----------
+  // Opened from a card on the Stats and Instincts tabs (the bottom bar is full), or from #swing.
+  // The page itself lives in swing/app.js.
   function swingCardHTML() {
-    return `<button class="card swing-card" data-act="swingOpen"><img src="media/swing-thumb.jpg" alt=""><span><span class="t"><b>Swing AI</b><span class="chip soon">COMING SOON</span></span><span class="d">Every swing from game video, broken down frame by frame.</span></span><span class="fee-go" aria-hidden="true">›</span></button>`;
-  }
-  function renderSwing() {
-    const back = UI.swingFrom === 'iq' ? 'Instincts' : 'Stats';
-    const item = (icon, title, text) => `<div><svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg><div><b>${esc(title)}</b><span>${esc(text)}</span></div></div>`;
-    let h = `<div class="row"><button class="btn ghost sm" data-act="swingBack">‹ ${back}</button></div>`;
-    h += `<section class="iq-hero"><img src="${LOGO}" alt=""><div><div class="iq-kicker">Coming soon</div><h2>Swing AI</h2><p>Every swing from your game video, broken down <b>frame by frame</b>.</p></div></section>`;
-    h += '<div class="swing-video"><img src="media/swing-breakdown.gif" alt="Swing breakdown of a GS hitter: body tracking through stance, stride, swing, contact and follow-through, with a timing chart and the ball tracked off the bat"></div>';
-    h += `<h2 class="sec">From this swing</h2><div class="swing-stats">
-      <div><span>Leg lift to contact</span><b>0.55 s</b></div>
-      <div><span>Foot down to contact</span><b>0.18 s</b></div>
-      <div><span>Result</span><b class="txt">Fly ball, pulled</b><small>toward left-center</small></div></div>`;
-    h += `<h2 class="sec">What it shows</h2><section class="card swing-list">
-      ${item('<rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M7.5 4.5v15M16.5 4.5v15M3 9.5h4.5M3 14.5h4.5M16.5 9.5H21M16.5 14.5H21"/>', 'Every phase', 'Marks stance, stride, swing, contact and follow-through, and reads the batter from the scoreboard.')}
-      ${item('<circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9.5M10 2.5h4M12 2.5V6M18.5 6.5l1.5-1.5"/>', 'Timing to contact', 'When the leg lifts, the foot lands and the hips open, timed against contact.')}
-      ${item('<path d="M3.5 19.5h17M3.5 19.5V4.5M5.5 16l4-2 3 1 3.5-5 3-1.5M5.5 17.5l4-1.5 3-1.5 3.5-3 3-3"/>', 'Hip and shoulder turn', 'Charts how far the hips and shoulders turn toward the pitcher, plus head drift.')}
-      ${item('<circle cx="17" cy="7" r="3.5"/><path d="M14.6 4.6c1 .8 1.6 2 1.6 3.4M3.5 20.5c3-6 6.5-9.5 10-11.5"/>', 'Where the ball went', 'Tracks the ball off the bat to call the result, like a fly ball pulled to left-center.')}
-    </section>`;
-    h += '<p class="small muted" style="margin:0 4px">Swing AI is coming soon to GS Baseball Hub. Watch Announcements for when it’s ready.</p>';
-    return h;
+    return `<button class="card swing-card" data-act="swingOpen"><img src="media/swing-thumb.jpg" alt=""><span><span class="t"><b>Swing AI</b><span class="chip soon">NEW</span></span><span class="d">Analyze a swing from your video, frame by frame.</span></span><span class="fee-go" aria-hidden="true">›</span></button>`;
   }
   function renderIQ() {
     const R = UI.iq;
@@ -2545,6 +2675,12 @@ body.viewer-on { overflow: hidden; }
     document.body.classList.toggle('gated', gated);
     if (gated) { $('#chat-bar').hidden = true; v.innerHTML = renderGate(); renderDock(); return; }
     if (!UI.ready) { v.innerHTML = `<div class="loading"><img src="${LOGO}" alt=""><div>Loading your team…</div></div>`; return; }
+    if (UI.tab === 'swing') {
+      try { renderSwingPage(v); } catch (err) { console.error(err); }
+      try { renderDock(); } catch (err) { console.error(err); }
+      return;
+    }
+    if (SwingUI.mounted) swingLeave();
     let h = '';
     try {
       if (UI.tab === 'games') h = renderGames();
@@ -2554,7 +2690,6 @@ body.viewer-on { overflow: hidden; }
       else if (UI.tab === 'chat') h = renderChat();
       else if (UI.tab === 'news') h = renderNews();
       else if (UI.tab === 'iq') h = renderIQ();
-      else if (UI.tab === 'swing') h = renderSwing();
       else h = renderTeam();
     } catch (err) {
       console.error(err);
@@ -3061,6 +3196,25 @@ body.viewer-on { overflow: hidden; }
         H.pas.push(...importedPas(sp1, !sp.v, date));
       }
     }
+    // Balls in play from Swing AI: analyzed clips and scouted game video.
+    for (const sw of Swings.list) {
+      if (!sw.opp || !swingLoc(sw)) continue;
+      const R = Data.opponents[sw.opp];
+      const name = String((R && R.name) || sw.oppName || 'Opponent').trim();
+      const k = oppKey(name);
+      const date = todayISO(new Date(Number(sw.createdAt) || Date.now()));
+      let O = [...opps.values()].find((x) => oppKey(x.name) === k);
+      if (!O) { O = { key: name.toLowerCase(), name, hitters: new Map(), games: 0, last: date }; opps.set(O.key, O); }
+      if (date > O.last) O.last = date;
+      const num = String((sw.hitter && sw.hitter.number) || '').trim(), nm = String((sw.hitter && sw.hitter.name) || '').trim();
+      const hk = num ? '#' + num : nm.toLowerCase();
+      if (!hk) continue;
+      if (!O.hitters.has(hk)) O.hitters.set(hk, { key: hk, num, name: nm, bats: sw.bats || '', pas: [], slot: 99 });
+      const H = O.hitters.get(hk);
+      if (!H.name && nm) H.name = nm;
+      if (!H.bats && sw.bats) H.bats = sw.bats;
+      H.pas.push(swingPa(sw, date));
+    }
     return opps;
   }
   // One imported hitter's dots as balls in play (imp) that sit beside the ones from scored games.
@@ -3092,6 +3246,7 @@ body.viewer-on { overflow: hidden; }
       const date = todayISO(new Date(sp.at || Date.now()));
       for (const x of sp.players) if (x && x.id) get(x.id, x.name).pas.push(...importedPas(x, !sp.v, date));
     }
+    for (const sw of Swings.list) if (sw.pid && swingLoc(sw)) get(sw.pid, sw.hitter && sw.hitter.name).pas.push(swingPa(sw, todayISO(new Date(Number(sw.createdAt) || Date.now()))));
     return by;
   }
   // The nine spots an imported chart can put a ball, in this app's field coordinates (home at 50,76).
@@ -3115,7 +3270,7 @@ body.viewer-on { overflow: hidden; }
     const out = [], groups = {};
     for (const p of pas) {
       if (p.imp) (groups[p.zone] = groups[p.zone] || []).push(p);
-      else if (p.loc) out.push({ loc: p.loc, r: p.r });
+      else if (p.loc) out.push(p.sw ? { loc: p.loc, sw: 1, res: p.res, title: p.title } : { loc: p.loc, r: p.r });
     }
     for (const z in groups) {
       const g = groups[z].slice().sort((a, b) => 'GLFP'.indexOf(a.bt) - 'GLFP'.indexOf(b.bt) || 'eoh'.indexOf(a.res) - 'eoh'.indexOf(b.res));
@@ -4106,6 +4261,7 @@ body.viewer-on { overflow: hidden; }
   function confirmSheet(title, text, yes, fn, danger) { openSheet({ type: 'confirm', title, text, yes, fn, danger }); }
   const A = {
     tab(d) {
+      if (UI.tab === 'swing' && d.tab !== 'swing' && SwingUI.mod && SwingUI.mounted && SwingUI.mod.busy()) { toast('Swing AI is still working. Tap Stop first, or wait for it to finish.'); return; }
       UI.tab = d.tab;
       UI.feeId = null;
       if (d.tab === 'games') UI.gameId = null;
@@ -4638,7 +4794,10 @@ body.viewer-on { overflow: hidden; }
     },
     muteShow(d) { Chat.show.add(d.uid); render(); },
     swingOpen() { UI.swingFrom = UI.tab === 'iq' ? 'iq' : 'stats'; UI.tab = 'swing'; render(); window.scrollTo(0, 0); },
-    swingBack() { UI.tab = UI.swingFrom || 'stats'; render(); window.scrollTo(0, 0); },
+    swingBack() {
+      if (SwingUI.mod && SwingUI.mounted && SwingUI.mod.busy()) { toast('Swing AI is still working. Tap Stop first, or wait for it to finish.'); return; }
+      UI.tab = UI.swingFrom || 'stats'; render(); window.scrollTo(0, 0);
+    },
     talk(d) {
       if (d.v === 'news') News.mark = newsSeen();
       UI.tab = d.v === 'news' ? 'news' : 'chat';

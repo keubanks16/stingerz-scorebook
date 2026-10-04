@@ -53,9 +53,18 @@ Long charts are read one piece at a time, so a big team reads as well as a small
 
 Imported balls add to scouting; they never replace the games you score. The spray chart, direction split, contact mix (grounders, liners, pop ups) and the tips use both. The batting line (hits, walks, strikeouts) and outfield distances still come only from games you score, because spray charts don't include them. Importing again replaces the earlier import for the same hitters. Imported balls never change batting stats. To remove an opponent's import, open their roster and tap **Remove** in the Spray chart box; for your team, tap **Remove** under the Stats tab's spray chart.
 
-## Swing AI (coming soon)
+## Swing AI
 
-A preview page for the swing analyzer: the swing breakdown clip (`media/swing-breakdown.gif`), three numbers from that swing, and what the analyzer will show. Open it from the **Swing AI** card at the top of the **Stats** tab or on the **Instincts** tab, or go straight to `scorebook.stingerz-baseball.com/#swing`. To swap the clip, replace `media/swing-breakdown.gif` (and `media/swing-thumb.jpg` for the card picture).
+Open **Swing AI** from the card at the top of the **Stats** tab or on the **Instincts** tab (or go to `#swing`). Everything is tracked on the phone with a pose-tracking AI (MoveNet on TensorFlow.js). Videos never leave the phone; only the numbers, a snapshot and the body keypoints are saved.
+
+- **Analyze:** pick the batter and a clip, tap the batter on a frame before the pitch, and tap **Analyze swing**. You get the swing's timeline against contact (leg lift, foot down, hips and shoulders opening), timing, hips vs shoulders, head drift, stride, a hip and shoulder turn chart, and the ball off the bat. A skeleton is drawn over the video, and **Replay the swing** plays it in slow motion. Then tap where the ball went and **Save**.
+- **The call:** before you tag the result, Swing AI predicts where the ball is going from that hitter's saved swings. The **Hitters** tab tracks how often it's right.
+- **Hitters:** every saved swing by player, with averages, the call for their next ball, where to play them, and a stick-figure replay of each saved swing.
+- **Scout a game (coaches):** pick a whole game video, tap the four bases, pick whose hitters, and start. It finds every ball in play, measures each swing and places the ball. Check the list, fix names or spots, and **Save to the spray charts**. The balls show on the Scout tab (opponents) or the Stats tab (your team). Scoreboard names are read by your Worker's AI when it's set up, otherwise by on-phone text reading (Tesseract).
+- **Who sees what:** coaches can analyze anyone and see every swing. A family can analyze and see only the player linked to their account (Team, Families & coaches).
+- The first time, the phone downloads the AI (about 13 MB, then kept for offline use). It needs a recent Safari or Chrome.
+
+Needs the latest `firestore.rules` published. The engine files in `swing/` come from GS Baseball Scout; `swing/app.js` is the Hub's Swing AI page.
 
 ## Baseball Instincts
 

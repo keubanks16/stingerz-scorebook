@@ -43,15 +43,31 @@ async function page(request) {
   if (saved) { net.catch(() => {}); return saved; }
   return net;
 }
-// Firebase code is versioned, so the saved copy never goes stale.
+// Firebase code, the pose model and TensorFlow.js are versioned, so the saved copy never goes
+// stale. (TensorFlow.js comes from a CDN as a plain script, which the browser can't read; it is
+// saved as is.)
 async function savedFirst(request) {
   const cache = await caches.open(CACHE);
   const saved = await cache.match(request);
   if (saved) return saved;
   const r = await fetch(request);
-  if (r && r.ok) cache.put(request, r.clone());
+  if (r && (r.ok || r.type === 'opaque')) cache.put(request, r.clone());
   return r;
 }
+// Swing AI code: the newest copy when there's signal, the saved one when there isn't.
+async function netFirst(request) {
+  const cache = await caches.open(CACHE);
+  try {
+    const r = await fetch(request);
+    if (r && r.ok) cache.put(request, r.clone());
+    return r;
+  } catch (e) {
+    const saved = await cache.match(request);
+    if (saved) return saved;
+    throw e;
+  }
+}
+const TF_URL = /^https:\/\/(cdnjs\.cloudflare\.com\/ajax\/libs\/tensorflow\/|cdn\.jsdelivr\.net\/npm\/@tensorflow\/tfjs@|unpkg\.com\/@tensorflow\/tfjs@)/;
 // Icons, pictures and the app manifest: answer from the saved copy, refresh it in the background.
 async function savedThenRefresh(request) {
   const cache = await caches.open(CACHE);
@@ -65,7 +81,9 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (req.mode === 'navigate' && url.origin === self.location.origin) { event.respondWith(page(req)); return; }
-  if (url.href.startsWith(FB)) { event.respondWith(savedFirst(req)); return; }
+  if (url.href.startsWith(FB) || TF_URL.test(url.href)) { event.respondWith(savedFirst(req)); return; }
+  if (url.origin === self.location.origin && url.pathname.includes('/swing/model/')) { event.respondWith(savedFirst(req)); return; }
+  if (url.origin === self.location.origin && url.pathname.includes('/swing/') && url.pathname.endsWith('.js')) { event.respondWith(netFirst(req)); return; }
   if (url.origin === self.location.origin && /\.(png|jpg|gif|webmanifest|svg|ico)$/.test(url.pathname)) { event.respondWith(savedThenRefresh(req)); return; }
   // Everything else (the database, sign-in, the Worker, video) goes straight to the network.
 });

@@ -166,6 +166,36 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Swing AI. swings/{id} is one analyzed swing or scouted ball in play; swingMedia/{id} holds
+    // its snapshot and keypoints. pid = one of our players, opp = an opponent roster key.
+    // Coaches see and manage everything. A family sees their linked players' swings and can
+    // save, change or delete the ones they added for their own player (never opponents).
+    function swingFamily(d) { return d.pid is string && d.pid != '' && d.pid in myPlayers(); }
+    function swingShape(d) {
+      return d.pid is string && d.opp is string && d.by is string
+        && d.pid.size() <= 64 && d.opp.size() <= 70 && (d.pid == '' || d.opp == '');
+    }
+    match /swings/{id} {
+      allow read: if isAdmin() || swingFamily(resource.data);
+      allow create: if signedIn() && request.resource.data.by == request.auth.uid
+        && swingShape(request.resource.data)
+        && request.resource.data.keys().hasOnly(['pid', 'opp', 'oppName', 'hitterKey', 'hitter', 'bats', 'outcome', 'swing', 'features', 'ball', 'prediction', 'auto', 'source', 'game', 'count', 'inning', 'clip', 'needsReview', 'by', 'createdAt', 'updatedAt'])
+        && (isAdmin() || (swingFamily(request.resource.data) && request.resource.data.opp == ''));
+      allow update: if swingShape(request.resource.data)
+        && request.resource.data.by == resource.data.by
+        && request.resource.data.pid == resource.data.pid && request.resource.data.opp == resource.data.opp
+        && (isAdmin() || (resource.data.by == request.auth.uid && swingFamily(resource.data)));
+      allow delete: if isAdmin() || (resource.data.by == request.auth.uid && swingFamily(resource.data));
+    }
+    match /swingMedia/{id} {
+      allow read: if isAdmin() || swingFamily(resource.data);
+      allow create: if signedIn() && request.resource.data.by == request.auth.uid
+        && swingShape(request.resource.data)
+        && request.resource.data.keys().hasOnly(['pid', 'opp', 'by', 'thumb', 'series', 'track', 'frames', 'events'])
+        && (isAdmin() || (swingFamily(request.resource.data) && request.resource.data.opp == ''));
+      allow delete: if isAdmin() || (resource.data.by == request.auth.uid && swingFamily(resource.data));
+    }
+
     // Each person's own chat settings: who they muted (a map of uid -> name). Private to them;
     // the Worker reads it with the service account to skip notifications from muted people.
     match /prefs/{uid} {
