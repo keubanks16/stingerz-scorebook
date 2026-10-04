@@ -4,22 +4,23 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 
 ## Who can do what
 
-| | Coaches (admins) | Camera operators | Families |
-|---|---|---|---|
-| Score games, edit rosters, scan rosters | Yes | No | No |
-| Import a spray chart (your team or an opponent) | Yes | No | No |
-| Follow games live, box scores, stats, scouting | Yes | Yes | Yes |
-| Watch the live video with the scoreboard on top | Yes | Yes | Yes |
-| Stream from the built-in camera, upload game video | Yes | Yes | No |
-| Team chat (read and post) | Yes | Yes | Yes |
-| Pay their own player's tournament fees | Yes | Yes | Yes (once linked to their player) |
-| See the fee list and who has paid | Owner, plus anyone the owner turns on | Only if turned on | Only if turned on |
-| Send photos in the team chat | Yes | Yes | Yes |
-| Delete anyone's chat message | Yes | No | No |
-| Approve families, add coaches and camera operators, change who can watch | Yes | No | No |
+| | Coaches (admins) | Scorekeepers | Camera operators | Families |
+|---|---|---|---|---|
+| Create and score games, set lineups, finish and reopen games | Yes | Yes | No | No |
+| Edit your roster and team settings, delete games, scan rosters | Yes | No | No | No |
+| Import a spray chart (your team or an opponent) | Yes | No | No | No |
+| Follow games live, box scores, stats, scouting | Yes | Yes | Yes | Yes |
+| Watch the live video with the scoreboard on top | Yes | Yes | Yes | Yes |
+| Stream from the built-in camera, upload game video | Yes | No | Yes | No |
+| Team chat (read and post) | Yes | Yes | Yes | Yes |
+| Pay their own player's tournament fees | Yes | Yes (once linked to their player) | Yes | Yes (once linked to their player) |
+| See the fee list and who has paid | Owner, plus anyone the owner turns on | Only if turned on | Only if turned on | Only if turned on |
+| Send photos in the team chat | Yes | Yes | Yes | Yes |
+| Delete anyone's chat message | Yes | No | No | No |
+| Approve families, add coaches and camera operators, change who can watch | Yes | No | No | No |
 
 - The **owner** is the first account created on the site. The owner is always an admin.
-- New people tap **Request access**. A coach approves them on **Team → Families & coaches**, then taps their name to make them a coach or a **camera operator** if needed.
+- New people tap **Request access**. A coach approves them on **Team → Families & coaches**, then taps their name to make them a coach, a **scorekeeper** or a **camera operator** if needed. A scorekeeper keeps score (new games, lineups, every pitch) and can do everything a family can, but can't change the roster, team settings or members, or delete games. Link a scorekeeper to their own player the same way as a family.
 - **Who can watch** (same screen): **Approved families**, where parents create an account and a coach approves it, or **Anyone with the link**, with no sign-in needed to watch.
 - The database itself enforces these rules (`firestore.rules`). Hiding buttons isn't the only protection. After updating `firestore.rules` here, paste it into Firebase again and **Publish**.
 

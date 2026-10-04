@@ -1235,10 +1235,11 @@ body.viewer-on { overflow: hidden; }
     X.isApproved = !!(uid && X.member && X.member.status === 'approved');
     X.isAdmin = X.isOwner || (X.isApproved && X.member.role === 'admin');
     X.isCamera = X.isApproved && !X.isAdmin && X.member.role === 'camera';
+    X.isScorer = X.isApproved && !X.isAdmin && X.member.role === 'scorer';
     X.canView = X.publicView || X.isApproved || X.isAdmin;
     X.evaluated = true;
-    UI.readOnly = !X.isAdmin;
-    UI.canWrite = X.isAdmin;
+    UI.readOnly = !(X.isAdmin || X.isScorer);
+    UI.canWrite = X.isAdmin || X.isScorer;
     if (X.canView && !DataSubs) {
       Data.loaded = { team: false, games: false, opps: false };
       UI.ready = false;
@@ -1377,7 +1378,7 @@ body.viewer-on { overflow: hidden; }
     const X = Access;
     let h = '<h2 class="sec">Account</h2><section class="card stack" style="padding:14px">';
     if (X.user) {
-      const role = X.isOwner ? 'Admin (team owner)' : X.isAdmin ? 'Coach (admin)' : X.isCamera ? 'Camera operator (streams games)' : X.isApproved ? 'Family (view only)' : 'Waiting for approval';
+      const role = X.isOwner ? 'Admin (team owner)' : X.isAdmin ? 'Coach (admin)' : X.isCamera ? 'Camera operator (streams games)' : X.isScorer ? 'Scorekeeper (scores games)' : X.isApproved ? 'Family (view only)' : 'Waiting for approval';
       h += `<div class="row"><div class="grow"><b>${esc((X.member && X.member.name) || X.user.displayName || X.user.email)}</b><div class="small muted">${esc(X.user.email || '')} · ${esc(role)}</div></div><button class="btn sm" data-act="signOut">Sign out</button></div>`;
       if (chatAllowed()) {
         const muted = mutedList();
@@ -1397,7 +1398,7 @@ body.viewer-on { overflow: hidden; }
       <div><span class="field-lbl">Who can watch games</span>${segB('setWatch', X.publicView ? 'public' : 'approved', [['approved', 'Approved families'], ['public', 'Anyone with the link']])}</div>
       <p class="small muted" style="margin:0">${X.publicView ? 'Anyone who opens the address can follow games and stats without signing in. Only coaches can change anything.' : 'Parents create an account and wait for a coach to approve it. Only approved families see games and stats.'}</p></section>`;
     if (pending.length) h += `<h2 class="sec">Waiting for approval (${pending.length})</h2><div class="card roster">${pending.map((m) => `<div class="player" style="cursor:default"><span class="no" style="font-size:14px">NEW</span><span style="min-width:0"><span class="nm">${esc(memberLabel(m))}</span><span class="meta">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}</span></span><span class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm primary" data-act="memberSet" data-uid="${esc(m.uid)}" data-status="approved">Approve</button><button class="btn sm" data-act="memberSet" data-uid="${esc(m.uid)}" data-status="denied">Deny</button></span></div>`).join('')}</div>`;
-    if (others.length) h += `<div class="card roster">${others.map((m) => { const own = m.uid === X.owner; const chip = own ? 'Owner' : m.status === 'denied' ? 'Declined' : m.role === 'admin' ? 'Coach' : m.role === 'camera' ? 'Camera' : 'Family'; return `<button class="player" data-act="member" data-uid="${esc(m.uid)}"><span class="no" style="font-size:14px">${{ Family: 'FAM', Declined: '—', Camera: 'CAM' }[chip] || 'CO'}</span><span style="min-width:0"><span class="nm">${esc(memberLabel(m))}</span><span class="meta">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}</span></span><span class="chip">${chip}</span></button>`; }).join('')}</div>`;
+    if (others.length) h += `<div class="card roster">${others.map((m) => { const own = m.uid === X.owner; const chip = own ? 'Owner' : m.status === 'denied' ? 'Declined' : m.role === 'admin' ? 'Coach' : m.role === 'camera' ? 'Camera' : m.role === 'scorer' ? 'Scorer' : 'Family'; return `<button class="player" data-act="member" data-uid="${esc(m.uid)}"><span class="no" style="font-size:14px">${{ Family: 'FAM', Declined: '—', Camera: 'CAM', Scorer: 'SCR' }[chip] || 'CO'}</span><span style="min-width:0"><span class="nm">${esc(memberLabel(m))}</span><span class="meta">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}</span></span><span class="chip">${chip}</span></button>`; }).join('')}</div>`;
     return h;
   }
 
@@ -2237,7 +2238,7 @@ body.viewer-on { overflow: hidden; }
       // Writes the server will never take shouldn't come back on the next open.
       if (['permission_denied', 'invalid_argument', 'revoked', 'quota_exceeded'].includes(code)) Unsynced.drop(path);
       if (code === 'permission_denied') {
-        if (Access.isAdmin) toast('The database refused the save. Check that the security rules are published in Firebase.');
+        if (Access.isAdmin || Access.isScorer) toast('The database refused the save. Check that the security rules are published in Firebase.');
         else { UI.readOnly = true; toast('Only coaches can make changes.'); render(); }
       } else if (code === 'invalid_argument' && UI.canWrite !== true) {
         UI.readOnly = true;
@@ -2327,6 +2328,9 @@ body.viewer-on { overflow: hidden; }
     return live.length ? live[live.length - 1] : null;
   }
   const canEdit = () => !UI.readOnly;
+  // Coach-only changes (roster, team settings, connections, deleting games). Scorekeepers can
+  // score games but not these.
+  const canManage = () => canEdit() && (Backend.kind !== 'fb' || Access.isAdmin);
   const hasSample = () => Data.team.players.some((p) => p.sample) || Object.values(Data.games).some((g) => g.sample);
   const innLabel = (s) => (s.half === 0 ? 'Top ' : 'Bottom ') + ORDN(s.inning);
 
@@ -2706,7 +2710,7 @@ body.viewer-on { overflow: hidden; }
   }
 
   function sampleBanner() {
-    if (!hasSample() || !canEdit()) return '';
+    if (!hasSample() || !canManage()) return '';
     return `<div class="banner"><span class="grow">You're looking at <b>sample games and players</b> so you can see how everything works. Clear them when you're ready to add your own team.</span><button class="btn sm" data-act="clearSample">Clear sample data</button></div>`;
   }
 
@@ -2835,7 +2839,8 @@ body.viewer-on { overflow: hidden; }
       if (g.status === 'scheduled') a.push(`<button class="btn primary" data-act="lineup" data-id="${g.id}" data-start="1">Set lineup &amp; start</button>`);
       if (g.status === 'live') a.push(`<button class="btn primary" data-act="resume" data-id="${g.id}">Resume scoring</button>`, `<button class="btn" data-act="lineup" data-id="${g.id}">Lineups</button>`, `<button class="btn" data-act="finish" data-id="${g.id}">Finish game</button>`);
       if (g.status === 'final') a.push(`<button class="btn" data-act="reopen" data-id="${g.id}">Reopen scoring</button>`, `<button class="btn" data-act="lineup" data-id="${g.id}">Lineups</button>`);
-      a.push(`<button class="btn" data-act="editGame" data-id="${g.id}">Edit details</button>`, `<button class="btn danger" data-act="deleteGame" data-id="${g.id}">Delete</button>`);
+      a.push(`<button class="btn" data-act="editGame" data-id="${g.id}">Edit details</button>`);
+      if (canManage()) a.push(`<button class="btn danger" data-act="deleteGame" data-id="${g.id}">Delete</button>`);
       h += `<div class="row">${a.join('')}</div>`;
     }
     if (g.status === 'scheduled' && !g.events.length) {
@@ -3118,7 +3123,7 @@ body.viewer-on { overflow: hidden; }
   function teamSprayHTML() {
     const by = teamSpray();
     const list = [...by.values()].filter((x) => x.pas.length).sort((a, b) => b.pas.length - a.pas.length || (parseInt(a.num, 10) || 999) - (parseInt(b.num, 10) || 999));
-    const canImport = canEdit() && !!Caps.sample;
+    const canImport = canManage() && !!Caps.sample;
     const headBtn = canImport ? ' <button class="btn ghost sm" data-act="sprayOpen" data-who="us">+ Spray chart</button>' : '';
     if (!list.length) {
       return canImport ? `<h2 class="sec" id="team-spray">Spray charts${headBtn}</h2><div class="card empty" style="padding:20px"><p>Spray charts fill in from every ball in play you chart. Have a spray chart for your team from another app? Import it.</p><button class="btn primary" data-act="sprayOpen" data-who="us">${CAMERA}<span>Import a spray chart</span></button></div>` : '';
@@ -3297,7 +3302,7 @@ body.viewer-on { overflow: hidden; }
   }
   function renderScout() {
     const opps = scoutData();
-    const canImport = canEdit() && !!Caps.sample;
+    const canImport = canManage() && !!Caps.sample;
     if (!opps.size) return `<div class="card empty"><img src="${LOGO}" alt=""><h3>Scouting fills in as you score</h3><p>Every ball in play you chart for an opponent hitter lands here, with spray charts, tendencies and where to position your defense.${canImport ? ' Have a spray chart from another app? Import it to start.' : ''}</p>${canImport ? `<button class="btn primary" data-act="sprayOpen">${CAMERA}<span>Import a spray chart</span></button>` : ''}</div>`;
     const list = [...opps.values()].sort((a, b) => b.last.localeCompare(a.last));
     if (!UI.scoutOpp || !opps.has(UI.scoutOpp)) { UI.scoutOpp = list[0].key; UI.scoutKey = '*'; }
@@ -3353,23 +3358,23 @@ body.viewer-on { overflow: hidden; }
     if (UI.feeId && Fees.list[UI.feeId] && feeAccess()) return feeDetailHTML(Fees.list[UI.feeId]);
     UI.feeId = null;
     let h = sampleBanner() + yourFeesHTML();
-    h += `<section class="card brand-card"><div class="logo-tile"><img src="${LOGO}" alt="GS logo"></div><div class="stack" style="gap:4px;min-width:0"><h3>${esc(t.name)}</h3><span class="muted small">${t.players.length} player${t.players.length === 1 ? '' : 's'} · ${t.innings}-inning games · ${t.pitchLimit ? t.pitchLimit + '-pitch limit' : 'no pitch limit'}</span>${canEdit() ? '<div><button class="btn sm" data-act="teamEdit">Edit team settings</button></div>' : ''}</div></section>`;
+    h += `<section class="card brand-card"><div class="logo-tile"><img src="${LOGO}" alt="GS logo"></div><div class="stack" style="gap:4px;min-width:0"><h3>${esc(t.name)}</h3><span class="muted small">${t.players.length} player${t.players.length === 1 ? '' : 's'} · ${t.innings}-inning games · ${t.pitchLimit ? t.pitchLimit + '-pitch limit' : 'no pitch limit'}</span>${canManage() ? '<div><button class="btn sm" data-act="teamEdit">Edit team settings</button></div>' : ''}</div></section>`;
     h += feesHTML();
-    h += `<h2 class="sec">Roster ${canEdit() ? '<button class="btn ghost sm" data-act="player">+ Add player</button>' : ''}</h2>`;
-    if (!t.players.length) h += `<div class="card empty"><h3>Add your players</h3><p>Numbers, positions, and which side they hit from. Lineups and stats use this roster.</p>${canEdit() ? '<button class="btn primary" data-act="player">+ Add player</button>' : ''}</div>`;
-    else h += `<div class="card roster">${sortedRoster().map((p) => `<button class="player" data-act="${canEdit() ? 'player' : 'playerCard'}" data-id="${esc(p.id)}"><span class="no">${esc(p.num || '–')}</span><span style="min-width:0"><span class="nm">${esc(p.name)}</span> ${p.sample ? '<span class="chip sample">Sample</span>' : ''}<span class="meta">${esc(p.pos || 'Position not set')} · B/T ${esc(p.bats || '?')}/${esc(p.throws || '?')}</span></span><span class="meta">${canEdit() ? 'Edit' : ''}</span></button>`).join('')}</div>`;
-    if (canEdit()) {
+    h += `<h2 class="sec">Roster ${canManage() ? '<button class="btn ghost sm" data-act="player">+ Add player</button>' : ''}</h2>`;
+    if (!t.players.length) h += `<div class="card empty"><h3>Add your players</h3><p>Numbers, positions, and which side they hit from. Lineups and stats use this roster.</p>${canManage() ? '<button class="btn primary" data-act="player">+ Add player</button>' : ''}</div>`;
+    else h += `<div class="card roster">${sortedRoster().map((p) => `<button class="player" data-act="${canManage() ? 'player' : 'playerCard'}" data-id="${esc(p.id)}"><span class="no">${esc(p.num || '–')}</span><span style="min-width:0"><span class="nm">${esc(p.name)}</span> ${p.sample ? '<span class="chip sample">Sample</span>' : ''}<span class="meta">${esc(p.pos || 'Position not set')} · B/T ${esc(p.bats || '?')}/${esc(p.throws || '?')}</span></span><span class="meta">${canManage() ? 'Edit' : ''}</span></button>`).join('')}</div>`;
+    if (canManage()) {
       const rs = Object.entries(Data.opponents).sort((a, b) => a[1].name.localeCompare(b[1].name));
       h += `<h2 class="sec">Opponent rosters <button class="btn ghost sm" data-act="roster">+ Add roster</button></h2>`;
       if (!rs.length) h += `<div class="card empty" style="padding:20px"><p>${Caps.sample ? 'Take a photo or screenshot of another team\'s roster and GS Baseball reads the names and numbers into it.' : 'Save each opponent\'s roster so lineups and scouting show names, not just numbers.'}</p><button class="btn primary" data-act="roster">+ Add roster</button></div>`;
       else h += `<div class="card roster">${rs.map(([k, r]) => `<button class="player" data-act="roster" data-key="${esc(k)}"><span class="no" style="font-size:16px">${esc((r.name || '?').slice(0, 3).toUpperCase())}</span><span style="min-width:0"><span class="nm">${esc(r.name)}</span><span class="meta">${r.players.length} player${r.players.length === 1 ? '' : 's'}${r.spray && r.spray.players && r.spray.players.length ? ' · spray chart' : ''}${r.updatedAt ? ' · updated ' + esc(new Date(r.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) : ''}</span></span><span class="meta">Edit</span></button>`).join('')}</div>`;
     }
     h += accountHTML() + familiesHTML();
-    if (canEdit()) {
+    if (canManage()) {
       const vid = videoEmbed(Data.team.video);
       h += `<h2 class="sec">Live video</h2><section class="card stack" style="padding:14px"><p style="margin:0">${!Data.team.video ? 'Not set up. Add your YouTube channel and every live game shows the stream with the scoreboard on top.' : vid && vid.channel ? 'Your YouTube channel is connected. Whatever you stream publicly shows up on the Live tab during games.' : 'A video link is set for the team.'}</p><div><button class="btn${Data.team.video ? '' : ' primary'}" data-act="videoSetup">${Data.team.video ? 'Change video link' : 'Set up live video'}</button></div></section>`;
     }
-    if (UI.standalone && canEdit()) {
+    if (UI.standalone && canManage()) {
       const c = loadAiCfg();
       const shared = Backend.kind === 'fb';
       h += `<h2 class="sec">Cloudflare Worker</h2><section class="card stack" style="padding:14px"><p style="margin:0">${c ? (shared ? 'Connected for every coach and camera operator. Roster photo scanning, scouting reports and live video are on.' : 'Connected on this phone. Roster photo scanning, scouting reports and live video are on.') : 'Not set up. Connect your Worker to scan roster photos, get scouting reports and stream games.'}</p><div><button class="btn${c ? '' : ' primary'}" data-act="aiSetup">${c ? 'Change connection' : 'Set up'}</button></div></section>`;
@@ -3384,7 +3389,7 @@ body.viewer-on { overflow: hidden; }
     if (Backend.kind === 'db') h += `<p style="margin:0">Games and the roster are saved with this page, so they sync across your devices. Share the page and families can follow games live as you score.</p>`;
     else if (Backend.kind === 'fb') h += `<p style="margin:0">Games, rosters and stats are saved to your team's online database and sync to every coach's phone. Families see each pitch live. Export a backup now and then for your own records.</p>`;
     else h += `<p style="margin:0">Games and the roster are saved in this browser on this device. Export a backup now and then so nothing is lost if the browser data is cleared.</p>`;
-    h += `<div class="row"><button class="btn" data-act="export">Export backup</button>${canEdit() ? '<button class="btn" data-act="importPick">Import backup</button><input type="file" id="import-file" accept="application/json,.json" hidden>' : ''}</div></section>`;
+    h += `<div class="row"><button class="btn" data-act="export">Export backup</button>${canManage() ? '<button class="btn" data-act="importPick">Import backup</button><input type="file" id="import-file" accept="application/json,.json" hidden>' : ''}</div></section>`;
     return h;
   }
 
@@ -3444,7 +3449,7 @@ body.viewer-on { overflow: hidden; }
       const list = Access.members.filter((m) => m.status === 'approved' && m.uid !== Access.owner).sort((a, b) => (a.role === b.role ? memberLabel(a).localeCompare(memberLabel(b)) : a.role === 'admin' ? -1 : 1));
       return head('Who can see fees') + `<p class="small muted" style="margin:0">Only the people turned on here see the fee list and who has paid. Families who are off still see their own player’s fees so they can pay.</p>
         <div class="card" style="padding:4px 14px;box-shadow:none"><div class="who"><span class="nm"><b>You</b><span>Owner · always</span></span><span class="tg on lock" aria-hidden="true"><i></i></span></div>
-        ${list.map((m) => `<button class="who" data-act="feeWhoToggle" data-uid="${esc(m.uid)}" aria-pressed="${m.fees === true}"><span class="nm"><b>${esc(memberLabel(m))}</b><span>${m.role === 'admin' ? 'Coach' : m.role === 'camera' ? 'Camera operator' : 'Family'}</span></span><span class="tg${m.fees === true ? ' on' : ''}" aria-hidden="true"><i></i></span></button>`).join('')}</div>
+        ${list.map((m) => `<button class="who" data-act="feeWhoToggle" data-uid="${esc(m.uid)}" aria-pressed="${m.fees === true}"><span class="nm"><b>${esc(memberLabel(m))}</b><span>${m.role === 'admin' ? 'Coach' : m.role === 'camera' ? 'Camera operator' : m.role === 'scorer' ? 'Scorekeeper' : 'Family'}</span></span><span class="tg${m.fees === true ? ' on' : ''}" aria-hidden="true"><i></i></span></button>`).join('')}</div>
         ${list.length ? '' : '<p class="small muted" style="margin:0">Approved coaches and families show up here.</p>'}
         <div class="row"><button class="btn" data-act="close">Done</button></div>`;
     },
@@ -3678,6 +3683,7 @@ body.viewer-on { overflow: hidden; }
       else {
         if (m.status !== 'approved') acts += `<button class="btn primary" data-act="memberSet" data-uid="${esc(m.uid)}" data-status="approved">Approve as family</button>`;
         if (m.role !== 'admin' || m.status !== 'approved') acts += `<button class="btn" data-act="memberRole" data-uid="${esc(m.uid)}" data-role="admin">Make a coach (admin)</button>`;
+        if (m.role !== 'scorer' || m.status !== 'approved') acts += `<button class="btn" data-act="memberRole" data-uid="${esc(m.uid)}" data-role="scorer">Make a scorekeeper (scores games, plus everything a family can do)</button>`;
         if (m.role !== 'camera' || m.status !== 'approved') acts += `<button class="btn" data-act="memberRole" data-uid="${esc(m.uid)}" data-role="camera">Make a camera operator (streams games, can\u2019t score)</button>`;
         if (m.role !== 'parent' && m.status === 'approved' && !me) acts += `<button class="btn" data-act="memberRole" data-uid="${esc(m.uid)}" data-role="parent">Change to family (view only)</button>`;
         if (!me) acts += `<button class="btn danger" data-act="memberRemove" data-uid="${esc(m.uid)}">Remove access</button>`;
@@ -3752,7 +3758,7 @@ body.viewer-on { overflow: hidden; }
 
   const CAMERA = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2.5h7L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg>';
   function scanBlock(sh, label) {
-    if (!Caps.sample || !canEdit()) return '';
+    if (!Caps.sample || !canManage()) return '';
     const sc = sh.scan || {};
     if (sc.busy) return `<div class="scan"><span class="spin" aria-hidden="true"></span><span class="grow">Reading the roster. This can take up to a minute.</span><button class="btn sm" data-act="scanStop">Stop</button></div>`;
     return `<div class="stack" style="gap:6px"><label class="btn ${label === 'secondary' ? '' : 'primary'} scan-btn">${CAMERA}<span>Scan a roster photo</span><input class="vh" type="file" accept="image/*" multiple data-scan="1"></label>
@@ -4437,6 +4443,7 @@ body.viewer-on { overflow: hidden; }
       if (d.then === 'lineup') A.lineup({ id: g.id, start: '1' });
     },
     deleteGame(d) {
+      if (!canManage()) return;
       const g = Data.games[d.id];
       confirmSheet('Delete this game?', `${g.home ? 'vs' : '@'} ${g.opponent} on ${longDate(g.date)} and every pitch recorded in it will be removed.`, 'Delete game', () => { removeGame(d.id); UI.gameId = null; render(); toast('Game deleted'); }, true);
     },
@@ -4906,7 +4913,7 @@ body.viewer-on { overflow: hidden; }
       if (UI.sheet && UI.sheet.type === 'member') closeSheet();
     },
     async memberRole(d) {
-      try { await FB.F.updateDoc(FB.F.doc(FB.fs, 'members', d.uid), { role: d.role, status: 'approved' }); toast(d.role === 'admin' ? 'Now a coach with admin rights' : d.role === 'camera' ? 'Now a camera operator' : 'Now a family account'); }
+      try { await FB.F.updateDoc(FB.F.doc(FB.fs, 'members', d.uid), { role: d.role, status: 'approved' }); toast(d.role === 'admin' ? 'Now a coach with admin rights' : d.role === 'camera' ? 'Now a camera operator' : d.role === 'scorer' ? 'Now a scorekeeper' : 'Now a family account'); }
       catch (e) { toast(authErrorText(e)); }
       if (UI.sheet && UI.sheet.type === 'member') closeSheet();
     },
@@ -5701,7 +5708,7 @@ body.viewer-on { overflow: hidden; }
     const m = Unsynced.all();
     const paths = Object.keys(m);
     if (!paths.length) return;
-    if (!Access.isAdmin) { Unsynced.save({}); return; }
+    if (!Access.isAdmin && !Access.isScorer) { Unsynced.save({}); return; }
     let n = 0;
     for (const path of paths) {
       const x = m[path] || {};

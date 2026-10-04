@@ -8,6 +8,9 @@ rules_version = '2';
 //   Coach   members/{uid} with role 'admin' and status 'approved'; can change everything.
 //   Camera  members/{uid} with role 'camera' and status 'approved'; views, streams games,
 //           and can attach a replay link to a game. Can't score or change anything else.
+//   Scorer  members/{uid} with role 'scorer' and status 'approved'; everything a family can do,
+//           plus create and score games and save opponent rosters. Can't delete games or change
+//           the team, its roster, members or settings.
 //   Family  members/{uid} with role 'parent' and status 'approved'; view only.
 // Fees
 //   Only the owner, and anyone the owner turns on (members/{uid}.fees == true), can see the
@@ -32,6 +35,7 @@ service cloud.firestore {
     }
     function isAdmin() { return isOwner() || (isApproved() && myMember().role == 'admin'); }
     function isCamera() { return isApproved() && myMember().role == 'camera'; }
+    function isScorer() { return isApproved() && myMember().role == 'scorer'; }
     function publicView() {
       return exists(docPath('config', 'access')) && get(docPath('config', 'access')).data.publicView == true;
     }
@@ -88,6 +92,7 @@ service cloud.firestore {
     match /games/{id} {
       allow read: if canView();
       allow write: if isAdmin();
+      allow create, update: if isScorer();
       // Camera operators may only attach the replay link.
       allow update: if isCamera()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['video', 'updatedAt']);
@@ -95,6 +100,7 @@ service cloud.firestore {
     match /opponents/{id} {
       allow read: if canView();
       allow write: if isAdmin();
+      allow create, update: if isScorer();
     }
     // Phones that asked for notifications. Each person manages only their own; the Worker reads
     // them with the service account.
