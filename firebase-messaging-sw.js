@@ -52,7 +52,7 @@ async function savedFirst(request) {
   if (r && r.ok) cache.put(request, r.clone());
   return r;
 }
-// Icons and the app manifest: answer from the saved copy, refresh it in the background.
+// Icons, pictures and the app manifest: answer from the saved copy, refresh it in the background.
 async function savedThenRefresh(request) {
   const cache = await caches.open(CACHE);
   const saved = await cache.match(request, { ignoreSearch: true });
@@ -66,7 +66,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (req.mode === 'navigate' && url.origin === self.location.origin) { event.respondWith(page(req)); return; }
   if (url.href.startsWith(FB)) { event.respondWith(savedFirst(req)); return; }
-  if (url.origin === self.location.origin && /\.(png|webmanifest|svg|ico)$/.test(url.pathname)) { event.respondWith(savedThenRefresh(req)); return; }
+  if (url.origin === self.location.origin && /\.(png|jpg|gif|webmanifest|svg|ico)$/.test(url.pathname)) { event.respondWith(savedThenRefresh(req)); return; }
   // Everything else (the database, sign-in, the Worker, video) goes straight to the network.
 });
 

@@ -53,6 +53,10 @@ Long charts are read one piece at a time, so a big team reads as well as a small
 
 Imported balls add to scouting; they never replace the games you score. The spray chart, direction split, contact mix (grounders, liners, pop ups) and the tips use both. The batting line (hits, walks, strikeouts) and outfield distances still come only from games you score, because spray charts don't include them. Importing again replaces the earlier import for the same hitters. Imported balls never change batting stats. To remove an opponent's import, open their roster and tap **Remove** in the Spray chart box; for your team, tap **Remove** under the Stats tab's spray chart.
 
+## Swing AI (coming soon)
+
+A preview page for the swing analyzer: the swing breakdown clip (`media/swing-breakdown.gif`), three numbers from that swing, and what the analyzer will show. Open it from the **Swing AI** card at the top of the **Stats** tab or on the **Instincts** tab, or go straight to `scorebook.stingerz-baseball.com/#swing`. To swap the clip, replace `media/swing-breakdown.gif` (and `media/swing-thumb.jpg` for the card picture).
+
 ## Baseball Instincts
 
 The **Instincts** tab is for the players: game situations they solve on a field diagram that shows the runners, the outs, where the ball is hit and where **YOU** are. They pick what they'd do, then see the play drawn on the field and a short reason why.
