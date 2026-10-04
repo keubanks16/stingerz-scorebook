@@ -26,6 +26,7 @@
   --ink-3: #75829B;
   --line: #D4DBE6;
   --navy: #0B2753;
+  --pick: #0B2753; --pick-ink: #FFFFFF;
   --carolina: #6DA0D6;
   --accent: #245FA8;
   --accent-ink: #FFFFFF;
@@ -64,6 +65,7 @@
     --grass: #2F6B3B; --grass-2: #275A31; --dirt: #9E7452; --chalk: #F2F5FA; --hit: #8FBDF0; --heat: #FF7A4D;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25); --scrim: rgba(0, 4, 14, .6);
     --on-signal: #04122D;
+    --pick: #7FB0E6; --pick-ink: #04122D;
     --c1: #2E5A9E; --c1-ink: #FFFFFF; --c2: #6DA0D6; --c2-ink: #04122D; --c3: #B9D5F2; --c3-ink: #04122D; --c4: #4B5E80; --c4-ink: #FFFFFF;
     color-scheme: dark;
   }
@@ -78,6 +80,7 @@
   --on-signal: #04122D;
   --c1: #2E5A9E; --c1-ink: #FFFFFF; --c2: #6DA0D6; --c2-ink: #04122D; --c3: #B9D5F2; --c3-ink: #04122D; --c4: #4B5E80; --c4-ink: #FFFFFF;
   color-scheme: dark;
+  --pick: #7FB0E6; --pick-ink: #04122D;
 }
 
 * { box-sizing: border-box; }
@@ -234,6 +237,15 @@ table.st tr:last-child td { border-bottom: 0; }
 .play:last-child { border-bottom: 0; }
 .play .tag { font-size: 12px; font-weight: 700; color: var(--ink-3); padding-top: 2px; }
 .play .scr { display: block; margin-top: 2px; font-weight: 700; font-size: 14px; color: var(--accent); }
+.fix-hint { margin: 10px 0 0; }
+.play-fix { width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); grid-template-columns: 38px 1fr 12px; min-height: 44px; }
+.play-fix:last-child { border-bottom: 0; }
+.play-fix:hover { background: var(--surface-2); }
+.play-fix .fix-go { color: var(--ink-3); font-size: 20px; line-height: 1; align-self: center; }
+.sheet .res-grid button[aria-pressed="true"] { background: var(--pick); color: var(--pick-ink); border-color: var(--pick); }
+.fix-was { margin: -6px 0 0; font-size: 14px; color: var(--ink-2); }
+.fix-effect { font-size: 14px; color: var(--ink-2); background: var(--surface-2); border-radius: 8px; padding: 10px 12px; }
+.fix-effect b { color: var(--ink); }
 .inning-head { margin-top: 12px; padding: 6px 0; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; color: var(--ink-3); border-bottom: 2px solid var(--line); }
 .follow-note { display: flex; gap: 10px; align-items: center; font-size: 15px; color: var(--ink-2); }
 
@@ -563,7 +575,7 @@ table.st tr:last-child td { border-bottom: 0; }
 .runner-row .who small { color: var(--ink-3); font-weight: 600; margin-left: 6px; }
 .dest { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
 .dest button { border: 1px solid var(--line); background: var(--surface-2); border-radius: 7px; min-height: 40px; font-weight: 700; font-size: 14px; }
-.dest button[aria-pressed="true"] { background: var(--navy); color: #FFFFFF; border-color: var(--navy); }
+.dest button[aria-pressed="true"] { background: var(--pick); color: var(--pick-ink); border-color: var(--pick); }
 .dest button.out[aria-pressed="true"] { background: var(--bad); border-color: var(--bad); }
 .dest button:disabled { opacity: .3; }
 .warn-text { color: var(--bad); font-size: 14px; font-weight: 600; }
@@ -930,12 +942,15 @@ body.viewer-on { overflow: hidden; }
     const pref = currentPitcher(s);
     const ps = touchPitcher(s, fieldSide(s), pref);
     const bs = touchBatter(s, side, ref);
-    const adv = ev.adv || defaultAdv(ev.r, s.bases);
+    // A saved play lists where each runner went. Anyone on base it doesn't mention (possible once an
+    // earlier play has been fixed) moves the usual way for the result.
+    const adv = ev.adv ? Object.assign(defaultAdv(ev.r, s.bases), ev.adv) : defaultAdv(ev.r, s.bases);
     const pa = {
       side, ref, pit: pref, inn: s.inning, half: s.half, r: ev.r,
       loc: ev.loc || null, bt: meta.bip ? (ev.bt || meta.bt || null) : null,
       pitches: s.cur.pitches.slice(), outsBefore: s.outs, count: [s.balls, s.strikes],
-      rbi: 0, runs: 0, moves: [], slot: currentSlot(s)
+      rbi: 0, runs: 0, moves: [], slot: currentSlot(s),
+      ei: s.ei, e0: s.cur.e0 == null ? s.ei : s.cur.e0
     };
     const res = moveRunners(s, adv, ref ? { ref, pit: pref, ue: !!meta.err } : null);
     pa.moves = res.moves;
@@ -1010,12 +1025,13 @@ body.viewer-on { overflow: hidden; }
       if (ev.why === 'CS' && m.to === 0) b.CS++;
     }
     if (ev.why === 'E') s.errs[fieldSide(s)]++;
-    s.log.push({ k: 'run', inn: s.inning, half: s.half, why: ev.why || 'ADV', moves: res.moves.filter((m) => m.to !== m.from), runs: res.scored.length, side, before });
+    s.log.push({ k: 'run', inn: s.inning, half: s.half, why: ev.why || 'ADV', moves: res.moves.filter((m) => m.to !== m.from), runs: res.scored.length, side, before, ei: s.ei });
     if (s.outs >= 3) endHalf(s);
   }
 
   function apply(s, ev) {
     if (ev.t === 'p' || ev.t === 'pa' || ev.t === 'run') s.halfEvents++;
+    if ((ev.t === 'p' || ev.t === 'pa') && s.cur.e0 == null) s.cur.e0 = s.ei;
     switch (ev.t) {
       case 'p': pitch(s, ev.r); break;
       case 'pa': {
@@ -1025,6 +1041,11 @@ body.viewer-on { overflow: hidden; }
           const ps = touchPitcher(s, fieldSide(s), currentPitcher(s));
           s.cur.pitches.push(meta.bip ? 'X' : 'H');
           if (ps) { ps.PC++; if (meta.bip) ps.ST++; else ps.B++; }
+        } else if (ev.pp === 'B' || ev.pp === 'C' || ev.pp === 'S') {
+          // A strikeout or walk fixed after the fact keeps the at-bat's last pitch in the pitch count.
+          const ps = touchPitcher(s, fieldSide(s), currentPitcher(s));
+          s.cur.pitches.push(ev.pp);
+          if (ps) { ps.PC++; if (ev.pp === 'B') ps.B++; else ps.ST++; }
         }
         endPA(s, ev);
         break;
@@ -1034,7 +1055,7 @@ body.viewer-on { overflow: hidden; }
         const side = ev.side;
         s.pitcher[side] = ev.ref;
         touchPitcher(s, side, ev.ref);
-        s.log.push({ k: 'pc', inn: s.inning, half: s.half, side, ref: ev.ref });
+        s.log.push({ k: 'pc', inn: s.inning, half: s.half, side, ref: ev.ref, ei: s.ei });
         break;
       }
       case 'sub': {
@@ -1043,7 +1064,7 @@ body.viewer-on { overflow: hidden; }
           const prev = lu[ev.slot];
           lu[ev.slot] = ev.ref;
           touchBatter(s, ev.side, ev.ref);
-          s.log.push({ k: 'sub', inn: s.inning, half: s.half, side: ev.side, ref: ev.ref, prev, slot: ev.slot });
+          s.log.push({ k: 'sub', inn: s.inning, half: s.half, side: ev.side, ref: ev.ref, prev, slot: ev.slot, ei: s.ei });
         }
         break;
       }
@@ -1055,7 +1076,8 @@ body.viewer-on { overflow: hidden; }
     const s = createState(game);
     const evs = game.events || [];
     const n = upTo == null ? evs.length : Math.min(upTo, evs.length);
-    for (let i = 0; i < n; i++) apply(s, evs[i]);
+    for (let i = 0; i < n; i++) { s.ei = i; apply(s, evs[i]); }
+    s.ei = n;
     s.batSide = batSide(s);
     s.fieldSide = fieldSide(s);
     s.batter = currentBatter(s);
@@ -2331,6 +2353,8 @@ body.viewer-on { overflow: hidden; }
   // Coach-only changes (roster, team settings, connections, deleting games). Scorekeepers can
   // score games but not these.
   const canManage = () => canEdit() && (Backend.kind !== 'fb' || Access.isAdmin);
+  // Changing or deleting a play after it was scored is for the owner only.
+  const canFixPlays = () => canEdit() && (Backend.kind === 'fb' ? Access.isOwner : Backend.kind === 'db' ? UI.dbOwner !== false : true);
   const hasSample = () => Data.team.players.some((p) => p.sample) || Object.values(Data.games).some((g) => g.sample);
   const innLabel = (s) => (s.half === 0 ? 'Top ' : 'Bottom ') + ORDN(s.inning);
 
@@ -2816,7 +2840,7 @@ body.viewer-on { overflow: hidden; }
       else if (L.k === 'pc') { tag = 'PC'; text = `Pitching change: ${refName(g, L.ref)} now pitching for ${names[L.side]}.`; }
       else if (L.k === 'sub') { tag = 'SUB'; text = `${refName(g, L.ref)} bats in the ${ORDN(L.slot + 1)} spot for ${refName(g, L.prev)}.`; }
       if (runs && side) sc[side] += runs;
-      cur.items.push({ tag, text, score: runs ? `${names.away.slice(0, 12)} ${sc.away}, ${names.home.slice(0, 12)} ${sc.home}` : '' , inn: cur.inn, half: cur.half });
+      cur.items.push({ tag, text, score: runs ? `${names.away.slice(0, 12)} ${sc.away}, ${names.home.slice(0, 12)} ${sc.home}` : '' , inn: cur.inn, half: cur.half, ei: L.k === 'pa' ? L.pa.ei : L.ei });
     }
     return groups;
   }
@@ -2825,8 +2849,16 @@ body.viewer-on { overflow: hidden; }
     const names = sideNames(g);
     const groups = playItems(g, s).filter((x) => x.items.length);
     if (!groups.length) return '<p class="muted small">No plays yet.</p>';
-    return groups.map((gr) => `<div class="inning-head">${gr.half ? 'Bottom' : 'Top'} ${ORDN(gr.inn)} · ${esc(names[gr.half ? 'home' : 'away'])} batting</div><div class="plays">` +
-      gr.items.map((it) => `<div class="play"><span class="tag">${esc(it.tag)}</span><span>${esc(it.text)}${it.score ? `<span class="scr">${esc(it.score)}</span>` : ''}</span></div>`).join('') + '</div>').join('');
+    const fix = canFixPlays();
+    const row = (it) => {
+      const body = `<span class="tag">${esc(it.tag)}</span><span>${esc(it.text)}${it.score ? `<span class="scr">${esc(it.score)}</span>` : ''}</span>`;
+      return fix && it.ei != null ? `<button class="play play-fix" data-act="fixPlay" data-id="${esc(g.id)}" data-ei="${it.ei}" aria-label="Fix this play: ${esc(it.text)}">${body}<span class="fix-go" aria-hidden="true">›</span></button>` : `<div class="play">${body}</div>`;
+    };
+    const u = UI.fixUndo;
+    const undo = fix && u && u.gid === g.id && JSON.stringify(g.events) === u.after;
+    return (undo ? `<div class="row fix-hint"><span class="small grow">Play changed. Stats are updated.</span><button class="btn sm" data-act="fixUndo" data-id="${esc(g.id)}">↶ Undo change</button></div>` : fix ? '<p class="small muted fix-hint">Tap a play to change or delete it. Only you can do this.</p>' : '') +
+      groups.map((gr) => `<div class="inning-head">${gr.half ? 'Bottom' : 'Top'} ${ORDN(gr.inn)} · ${esc(names[gr.half ? 'home' : 'away'])} batting</div><div class="plays">` +
+      gr.items.map(row).join('') + '</div>').join('');
   }
 
   function renderGameDetail(g) {
@@ -3540,11 +3572,52 @@ body.viewer-on { overflow: hidden; }
       const rows = [3, 2, 1].filter((b) => s.bases[b]).map((b) => destRow(g, s.bases[b].ref, b, sh.adv[b], 'runDest')).join('');
       const v = validateAdv(s, sh.adv, null);
       const moved = [1, 2, 3].some((b) => s.bases[b] && sh.adv[b] !== b);
-      const whys = [['SB', 'Stolen base'], ['WP', 'Wild pitch'], ['PB', 'Passed ball'], ['BK', 'Balk'], ['E', 'Error'], ['CS', 'Caught stealing'], ['PO', 'Picked off'], ['ADV', 'Other']];
       return head('Move runners') + `<div>${rows || '<p class="muted">Nobody on base.</p>'}</div>
-        <div><span class="field-lbl">How</span><div class="seg">${whys.map(([k, l]) => `<button data-act="runWhy" data-v="${k}" aria-pressed="${sh.why === k}">${l}</button>`).join('')}</div></div>
+        <div><span class="field-lbl">How</span><div class="seg">${RUN_WHYS.map(([k, l]) => `<button data-act="runWhy" data-v="${k}" aria-pressed="${sh.why === k}">${l}</button>`).join('')}</div></div>
         ${v ? `<div class="warn-text">${esc(v)}</div>` : ''}
         <div class="row"><button class="btn primary" data-act="saveRunners" ${v || !moved ? 'disabled' : ''}>Record</button><button class="btn" data-act="close">Cancel</button></div>`;
+    },
+    fixPlay(sh) {
+      const g = Data.games[sh.gid];
+      const L = g && g.events[sh.ei] ? fixLogEntry(g, sh.ei) : null;
+      if (!L) return head('Fix a play') + '<p class="muted" style="margin:0">This play has changed since you opened it. Close this and tap it again.</p><div class="row"><button class="btn" data-act="close">Close</button></div>';
+      const before = E.replay(g, sh.ei);
+      const nm = (r) => refName(g, r);
+      const on = ON_BASE(before);
+      const sit = `${before.half ? 'Bottom' : 'Top'} ${ORDN(before.inning)} · ${before.outs} out${before.outs === 1 ? '' : 's'}${on.length ? ' · on ' + on.map((b) => ORD[b]).join(' and ') : ''}`;
+      if (sh.kind === 'pc' || sh.kind === 'sub') {
+        const what = sh.kind === 'pc' ? `${refName(g, L.ref)} came in to pitch.` : `${refName(g, L.ref)} subbed in the ${ORDN(L.slot + 1)} spot for ${refName(g, L.prev)}.`;
+        return head(sh.kind === 'pc' ? 'Pitching change' : 'Substitution') + `<p class="fix-was">${esc(sit)}</p><p style="margin:0">${esc(what)}</p>
+          <p class="small muted" style="margin:0">Delete it if it didn't happen. ${sh.kind === 'pc' ? 'The pitcher before keeps pitching until the next change.' : 'The player before stays in that spot until the next sub.'}</p>
+          <div class="row"><button class="btn danger" data-act="fixDelete">Delete</button><button class="btn" data-act="close">Cancel</button></div>`;
+      }
+      let h = head('Fix a play') + `<p class="fix-was">${esc(sit)}</p><p class="fix-was">Recorded: ${esc(L.k === 'pa' ? E.describe(L.pa, nm) : L.moves.length ? E.describeRun(L, nm) : 'Runners held.')}</p>`;
+      let v = '';
+      if (sh.kind === 'run') {
+        h += `<div>${on.map((b) => destRow(g, before.bases[b].ref, b, sh.adv[b], 'fixDest')).join('') || '<p class="muted">Nobody was on base.</p>'}</div>
+          <div><span class="field-lbl">How</span><div class="seg">${RUN_WHYS.map(([k, l]) => `<button data-act="fixWhy" data-v="${k}" aria-pressed="${sh.why === k}">${l}</button>`).join('')}</div></div>`;
+        v = validateAdv(before, sh.adv, null);
+      } else {
+        const meta = E.RESULTS[sh.r];
+        h += `<div class="mu-sub">${esc(refName(g, L.pa.ref, true))} batting${L.pa.pit ? ' · ' + esc(refName(g, L.pa.pit, true)) + ' pitching' : ''}</div>`;
+        h += FIX_GROUPS.map(([lbl, items, cls]) => `<div class="res-lbl">${lbl}</div><div class="res-grid">${items.map(([r, l]) => `<button class="${cls}" data-act="fixResult" data-r="${r}" aria-pressed="${sh.r === r}">${esc(l)}</button>`).join('')}</div>`).join('');
+        if (meta.bip) {
+          h += `${fieldSVG({ tap: true, marker: sh.loc, label: 'Tap where the ball was fielded' })}
+            <div class="row small muted" style="justify-content:space-between"><span>${sh.loc ? 'Marked: ' + esc(E.zoneName(sh.loc)) + ' · ' + E.geo(sh.loc).ft + ' ft' : 'Tap where the ball was fielded or landed.'}</span>${sh.loc ? '<button class="btn ghost sm" data-act="clearLoc">Clear</button>' : ''}</div>
+            <div><span class="field-lbl">Contact</span>${segB('playBt', sh.bt || '', [['G', 'Ground'], ['L', 'Line'], ['F', 'Fly'], ['P', 'Pop']])}</div>`;
+        }
+        h += `<div><span class="field-lbl">Where did everyone end up?</span>${on.map((b) => destRow(g, before.bases[b].ref, b, sh.adv[b], 'fixDest')).join('')}${destRow(g, L.pa.ref, 'B', sh.adv.B, 'fixDest')}</div>`;
+        v = validateAdv(before, sh.adv, L.pa.ref);
+      }
+      const dirty = fixFields(sh) !== sh.init;
+      if (v) h += `<div class="warn-text">${esc(v)}</div>`;
+      else if (dirty) {
+        const evs = g.events.slice();
+        evs[sh.ei] = fixedEvent(g, sh, before);
+        const fx = fixEffect(g, evs, sh.ei);
+        if (fx.length) h += `<div class="fix-effect">${fx.join(' ')}</div>`;
+      }
+      return h + `<div class="row"><button class="btn primary" data-act="fixSave" ${v || !dirty ? 'disabled' : ''}>Save change</button><button class="btn danger" data-act="fixDelete">${sh.kind === 'pa' ? 'Delete at-bat' : 'Delete'}</button><button class="btn" data-act="close">Cancel</button></div>`;
     },
     pitcher(sh) {
       const g = liveGame();
@@ -4233,6 +4306,68 @@ body.viewer-on { overflow: hidden; }
       <div class="row"><button class="btn primary" data-act="commitPlay" ${v ? 'disabled' : ''}>Record play</button><button class="btn" data-act="playBack">Back</button></div>`;
   }
 
+  // ---------- fixing a play after it was scored (owner only) ----------
+  // Stats are always rebuilt from the plays, so changing a play fixes the box score, the season
+  // stats, the spray charts and scouting at the same time.
+  const FIX_GROUPS = [
+    ['Hits', [['1B', 'Single'], ['2B', 'Double'], ['3B', 'Triple'], ['HR', 'Home run']], 'hit'],
+    ['Outs', [['GO', 'Ground out'], ['FO', 'Fly out'], ['LO', 'Line out'], ['PO', 'Pop out'], ['DP', 'Double play'], ['SF', 'Sac fly'], ['SAC', 'Sac bunt'], ['K', 'Strikeout swinging'], ['KL', 'Strikeout looking']], ''],
+    ['Reached', [['E', 'Error'], ['FC', "Fielder's choice"], ['BB', 'Walk'], ['IBB', 'Int. walk'], ['HBP', 'Hit by pitch']], '']
+  ];
+  const RUN_WHYS = [['SB', 'Stolen base'], ['WP', 'Wild pitch'], ['PB', 'Passed ball'], ['BK', 'Balk'], ['E', 'Error'], ['CS', 'Caught stealing'], ['PO', 'Picked off'], ['ADV', 'Other']];
+  const ON_BASE = (s) => [1, 2, 3].filter((b) => s.bases[b]);
+  function fixLogEntry(g, ei) {
+    return st(g).log.find((L) => (L.k === 'pa' ? L.pa.ei : L.ei) === ei) || null;
+  }
+  function fixFields(sh) { return JSON.stringify(sh.kind === 'pa' ? [sh.r, sh.loc, sh.bt, sh.adv] : [sh.why, sh.adv]); }
+  // The play as it would be saved with the sheet's changes.
+  function fixedEvent(g, sh, before) {
+    const old = g.events[sh.ei];
+    if (sh.kind === 'run') {
+      const adv = {};
+      for (const b of ON_BASE(before)) if (sh.adv[b] !== b) adv[b] = sh.adv[b];
+      let why = sh.why;
+      if (why === 'SB' && Object.values(adv).some((v) => v === 0)) why = 'CS';
+      const ev = { t: 'run', adv, why };
+      if (old.ts) ev.ts = old.ts;
+      return ev;
+    }
+    const meta = E.RESULTS[sh.r];
+    const ev = { t: 'pa', r: sh.r };
+    if (old.ts) ev.ts = old.ts;
+    // Keep the at-bat's last pitch in the pitch count when the new result has no pitch of its own.
+    const threw = old.t === 'p' || (old.t === 'pa' && (!!(E.RESULTS[old.r] || {}).bip || old.r === 'HBP' || !!old.pp));
+    if (threw && !meta.bip && sh.r !== 'HBP') { const pp = { K: 'S', KL: 'C', BB: 'B' }[sh.r]; if (pp) ev.pp = pp; }
+    const adv = {};
+    for (const b of ON_BASE(before)) adv[b] = sh.adv[b] != null ? sh.adv[b] : b;
+    adv.B = sh.adv.B != null ? sh.adv.B : E.defaultAdv(sh.r, before.bases).B;
+    ev.adv = adv;
+    if (meta.bip) {
+      if (sh.loc) ev.loc = sh.loc;
+      ev.bt = sh.bt || meta.bt || (sh.loc && !E.geo(sh.loc).infield ? 'L' : 'G');
+    }
+    return ev;
+  }
+  // What changes elsewhere in the game if this fix is saved.
+  function fixEffect(g, evs, ei) {
+    const a = st(g), b = E.replay(Object.assign({}, g, { events: evs }));
+    const names = sideNames(g);
+    const out = [];
+    if (a.score.away !== b.score.away || a.score.home !== b.score.home) out.push(`The score becomes <b>${esc(names.away)} ${b.score.away}, ${esc(names.home)} ${b.score.home}</b> (was ${a.score.away}–${a.score.home}).`);
+    const later = (s) => s.pas.filter((p) => p.ei > ei).map((p) => p.inn + '|' + p.half + '|' + p.ref).join(',');
+    if (later(a) !== later(b)) out.push('This changes the outs, so the plays after it move to a different batter or half-inning. Check them after you save.');
+    return out;
+  }
+  function saveFix(g, evs, msg) {
+    const prev = g.events;
+    g.events = evs;
+    saveGame(g);
+    UI.fixUndo = { gid: g.id, events: prev, after: JSON.stringify(evs) };
+    closeSheet();
+    render();
+    toast(msg);
+  }
+
   // ---------- scoring actions ----------
   const EV_LABEL = { B: 'Ball', C: 'Called strike', S: 'Swinging strike', F: 'Foul' };
   function addEvent(ev) {
@@ -4551,6 +4686,79 @@ body.viewer-on { overflow: hidden; }
       if (why === 'SB' && outs) why = 'CS';
       closeSheet();
       addEvent({ t: 'run', adv, why });
+    },
+
+    fixPlay(d) {
+      const g = Data.games[d.id];
+      const ei = +d.ei;
+      if (!g || !canFixPlays() || !g.events[ei]) return;
+      const L = fixLogEntry(g, ei);
+      if (!L) return;
+      const sh = { type: 'fixPlay', gid: g.id, ei, kind: L.k };
+      if (L.k === 'pa') {
+        const ev = g.events[ei];
+        sh.r = L.pa.r;
+        sh.loc = L.pa.loc ? L.pa.loc.slice() : null;
+        sh.bt = ev.t === 'pa' && ev.bt ? ev.bt : '';
+        sh.adv = {};
+        for (const m of L.pa.moves) sh.adv[m.from === 0 ? 'B' : m.from] = m.to;
+      } else if (L.k === 'run') {
+        const before = E.replay(g, ei);
+        const ev = g.events[ei];
+        sh.why = ev.why || 'ADV';
+        sh.adv = {};
+        for (const b of ON_BASE(before)) sh.adv[b] = ev.adv && ev.adv[b] != null ? ev.adv[b] : b;
+      }
+      sh.init = fixFields(sh);
+      openSheet(sh);
+    },
+    fixResult(d) {
+      const sh = UI.sheet;
+      const g = Data.games[sh.gid];
+      if (!g || sh.r === d.r) return;
+      sh.r = d.r;
+      sh.adv = E.defaultAdv(d.r, E.replay(g, sh.ei).bases);
+      renderSheet();
+    },
+    fixDest(d) { const b = d.b === 'B' ? 'B' : +d.b; UI.sheet.adv[b] = +d.d; renderSheet(); },
+    fixWhy(d) { UI.sheet.why = d.v; renderSheet(); },
+    fixSave() {
+      const sh = UI.sheet;
+      const g = Data.games[sh.gid];
+      if (!g || !canFixPlays() || !g.events[sh.ei]) return;
+      const evs = g.events.slice();
+      evs[sh.ei] = fixedEvent(g, sh, E.replay(g, sh.ei));
+      saveFix(g, evs, 'Play changed. Stats updated.');
+    },
+    fixDelete() {
+      const sh = UI.sheet;
+      const g = Data.games[sh.gid];
+      if (!g || !canFixPlays() || !g.events[sh.ei]) return;
+      const L = fixLogEntry(g, sh.ei);
+      if (!L) return;
+      if (L.k === 'pa') {
+        // The whole at-bat goes: every pitch and the result. Runner moves, subs and pitching changes
+        // made during it stay.
+        const from = L.pa.e0, to = L.pa.ei;
+        const team = L.pa.side === st(g).us ? Data.team.name : g.opponent;
+        const evs = g.events.filter((ev, i) => i < from || i > to || (ev.t !== 'p' && ev.t !== 'pa'));
+        const outs = L.pa.outsOnPlay ? ` It also takes away ${L.pa.outsOnPlay === 1 ? 'an out' : L.pa.outsOnPlay + ' outs'}, so later plays can move to a different half-inning.` : '';
+        confirmSheet('Delete this at-bat?', `Only do this if ${refName(g, L.pa.ref, true)}'s at-bat didn't happen. Every later at-bat by ${team} gets credited to the batter one spot earlier in the order.${outs}`, 'Delete at-bat', () => saveFix(g, evs, 'At-bat deleted. Stats updated.'), true);
+        return;
+      }
+      const evs = g.events.filter((ev, i) => i !== sh.ei);
+      const what = L.k === 'pc' ? 'pitching change' : L.k === 'sub' ? 'substitution' : 'runner move';
+      confirmSheet(`Delete this ${what}?`, 'The score and stats update to match.', 'Delete', () => saveFix(g, evs, what[0].toUpperCase() + what.slice(1) + ' deleted. Stats updated.'), true);
+    },
+    fixUndo(d) {
+      const u = UI.fixUndo;
+      const g = u && Data.games[u.gid];
+      if (!g || u.gid !== d.id || !canFixPlays() || JSON.stringify(g.events) !== u.after) { UI.fixUndo = null; render(); return; }
+      g.events = u.events;
+      saveGame(g);
+      UI.fixUndo = null;
+      render();
+      toast('Change undone');
     },
     pitcher() {
       const g = liveGame();
@@ -5762,6 +5970,7 @@ body.viewer-on { overflow: hidden; }
           const [owner, can] = await Promise.all([user.isOwner(), user.can('data.write')]);
           UI.canWrite = can;
           UI.readOnly = !(owner || can === true);
+          UI.dbOwner = !!owner;
         }
       } catch (e) { /* keep editing; a refused write decides */ }
       subscribe(db);

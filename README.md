@@ -7,6 +7,7 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 | | Coaches (admins) | Scorekeepers | Camera operators | Families |
 |---|---|---|---|---|
 | Create and score games, set lineups, finish and reopen games | Yes | Yes | No | No |
+| Change or delete any play after it's scored | Owner only | No | No | No |
 | Edit your roster and team settings, delete games, scan rosters | Yes | No | No | No |
 | Import a spray chart (your team or an opponent) | Yes | No | No | No |
 | Follow games live, box scores, stats, scouting | Yes | Yes | Yes | Yes |
@@ -23,6 +24,16 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 - New people tap **Request access**. A coach approves them on **Team → Families & coaches**, then taps their name to make them a coach, a **scorekeeper** or a **camera operator** if needed. A scorekeeper keeps score (new games, lineups, every pitch) and can do everything a family can, but can't change the roster, team settings or members, or delete games. Link a scorekeeper to their own player the same way as a family.
 - **Who can watch** (same screen): **Approved families**, where parents create an account and a coach approves it, or **Anyone with the link**, with no sign-in needed to watch.
 - The database itself enforces these rules (`firestore.rules`). Hiding buttons isn't the only protection. After updating `firestore.rules` here, paste it into Firebase again and **Publish**.
+
+## Fixing a play
+
+Only the owner can do this. Open a game, tap **Plays**, and tap any play, during the game or after it's final.
+
+- **An at-bat:** change the result, where the ball went, the contact type, and where each runner and the batter ended up. **Delete at-bat** removes an at-bat that didn't happen (its pitches and result); every later at-bat by that team then goes to the batter one spot earlier in the order.
+- **A runner move** (steal, wild pitch and so on): change where runners ended up and how, or delete it.
+- **A pitching change or substitution:** delete it.
+
+Stats are always rebuilt from the plays, so the box score, line score, season stats, spray charts and scouting all update on their own. The sheet shows what else changes before you save: a new score, or a warning when the change adds or removes an out, which moves the plays after it to a different batter or half-inning. After saving, **Undo change** puts the play back.
 
 ## Tournament fees
 
