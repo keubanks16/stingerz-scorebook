@@ -165,6 +165,7 @@ h2.sec { margin: 4px 0 -6px; font-size: 13px; letter-spacing: .12em; text-transf
 .chip.l { background: var(--bad); color: var(--on-signal); border-color: transparent; }
 .chip.live { background: var(--strike); color: var(--on-signal); border-color: transparent; }
 .chip.sample { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.guest-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
 .invite-list { display: flex; flex-direction: column; }
 .invite-row { padding: 10px 0; border-top: 1px solid var(--line); gap: 8px; flex-wrap: nowrap; }
 .invite-row:first-child { border-top: 0; padding-top: 0; }
@@ -1438,6 +1439,12 @@ body.viewer-on { overflow: hidden; }
     }
     h += `<div><button class="btn${Invites.list.length ? '' : ' primary'}" data-act="inviteNew">+ Invite someone</button></div></section>`;
     return h;
+  }
+  // For guests, who have no Team tab: who invited them and a way to stop watching on this phone.
+  function guestFootHTML() {
+    if (!Access.isGuest) return '';
+    const iv = Access.guestInvite || {};
+    return `<div class="guest-foot small muted"><span class="grow">Watching as a guest${iv.byName ? ', invited by ' + esc(iv.byName) : ''}.</span><button class="btn ghost sm" data-act="signOut">Stop watching</button><button class="btn ghost sm" data-act="authOpen" data-mode="signin">Team sign in</button></div>`;
   }
   function guestBanner() {
     if (!Access.isGuest) return '';
@@ -2985,6 +2992,7 @@ body.viewer-on { overflow: hidden; }
   function render() {
     $('#team-name').textContent = Data.team.name || 'GS Baseball';
     syncPill();
+    if (Backend.kind === 'fb' && Access.isGuest && !['games', 'live'].includes(UI.tab)) UI.tab = 'live';
     for (const b of document.querySelectorAll('#tabs button')) {
       const cur = UI.tab === 'news' || UI.tab === 'photos' ? 'chat' : UI.tab === 'swing' ? (UI.swingFrom || 'stats') : UI.tab;
       if (b.dataset.tab === cur) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
@@ -2992,6 +3000,9 @@ body.viewer-on { overflow: hidden; }
     $('#live-dot').hidden = !shownGames().some((g) => g.status === 'live');
     if ((UI.tab === 'chat' || UI.tab === 'news' || UI.tab === 'photos') && Backend.kind !== 'fb' && UI.ready) UI.tab = 'games';
     $('#chat-tab').hidden = !chatAllowed();
+    // Guests (watch links) only get Games and Live.
+    const guest = Backend.kind === 'fb' && Access.isGuest;
+    for (const t of ['stats', 'scout', 'iq', 'team']) { const b = document.querySelector(`#tabs button[data-tab="${t}"]`); if (b) b.hidden = guest; }
     $('#chat-dot').hidden = !(UI.tab !== 'chat' && UI.tab !== 'news' && UI.tab !== 'photos' && (chatUnread() || newsUnread()));
     const bar = document.querySelector('.bar');
     if (bar) document.documentElement.style.setProperty('--bar-h', bar.offsetHeight + 'px');
@@ -3026,6 +3037,7 @@ body.viewer-on { overflow: hidden; }
       console.error(err);
       h = `<div class="card empty"><h3>Something went wrong showing this screen</h3><p>${esc(err && err.message)}</p></div>`;
     }
+    if (UI.tab === 'games' || UI.tab === 'live') h += guestFootHTML();
     v.innerHTML = h;
     if (chatOn) {
       if (nearBottom && Chat.loaded) { Chat.forceBottom = false; window.scrollTo(0, document.documentElement.scrollHeight); }
@@ -3389,7 +3401,7 @@ body.viewer-on { overflow: hidden; }
     const recent = [];
     for (let i = groups.length - 1; i >= 0 && recent.length < 5; i--) for (let j = groups[i].items.length - 1; j >= 0 && recent.length < 5; j--) recent.push(groups[i].items[j]);
     h += `<h2 class="sec">Recent plays <button class="btn ghost sm" data-act="openGame" data-id="${g.id}">Box score ›</button></h2>`;
-    h += `<div class="card" style="padding:2px 14px">${recent.length ? '<div class="plays">' + recent.map((it) => `<div class="play"><span class="tag">${it.half ? '▼' : '▲'}${it.inn}</span><span>${esc(it.text)}${it.score ? `<span class="scr">${esc(it.score)}</span>` : ''}</span></div>`).join('') + '</div>' : '<p class="muted small">First pitch is up to you.</p>'}</div>`;
+    h += `<div class="card" style="padding:2px 14px">${recent.length ? '<div class="plays">' + recent.map((it) => `<div class="play"><span class="tag">${it.half ? '▼' : '▲'}${it.inn}</span><span>${esc(it.text)}${it.score ? `<span class="scr">${esc(it.score)}</span>` : ''}</span></div>`).join('') + '</div>' : (canEdit() ? '<p class="muted small">First pitch is up to you.</p>' : '<p class="muted small">No plays yet. They show up here as they happen.</p>')}</div>`;
     return h;
   }
 
