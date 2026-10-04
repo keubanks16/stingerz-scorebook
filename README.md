@@ -27,7 +27,7 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 
 ## Inviting family to watch
 
-Parents (and coaches) can send grandparents and other family a **watch link**: Team tab → **Invite family to watch → + Invite someone** (or **Invite family** on the Live tab), type who it's for, and share or copy the link. Whoever opens it can follow games without an account: the live score, every play, the live video, box scores and stats. They can't see the chat, fees, photos or the roster's private details, and practice games stay hidden from them.
+Parents (and coaches) can send grandparents and other family a **watch link**: Team tab → **Invite family to watch → + Invite someone** (or **Invite family** on the Live tab), type who it's for, and share or copy the link. Whoever opens it can follow games without an account: the live score, every play, the live video, box scores and stats. They can't see the chat, chat photos or fees, and practice games stay hidden from them.
 
 - Each link shows on the Team tab of the person who made it. **Turn off** ends it right away. Coaches see every family's links and can turn any of them off.
 - Anyone with a link can watch, so only send it to family.
