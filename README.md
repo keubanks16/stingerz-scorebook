@@ -25,6 +25,15 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 - **Who can watch** (same screen): **Approved families**, where parents create an account and a coach approves it, or **Anyone with the link**, with no sign-in needed to watch.
 - The database itself enforces these rules (`firestore.rules`). Hiding buttons isn't the only protection. After updating `firestore.rules` here, paste it into Firebase again and **Publish**.
 
+## Inviting family to watch
+
+Parents (and coaches) can send grandparents and other family a **watch link**: Team tab → **Invite family to watch → + Invite someone** (or **Invite family** on the Live tab), type who it's for, and share or copy the link. Whoever opens it can follow games without an account: the live score, every play, the live video, box scores and stats. They can't see the chat, fees, photos or the roster's private details, and practice games stay hidden from them.
+
+- Each link shows on the Team tab of the person who made it. **Turn off** ends it right away. Coaches see every family's links and can turn any of them off.
+- Anyone with a link can watch, so only send it to family.
+
+**One-time setup:** in Firebase, open **Authentication → Sign-in method**, add **Anonymous** and turn it on (guests are signed in anonymously behind the scenes), and publish the latest `firestore.rules`.
+
 ## Practice games
 
 Coaches and scorekeepers can practice scoring without anyone else knowing: on the Games tab tap **+ Practice game** (or switch **Kind of game** to **Practice** on any game). A practice game works like a real one, but families never see it, nobody gets notifications for it, and it never counts in the season record, stats, spray charts or scouting. It shows a dashed **Practice** tag. Delete it when you're done, or leave it.

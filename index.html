@@ -165,6 +165,9 @@ h2.sec { margin: 4px 0 -6px; font-size: 13px; letter-spacing: .12em; text-transf
 .chip.l { background: var(--bad); color: var(--on-signal); border-color: transparent; }
 .chip.live { background: var(--strike); color: var(--on-signal); border-color: transparent; }
 .chip.sample { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.invite-list { display: flex; flex-direction: column; }
+.invite-row { padding: 10px 0; border-top: 1px solid var(--line); gap: 8px; flex-wrap: nowrap; }
+.invite-row:first-child { border-top: 0; padding-top: 0; }
 .chip.practice { background: var(--surface-2); color: var(--ink-2); border: 1px dashed var(--ink-3); }
 
 .banner { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 14px; border-radius: var(--radius); background: var(--accent-soft); color: var(--ink); font-size: 15px; }
@@ -1247,7 +1250,7 @@ body.viewer-on { overflow: hidden; }
   // ---------- Firebase: logins, roles and cloud sync (website copy) ----------
   const FB_VERSION = '12.19.0';
   const FB = { A: null, F: null, auth: null, fs: null, app: null, cfg: null };
-  const Access = { evaluated: false, authKnown: false, setupLoaded: false, accessLoaded: false, memberLoaded: true, rulesError: false, user: null, member: null, owner: null, publicView: false, members: [], isOwner: false, isApproved: false, isAdmin: false, isCamera: false, canView: false, worker: null };
+  const Access = { evaluated: false, authKnown: false, setupLoaded: false, accessLoaded: false, memberLoaded: true, guestLoaded: true, guest: null, guestInvite: null, isGuest: false, guestErr: '', claiming: false, rulesError: false, user: null, member: null, owner: null, publicView: false, members: [], isOwner: false, isApproved: false, isAdmin: false, isCamera: false, canView: false, worker: null };
   let WorkerSub = null;
   let DataSubs = null, MemberSub = null, MembersSub = null;
   function fsErr(e) {
@@ -1276,14 +1279,15 @@ body.viewer-on { overflow: hidden; }
   }
   function evaluateAccess() {
     const X = Access;
-    if (!X.authKnown || !X.setupLoaded || !X.accessLoaded || !X.memberLoaded) { X.evaluated = false; scheduleRender(); return; }
+    if (!X.authKnown || !X.setupLoaded || !X.accessLoaded || !X.memberLoaded || !X.guestLoaded) { X.evaluated = false; scheduleRender(); return; }
     const uid = X.user ? X.user.uid : null;
     X.isOwner = !!uid && X.owner === uid;
     X.isApproved = !!(uid && X.member && X.member.status === 'approved');
     X.isAdmin = X.isOwner || (X.isApproved && X.member.role === 'admin');
     X.isCamera = X.isApproved && !X.isAdmin && X.member.role === 'camera';
     X.isScorer = X.isApproved && !X.isAdmin && X.member.role === 'scorer';
-    X.canView = X.publicView || X.isApproved || X.isAdmin;
+    X.isGuest = !!(X.user && X.user.isAnonymous && X.guest && X.guestInvite);
+    X.canView = X.publicView || X.isApproved || X.isAdmin || X.isGuest;
     X.evaluated = true;
     UI.readOnly = !(X.isAdmin || X.isScorer);
     UI.canWrite = X.isAdmin || X.isScorer;
@@ -1313,6 +1317,7 @@ body.viewer-on { overflow: hidden; }
     muteSync();
     newsSync();
     gallerySync(false);
+    invitesSync();
     feesSync();
     swingsSync();
     if (chatAllowed() && pushLocal() && !Push.listening && 'Notification' in window && Notification.permission === 'granted') pushMessaging().catch(() => {});
@@ -1338,6 +1343,102 @@ body.viewer-on { overflow: hidden; }
       evaluateAccess();
     }, () => { Access.member = null; Access.memberLoaded = true; evaluateAccess(); });
   }
+  // ---------- Guests: grandparents and family who opened a watch link ----------
+  // A member makes invites/{token}; opening ?watch=TOKEN signs the phone in anonymously and writes
+  // guests/{uid} = { token }. The rules let a guest watch (games, team, opponents) while the invite
+  // exists, so turning the invite off ends it. Guests never see the chat, fees or members.
+  let GuestSub = null, GuestInvSub = null;
+  function watchGuest(user) {
+    if (GuestSub) { GuestSub(); GuestSub = null; }
+    if (GuestInvSub) { GuestInvSub(); GuestInvSub = null; }
+    Access.guest = null; Access.guestInvite = null;
+    if (!user || !user.isAnonymous) { Access.guestLoaded = true; return; }
+    Access.guestLoaded = false;
+    let tok = null;
+    GuestSub = FB.F.onSnapshot(FB.F.doc(FB.fs, 'guests', user.uid), (s) => {
+      Access.guest = s.exists() ? s.data() : null;
+      const t = Access.guest && Access.guest.token;
+      if (t === tok && (GuestInvSub || !t)) { if (!t) { Access.guestLoaded = true; evaluateAccess(); } return; }
+      tok = t;
+      if (GuestInvSub) { GuestInvSub(); GuestInvSub = null; }
+      if (!t) { Access.guestInvite = null; Access.guestLoaded = true; evaluateAccess(); return; }
+      GuestInvSub = FB.F.onSnapshot(FB.F.doc(FB.fs, 'invites', t), (iv) => {
+        Access.guestInvite = iv.exists() ? iv.data() : null;
+        Access.guestLoaded = true;
+        evaluateAccess();
+      }, () => { Access.guestInvite = null; Access.guestLoaded = true; evaluateAccess(); });
+    }, () => { Access.guest = null; Access.guestLoaded = true; evaluateAccess(); });
+  }
+  function watchToken() { try { return localStorage.getItem(WATCH_KEY) || ''; } catch (e) { return ''; } }
+  function dropWatchToken() { try { localStorage.removeItem(WATCH_KEY); } catch (e) { /* nothing saved */ } }
+  async function guestClaim(user) {
+    const token = watchToken();
+    if (!token) return;
+    if (user && !user.isAnonymous) { dropWatchToken(); return; } // already a member: they don't need it
+    if (Access.claiming) return;
+    Access.claiming = true; Access.guestErr = '';
+    scheduleRender();
+    try {
+      if (!user) { await FB.A.signInAnonymously(FB.auth); Access.claiming = false; return; } // comes back here signed in
+      await FB.F.setDoc(FB.F.doc(FB.fs, 'guests', user.uid), { token, at: Date.now() });
+      dropWatchToken();
+      try { localStorage.removeItem('gs-hub-guest-hi'); } catch (e) { /* per-device only */ }
+    } catch (e) {
+      const c = (e && e.code) || '';
+      if (/operation-not-allowed|admin-restricted/.test(c)) Access.guestErr = 'setup';
+      else if (/permission-denied/.test(c)) { Access.guestErr = 'invalid'; dropWatchToken(); }
+      else Access.guestErr = 'net';
+    }
+    Access.claiming = false;
+    scheduleRender();
+  }
+
+  // ---------- Invites (members invite family to watch) ----------
+  const Invites = { sub: null, key: '', list: [], loaded: false };
+  function canInvite() { return Backend.kind === 'fb' && !!Access.user && !Access.user.isAnonymous && (Access.isApproved || Access.isAdmin); }
+  function invitesSync() {
+    const key = canInvite() ? Access.user.uid + (Access.isAdmin ? ':all' : '') : '';
+    if (key === Invites.key) return;
+    if (Invites.sub) { Invites.sub(); Invites.sub = null; }
+    Invites.key = key; Invites.list = []; Invites.loaded = false;
+    if (!key) return;
+    const col = FB.F.collection(FB.fs, 'invites');
+    const q = Access.isAdmin ? col : FB.F.query(col, FB.F.where('by', '==', Access.user.uid));
+    Invites.sub = FB.F.onSnapshot(q, (snap) => {
+      Invites.list = snap.docs.map((d) => {
+        const x = d.data({ serverTimestamps: 'estimate' }) || {};
+        const at = x.at && typeof x.at.toMillis === 'function' ? x.at.toMillis() : Number(x.at) || Date.now();
+        return { id: d.id, by: String(x.by || ''), byName: String(x.byName || ''), name: String(x.name || ''), at };
+      }).sort((a, b) => b.at - a.at);
+      Invites.loaded = true;
+      scheduleRender();
+    }, () => { Invites.loaded = true; scheduleRender(); });
+  }
+  function watchLink(token) { return location.origin + location.pathname + '?watch=' + token + '#live'; }
+  function newToken() {
+    const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    const r = crypto.getRandomValues(new Uint8Array(32));
+    return Array.from(r, (n) => abc[n % abc.length]).join('');
+  }
+  function inviteDate(t) { return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
+  function invitesHTML() {
+    if (!canInvite()) return '';
+    const me = Access.user.uid;
+    let h = `<h2 class="sec">Invite family to watch <button class="btn ghost sm" data-act="inviteNew">+ Invite</button></h2><section class="card stack" style="padding:14px">
+      <p style="margin:0">Send grandparents and other family a link to follow games: the live score, every play, the live video, box scores and stats. They don’t need an account, and they can’t see the chat or fees.</p>`;
+    if (Invites.list.length) {
+      h += '<div class="invite-list">' + Invites.list.map((v) => `<div class="row invite-row"><div class="grow" style="min-width:0"><b>${esc(v.name || 'Family')}</b><div class="small muted">Sent ${esc(inviteDate(v.at))}${v.by !== me ? ' · from ' + esc(v.byName || 'a family') : ''}</div></div>${v.by === me ? `<button class="btn sm" data-act="inviteShare" data-id="${esc(v.id)}">Share</button>` : ''}<button class="btn sm ghost" data-act="inviteOff" data-id="${esc(v.id)}">Turn off</button></div>`).join('') + '</div>';
+    }
+    h += `<div><button class="btn${Invites.list.length ? '' : ' primary'}" data-act="inviteNew">+ Invite someone</button></div></section>`;
+    return h;
+  }
+  function guestBanner() {
+    if (!Access.isGuest) return '';
+    try { if (localStorage.getItem('gs-hub-guest-hi')) return ''; } catch (e) { /* show it */ }
+    const iv = Access.guestInvite || {};
+    return `<div class="banner guest-hi"><span class="grow"><b>Welcome${iv.name ? ', ' + esc(iv.name) : ''}!</b> ${esc(iv.byName || 'Your family')} invited you to follow ${esc(Data.team.name || 'the team')}. Scores update on their own on the <b>Live</b> tab during games. Add this page to your Home Screen to find it again.</span><button class="btn sm" data-act="guestHi">Got it</button></div>`;
+  }
+
   async function bootFirebase(cfg) {
     const base = 'https://www.gstatic.com/firebasejs/' + FB_VERSION + '/';
     let appMod;
@@ -1369,7 +1470,9 @@ body.viewer-on { overflow: hidden; }
       Access.user = user;
       Access.authKnown = true;
       watchMember(user);
+      watchGuest(user);
       evaluateAccess();
+      guestClaim(user);
     });
   }
   function authErrorText(e) {
@@ -1400,13 +1503,26 @@ body.viewer-on { overflow: hidden; }
     const X = Access;
     const name = (X.member && X.member.name) || (X.user && (X.user.displayName || X.user.email)) || '';
     let body, actions;
-    if (X.rulesError && !X.owner) {
+    const anon = X.user && X.user.isAnonymous;
+    if (X.claiming || (watchToken() && !X.guestErr && (!X.user || anon))) {
+      body = 'Opening your invite…';
+      actions = '';
+    } else if (X.guestErr === 'setup') {
+      body = 'Watch links aren’t turned on for this team yet. Let the coach know. (In Firebase: Authentication, Sign-in method, turn on Anonymous.)';
+      actions = '<button class="btn" data-act="guestRetry">Try again</button>';
+    } else if (X.guestErr === 'net') {
+      body = 'Couldn’t open the invite. Check your connection and try again.';
+      actions = '<button class="btn primary" data-act="guestRetry">Try again</button>';
+    } else if (X.guestErr === 'invalid' || (anon && X.guest)) {
+      body = 'This watch link has been turned off. Ask the family member who sent it for a new one.';
+      actions = (anon ? '<button class="btn" data-act="signOut">Close</button>' : '') + '<button class="btn" data-act="authOpen" data-mode="signin">Team member? Sign in</button>';
+    } else if (X.rulesError && !X.owner) {
       body = 'The database isn’t ready yet. In Firebase, open Firestore Database, Rules, paste the firestore.rules file, and Publish. Then reload this page.';
       actions = '';
     } else if (!X.owner) {
       body = 'Set up your team hub. The first account created here becomes the admin, so do this before you share the address.';
       actions = X.user ? `<button class="btn primary" data-act="claim">Make ${esc(X.user.email || 'this account')} the admin</button><button class="btn" data-act="signOut">Sign out</button>` : '<button class="btn primary" data-act="authOpen" data-mode="setup">Create the admin account</button><button class="btn" data-act="authOpen" data-mode="signin">Sign in</button>';
-    } else if (!X.user) {
+    } else if (!X.user || anon) {
       body = 'Sign in to follow games, box scores and stats. New families can ask for access, and a coach approves it.';
       actions = '<button class="btn primary" data-act="authOpen" data-mode="signin">Sign in</button><button class="btn" data-act="authOpen" data-mode="signup">Request access</button>';
     } else if (X.member && X.member.status === 'pending') {
@@ -1419,13 +1535,17 @@ body.viewer-on { overflow: hidden; }
       body = 'This account doesn’t have access yet.';
       actions = '<button class="btn primary" data-act="requestAccess">Request access</button><button class="btn" data-act="signOut">Sign out</button>';
     }
-    return `<div class="card empty gate"><div class="logo-tile"><img src="${LOGO}" alt="GS"></div><h3>${esc(Data.team.name || 'GS Baseball')} Hub</h3><p>${esc(body)}</p><div class="row" style="justify-content:center">${actions}</div>${X.user ? `<p class="small muted">Signed in as ${esc(X.user.email || '')}</p>` : ''}</div>`;
+    return `<div class="card empty gate"><div class="logo-tile"><img src="${LOGO}" alt="GS"></div><h3>${esc(Data.team.name || 'GS Baseball')} Hub</h3><p>${esc(body)}</p><div class="row" style="justify-content:center">${actions}</div>${X.user && !anon ? `<p class="small muted">Signed in as ${esc(X.user.email || '')}</p>` : ''}</div>`;
   }
   function accountHTML() {
     if (Backend.kind !== 'fb') return '';
     const X = Access;
     let h = '<h2 class="sec">Account</h2><section class="card stack" style="padding:14px">';
-    if (X.user) {
+    if (X.user && X.user.isAnonymous) {
+      const iv = X.guestInvite || {};
+      h += `<div class="row"><div class="grow"><b>Watching as a guest${iv.name ? ' (' + esc(iv.name) + ')' : ''}</b><div class="small muted">Invited by ${esc(iv.byName || 'a team family')}. You can follow games and stats.</div></div><button class="btn sm" data-act="signOut">Stop watching</button></div>`;
+      h += '<div class="hr"></div><div class="row"><span class="grow small muted">Coach or team family with an account?</span><button class="btn sm" data-act="authOpen" data-mode="signin">Sign in</button></div>';
+    } else if (X.user) {
       const role = X.isOwner ? 'Admin (team owner)' : X.isAdmin ? 'Coach (admin)' : X.isCamera ? 'Camera operator (streams games)' : X.isScorer ? 'Scorekeeper (scores games)' : X.isApproved ? 'Family (view only)' : 'Waiting for approval';
       h += `<div class="row"><div class="grow"><b>${esc((X.member && X.member.name) || X.user.displayName || X.user.email)}</b><div class="small muted">${esc(X.user.email || '')} · ${esc(role)}</div></div><button class="btn sm" data-act="signOut">Sign out</button></div>`;
       if (chatAllowed()) {
@@ -2335,6 +2455,18 @@ body.viewer-on { overflow: hidden; }
     return ai;
   }
   try { const t = localStorage.getItem('gs-baseball-tab'); if (t) UI.tab = t; } catch (e) { /* per-viewer convenience only */ }
+  // A watch link a family member sent (?watch=TOKEN). Kept on this phone until it's claimed, and taken
+  // out of the address bar so it isn't passed along by accident.
+  const WATCH_KEY = 'gs-hub-watch';
+  try {
+    const t = new URLSearchParams(location.search).get('watch');
+    if (t && /^[A-Za-z0-9]{24,64}$/.test(t)) {
+      localStorage.setItem(WATCH_KEY, t);
+      const u = new URL(location.href);
+      u.searchParams.delete('watch');
+      history.replaceState(null, '', u.pathname + u.search + (u.hash || '#live'));
+    }
+  } catch (e) { /* storage blocked: the link just won't open */ }
   const hashTab = (location.hash || '').slice(1);
   if (['games', 'live', 'stats', 'scout', 'team', 'chat', 'news', 'photos', 'iq', 'swing'].includes(hashTab)) UI.tab = hashTab;
 
@@ -2927,7 +3059,7 @@ body.viewer-on { overflow: hidden; }
     let w = 0, l = 0, t = 0, rf = 0, ra = 0;
     for (const g of finals) {
       if (g.practice) continue; const r = result(g); rf += r.us; ra += r.them; if (r.us > r.them) w++; else if (r.us < r.them) l++; else t++; }
-    let h = sampleBanner() + newsBanner() + feeBanner();
+    let h = guestBanner() + sampleBanner() + newsBanner() + feeBanner();
     const next = upcoming.find((g) => !g.practice);
     h += `<section class="board season"><span class="lbl">Season record</span>
       <span class="rec num">${w}<small>–</small>${l}${t ? '<small>–</small>' + t : ''}</span>
@@ -3243,7 +3375,7 @@ body.viewer-on { overflow: hidden; }
         ${UI.standalone && Backend.kind === 'fb' ? `<button class="btn sm" data-act="camOpen">${Data.stream && Data.stream.live && Data.stream.gid === g.id ? 'Camera (live)' : 'Stream video'}</button>` : ''}
       </div>`;
     } else {
-      h += `<div class="follow-note card" style="padding:12px 14px"><span class="pill" data-s="follow" style="background:var(--accent-soft);color:var(--ink)">Live</span><span>Updates as the scorer records each pitch.</span></div>`;
+      h += `<div class="follow-note card" style="padding:12px 14px"><span class="pill" data-s="follow" style="background:var(--accent-soft);color:var(--ink)">Live</span><span class="grow">Updates as the scorer records each pitch.</span>${canInvite() ? '<button class="btn sm" data-act="inviteNew">Invite family</button>' : ''}</div>`;
       if (Access.isCamera && UI.standalone && Backend.kind === 'fb') h += `<button class="btn primary block" data-act="camOpen">${Data.stream && Data.stream.live && Data.stream.gid === g.id ? 'Camera (live)' : 'Stream video'}</button>`;
     }
     const groups = playItems(g, s);
@@ -3569,7 +3701,7 @@ body.viewer-on { overflow: hidden; }
       if (!rs.length) h += `<div class="card empty" style="padding:20px"><p>${Caps.sample ? 'Take a photo or screenshot of another team\'s roster and GS Baseball reads the names and numbers into it.' : 'Save each opponent\'s roster so lineups and scouting show names, not just numbers.'}</p><button class="btn primary" data-act="roster">+ Add roster</button></div>`;
       else h += `<div class="card roster">${rs.map(([k, r]) => `<button class="player" data-act="roster" data-key="${esc(k)}"><span class="no" style="font-size:16px">${esc((r.name || '?').slice(0, 3).toUpperCase())}</span><span style="min-width:0"><span class="nm">${esc(r.name)}</span><span class="meta">${r.players.length} player${r.players.length === 1 ? '' : 's'}${r.spray && r.spray.players && r.spray.players.length ? ' · spray chart' : ''}${r.updatedAt ? ' · updated ' + esc(new Date(r.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) : ''}</span></span><span class="meta">Edit</span></button>`).join('')}</div>`;
     }
-    h += accountHTML() + familiesHTML();
+    h += invitesHTML() + accountHTML() + familiesHTML();
     if (canManage()) {
       const vid = videoEmbed(Data.team.video);
       h += `<h2 class="sec">Live video</h2><section class="card stack" style="padding:14px"><p style="margin:0">${!Data.team.video ? 'Not set up. Add your YouTube channel and every live game shows the stream with the scoreboard on top.' : vid && vid.channel ? 'Your YouTube channel is connected. Whatever you stream publicly shows up on the Live tab during games.' : 'A video link is set for the team.'}</p><div><button class="btn${Data.team.video ? '' : ' primary'}" data-act="videoSetup">${Data.team.video ? 'Change video link' : 'Set up live video'}</button></div></section>`;
@@ -3683,6 +3815,19 @@ body.viewer-on { overflow: hidden; }
           <div class="row"><button class="btn primary" data-act="payMark" ${sh.how ? '' : 'disabled'}>Mark paid</button>${workerUrl() ? `<button class="btn" data-act="feeRemindOne" ${Fees.busy === 'remind' ? 'disabled' : ''}>Send a reminder</button>` : ''}</div>`;
       }
       return h;
+    },
+    invite(sh) {
+      if (!sh.token) {
+        return head('Invite family to watch') + `<p style="margin:0">They get a link that opens the team’s games: the live score, every play, the live video, box scores and stats. No account needed. They can’t see the chat or fees.</p>
+          <label><span class="field-lbl">Who is it for?</span>${inp('name', sh.name, 'placeholder="Grandma and Grandpa Ruiz" autocomplete="off" maxlength="60"')}</label>
+          ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
+          <div class="row"><button class="btn primary" data-act="inviteMake" ${sh.busy ? 'disabled' : ''}>${sh.busy ? 'Making the link…' : 'Make the link'}</button><button class="btn" data-act="close">Cancel</button></div>`;
+      }
+      const url = watchLink(sh.token);
+      return head(sh.again ? 'Share the watch link' : 'Your watch link is ready') + `<p style="margin:0">Send this to ${esc(sh.name || 'them')}. It opens straight to the Live tab on any phone or computer.</p>
+        <input class="input" readonly value="${esc(url)}" id="invite-url" aria-label="Watch link">
+        <div class="row">${navigator.share ? '<button class="btn primary" data-act="inviteSend">Share…</button>' : ''}<button class="btn${navigator.share ? '' : ' primary'}" data-act="inviteCopy">${sh.copied ? 'Copied ✓' : 'Copy link'}</button><button class="btn ghost" data-act="close">Done</button></div>
+        <p class="small muted" style="margin:0">Anyone with this link can watch, so only send it to family. Turn it off anytime on the Team tab.</p>`;
     },
     confirm(sh) {
       return head(esc(sh.title)) + `<p style="margin:0">${esc(sh.text)}</p><div class="row"><button class="btn ${sh.danger ? 'danger' : 'primary'}" data-act="confirmYes">${esc(sh.yes || 'Confirm')}</button><button class="btn" data-act="close">Cancel</button></div>`;
@@ -5163,6 +5308,45 @@ body.viewer-on { overflow: hidden; }
       render();
     },
     msgCancel() { Chat.delId = null; render(); },
+    inviteNew() { if (canInvite()) openSheet({ type: 'invite', name: '', token: '', err: '' }); },
+    async inviteMake() {
+      const sh = UI.sheet;
+      const name = String(sh.name || '').trim().slice(0, 60);
+      if (!name) { sh.err = 'Add who it’s for, like “Grandma Ruiz”, so you can tell your links apart.'; return renderSheet(); }
+      const token = newToken();
+      sh.busy = true; sh.err = ''; renderSheet();
+      try {
+        await FB.F.setDoc(FB.F.doc(FB.fs, 'invites', token), { by: Access.user.uid, byName: chatName().slice(0, 60), name, at: FB.F.serverTimestamp() });
+        if (UI.sheet !== sh) return;
+        sh.busy = false; sh.name = name; sh.token = token; renderSheet();
+      } catch (e) {
+        if (UI.sheet !== sh) return;
+        sh.busy = false;
+        sh.err = e && e.code === 'permission-denied' ? 'Couldn’t make the link. The latest security rules need to be published in Firebase.' : 'Couldn’t make the link. Check your connection and try again.';
+        renderSheet();
+      }
+    },
+    inviteShare(d) { const v = Invites.list.find((x) => x.id === d.id); if (v) openSheet({ type: 'invite', name: v.name, token: v.id, again: true }); },
+    async inviteSend() {
+      const sh = UI.sheet;
+      try { await navigator.share({ title: (Data.team.name || 'GS Baseball') + ' games', text: `Follow ${Data.team.name || 'the team'} games live, pitch by pitch:`, url: watchLink(sh.token) }); } catch (e) { /* closed the share sheet */ }
+    },
+    async inviteCopy() {
+      const sh = UI.sheet, url = watchLink(sh.token);
+      try { await navigator.clipboard.writeText(url); }
+      catch (e) { const el = $('#invite-url'); if (el) { el.focus(); el.select(); try { document.execCommand('copy'); } catch (x) { /* they can copy it by hand */ } } }
+      sh.copied = true; renderSheet();
+    },
+    inviteOff(d) {
+      const v = Invites.list.find((x) => x.id === d.id);
+      if (!v) return;
+      confirmSheet('Turn off this link?', `${v.name || 'They'} won’t be able to watch with it anymore. You can always send a new one.`, 'Turn off', async () => {
+        try { await FB.F.deleteDoc(FB.F.doc(FB.fs, 'invites', v.id)); toast('Link turned off'); }
+        catch (e) { toast(e && e.code === 'permission-denied' ? 'Couldn’t turn it off. Check that the latest security rules are published.' : 'Couldn’t turn it off. Check your connection and try again.'); }
+      }, true);
+    },
+    guestHi() { try { localStorage.setItem('gs-hub-guest-hi', '1'); } catch (e) { /* per-device only */ } render(); },
+    guestRetry() { Access.guestErr = ''; guestClaim(Access.user); render(); },
     // One reaction per person: tap a different one to switch, the same one again to take it back.
     async react(d) {
       if (!chatAllowed() || !REACT_EMOJI[d.r]) return;

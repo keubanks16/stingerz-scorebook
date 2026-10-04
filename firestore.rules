@@ -19,6 +19,7 @@ rules_version = '2';
 // Who can watch
 //   config/access.publicView == true   anyone with the link can view, no sign-in.
 //   otherwise                          only approved families and coaches can view.
+//   either way, guests (family invited with a watch link) can view while their invite exists.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -39,7 +40,14 @@ service cloud.firestore {
     function publicView() {
       return exists(docPath('config', 'access')) && get(docPath('config', 'access')).data.publicView == true;
     }
-    function canView() { return publicView() || isApproved() || isAdmin(); }
+    // Guests: family someone invited with a watch link. invites/{token} is the link (a long random
+    // token), guests/{uid} is the anonymous sign-in that opened it. They can watch while the invite
+    // exists; turning the invite off (deleting it) ends it.
+    function isGuest() {
+      return signedIn() && exists(docPath('guests', request.auth.uid))
+        && exists(docPath('invites', get(docPath('guests', request.auth.uid)).data.token));
+    }
+    function canView() { return publicView() || isApproved() || isAdmin() || isGuest(); }
     function feeAccess() { return isOwner() || (isApproved() && myMember().get('fees', false) == true); }
     function myPlayers() { return isApproved() ? myMember().get('players', []) : []; }
 
@@ -64,6 +72,28 @@ service cloud.firestore {
       allow read: if isAdmin() || isCamera();
       allow create, update: if isAdmin() && request.resource.data.keys().hasOnly(['url', 'code']);
       allow delete: if isAdmin();
+    }
+
+    // Watch links. Any approved member can make one for their family; they see and turn off their own,
+    // coaches see and turn off all of them. Knowing the token is what lets someone open it.
+    match /invites/{token} {
+      allow get: if true;
+      allow list: if isAdmin() || (signedIn() && resource.data.by == request.auth.uid);
+      allow create: if (isApproved() || isAdmin()) && token.size() >= 24
+        && request.resource.data.keys().hasOnly(['by', 'byName', 'name', 'at'])
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.byName is string && request.resource.data.byName.size() <= 60
+        && request.resource.data.name is string && request.resource.data.name.size() <= 60
+        && request.resource.data.at == request.time;
+      allow delete: if isAdmin() || (signedIn() && resource.data.by == request.auth.uid);
+    }
+    match /guests/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['token', 'at'])
+        && request.resource.data.token is string
+        && exists(docPath('invites', request.resource.data.token));
+      allow delete: if signedIn() && (request.auth.uid == uid || isAdmin());
     }
 
     // Accounts. A person may only ask for family access for themselves; coaches decide everything else.
