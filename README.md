@@ -123,6 +123,8 @@ Tap the camera button next to the message box to take a photo or pick one from t
 
 Photos are private to the team. They're stored in your Cloudflare account (R2), not on this public website, and the Worker only shows them to signed-in, approved members, using viewing links that expire within two days. The camera button appears once a coach has saved the Worker under **Team → Cloudflare Worker**.
 
+**Looking back at photos:** Chat → **Photos** shows every photo ever sent in the team chat as a grid, newest first and grouped by month, including ones too old to still show in the chat. Tap one to see it full size, then swipe (or tap the arrows) to go through the rest. Photos from people you muted are left out unless you tap **Show**.
+
 **Setting up photo storage (one time):**
 
 1. In [Cloudflare](https://dash.cloudflare.com), open **R2 Object Storage** and choose **Create bucket**. Name it `gs-hub-photos` and keep the default location. (If Cloudflare asks you to turn on R2 first, do that. The free tier covers 10 GB of storage a month, roughly 30,000 chat photos.)

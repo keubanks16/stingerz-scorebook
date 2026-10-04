@@ -662,7 +662,7 @@ body.cam-on { overflow: hidden; }
 .chat-muted span { min-width: 0; }
 .talk-top { position: sticky; top: calc(env(safe-area-inset-top, 0px) + var(--bar-h, 58px)); z-index: 15; background: var(--ground); margin: -16px -16px -6px; padding: 10px 16px 8px; }
 .talk-seg { display: flex; width: 100%; }
-.talk-seg button { flex: 1; position: relative; }
+.talk-seg button { flex: 1 1 auto; position: relative; padding-left: 8px; padding-right: 8px; }
 .talk-seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .talk-seg .sdot { position: absolute; top: 7px; right: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--strike); }
 .news { display: flex; flex-direction: column; gap: 10px; }
@@ -707,7 +707,19 @@ body.chat-on.chat-pend-on main { padding-bottom: calc(220px + env(safe-area-inse
 .viewer-who b { color: #fff; }
 .viewer-x { width: 40px; height: 40px; flex: none; border-radius: 50%; border: 0; background: rgba(255, 255, 255, .14); color: #fff; display: grid; place-items: center; cursor: pointer; }
 .viewer-x svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
-.viewer-img { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 8px; }
+.viewer-img { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 8px; position: relative; }
+.viewer-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgba(3, 10, 24, .55); color: #fff; display: grid; place-items: center; cursor: pointer; }
+.viewer-nav.prev { left: 10px; }
+.viewer-nav.next { right: 10px; }
+.viewer-nav svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.viewer-n { flex: none; padding: 3px 9px; border-radius: 999px; background: rgba(255, 255, 255, .14); font-size: 13px; color: #fff; white-space: nowrap; }
+.photos-count { margin: 4px 4px -6px; }
+.photos { display: flex; flex-direction: column; gap: 8px; }
+.photos h2.sec { margin: 8px 0 0; }
+.photo-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; }
+@media (min-width: 560px) { .photo-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.photo-grid .ph { aspect-ratio: 1; padding: 0; border: 0; border-radius: 4px; overflow: hidden; background: var(--surface-2); cursor: zoom-in; display: block; }
+.photo-grid .ph img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .viewer-img img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; }
 .viewer-img .wait { color: #A6B7D3; }
 .viewer-cap { padding: 12px 16px 0; font-size: 16px; line-height: 1.35; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 28vh; overflow-y: auto; }
@@ -1287,6 +1299,7 @@ body.viewer-on { overflow: hidden; }
     if (chatAllowed() && !Chat.sub) chatSubscribe();
     muteSync();
     newsSync();
+    gallerySync(false);
     feesSync();
     swingsSync();
     if (chatAllowed() && pushLocal() && !Push.listening && 'Notification' in window && Notification.permission === 'granted') pushMessaging().catch(() => {});
@@ -1690,7 +1703,9 @@ body.viewer-on { overflow: hidden; }
   }
 
   // ---------- Team chat (one group conversation for everyone approved) ----------
-  const Chat = { sub: null, list: [], loaded: false, delId: null, forceBottom: false, sending: false, pending: null, urls: new Map(), urlBusy: false, urlRetry: 0, mute: {}, muteSub: null, muteUid: '', show: new Set() };
+  const Chat = { sub: null, list: [], loaded: false, delId: null, forceBottom: false, sending: false, pending: null, urls: new Map(), urlBusy: false, urlAgain: false, urlRetry: 0, mute: {}, muteSub: null, muteUid: '', show: new Set() };
+  // Every photo ever sent in the chat (Chat.list only holds the latest 300 messages), newest first.
+  const Gallery = { sub: null, list: [], loaded: false, err: false, showMuted: false };
   const CHAT_SEEN = 'gs-baseball-chat-seen';
   const CHAT_DELHINT = 'gs-baseball-chat-delhint';
   function chatDelHintDone() { try { return localStorage.getItem(CHAT_DELHINT) === '1'; } catch (e) { return false; } }
@@ -1742,15 +1757,16 @@ body.viewer-on { overflow: hidden; }
       toast(e && e.code === 'permission-denied' ? 'Couldn’t save that. Check that the latest security rules are published.' : 'Couldn’t save that. Check your connection and try again.');
     });
   }
+  function msgFromDoc(d) {
+    const x = d.data({ serverTimestamps: 'estimate' }) || {};
+    const at = x.at && typeof x.at.toMillis === 'function' ? x.at.toMillis() : Number(x.at) || Date.now();
+    const ph = x.photo && typeof x.photo.key === 'string' ? { key: x.photo.key, w: Number(x.photo.w) || 0, h: Number(x.photo.h) || 0 } : null;
+    return { id: d.id, uid: x.uid, name: x.name || 'Team member', text: String(x.text || ''), coach: !!x.coach, at, photo: ph };
+  }
   function chatSubscribe() {
     const q = FB.F.query(FB.F.collection(FB.fs, 'messages'), FB.F.orderBy('at', 'desc'), FB.F.limit(300));
     Chat.sub = FB.F.onSnapshot(q, (snap) => {
-      Chat.list = snap.docs.map((d) => {
-        const x = d.data({ serverTimestamps: 'estimate' }) || {};
-        const at = x.at && typeof x.at.toMillis === 'function' ? x.at.toMillis() : Number(x.at) || Date.now();
-        const ph = x.photo && typeof x.photo.key === 'string' ? { key: x.photo.key, w: Number(x.photo.w) || 0, h: Number(x.photo.h) || 0 } : null;
-        return { id: d.id, uid: x.uid, name: x.name || 'Team member', text: String(x.text || ''), coach: !!x.coach, at, photo: ph };
-      }).reverse();
+      Chat.list = snap.docs.map(msgFromDoc).reverse();
       Chat.loaded = true;
       scheduleRender();
       chatPhotoUrls();
@@ -1876,7 +1892,7 @@ body.viewer-on { overflow: hidden; }
   }
   function talkTabsHTML() {
     const nd = UI.tab !== 'news' && newsUnread(), cd = UI.tab !== 'chat' && chatUnread();
-    return `<div class="talk-top"><div class="seg talk-seg"><button data-act="talk" data-v="news" aria-pressed="${UI.tab === 'news'}">Announcements${nd ? '<span class="sdot" aria-label="new"></span>' : ''}</button><button data-act="talk" data-v="chat" aria-pressed="${UI.tab === 'chat'}">Team chat${cd ? '<span class="sdot" aria-label="new"></span>' : ''}</button></div></div>`;
+    return `<div class="talk-top"><div class="seg talk-seg"><button data-act="talk" data-v="news" aria-pressed="${UI.tab === 'news'}">Announcements${nd ? '<span class="sdot" aria-label="new"></span>' : ''}</button><button data-act="talk" data-v="chat" aria-pressed="${UI.tab === 'chat'}">Team chat${cd ? '<span class="sdot" aria-label="new"></span>' : ''}</button><button data-act="talk" data-v="photos" aria-pressed="${UI.tab === 'photos'}">Photos</button></div></div>`;
   }
   function renderNews() {
     if (!chatAllowed()) return `<div class="card empty"><img src="${LOGO}" alt=""><h3>Announcements</h3><p>Sign in with an approved account to see announcements from the coaches.</p>${Access.user ? '' : '<button class="btn primary" data-act="authOpen" data-mode="signin">Sign in</button>'}</div>`;
@@ -1916,21 +1932,26 @@ body.viewer-on { overflow: hidden; }
     return { ok: r.ok, status: r.status, d: d || {} };
   }
   async function chatPhotoUrls() {
-    if (Chat.urlBusy || !chatAllowed() || !workerUrl() || Date.now() < Chat.urlRetry) return;
+    if (Chat.urlBusy) { Chat.urlAgain = true; return; }
+    if (!chatAllowed() || !workerUrl() || Date.now() < Chat.urlRetry) return;
     const soon = Date.now() + 6 * 3600 * 1000;
-    const need = [...new Set(Chat.list.filter((m) => m.photo).map((m) => m.photo.key))].filter((k) => { const c = Chat.urls.get(k); return !(c && c.exp * 1000 > soon); });
+    const keys = Chat.list.filter((m) => m.photo).reverse().concat(Gallery.list).map((m) => m.photo.key);
+    const need = [...new Set(keys)].filter((k) => { const c = Chat.urls.get(k); return !(c && c.exp * 1000 > soon); });
     if (!need.length) return;
     Chat.urlBusy = true;
     try {
-      const r = await workerPost({ task: 'photo-urls', keys: need.slice(0, 300) });
-      if (r.ok && r.d.urls) {
+      // The Worker signs up to 300 links per request.
+      for (let i = 0; i < need.length; i += 300) {
+        const r = await workerPost({ task: 'photo-urls', keys: need.slice(i, i + 300) });
+        if (!(r.ok && r.d.urls)) { Chat.urlRetry = Date.now() + 60000; break; }
         for (const k in r.d.urls) Chat.urls.set(k, { url: r.d.urls[k], exp: Number(r.d.exp) || 0 });
         Chat.urlRetry = 0;
         scheduleRender();
         viewerSync();
-      } else Chat.urlRetry = Date.now() + 60000;
+      }
     } catch (e) { Chat.urlRetry = Date.now() + 30000; }
     Chat.urlBusy = false;
+    if (Chat.urlAgain) { Chat.urlAgain = false; chatPhotoUrls(); }
   }
   function photoErrText(status, code) {
     if (code === 'photos_not_configured' || code === 'bad_request' || code === 'bad_code') return 'Photos aren’t turned on yet. A coach needs to finish photo setup.';
@@ -2029,35 +2050,114 @@ body.viewer-on { overflow: hidden; }
     }
     await FB.F.deleteDoc(FB.F.doc(FB.fs, 'messages', m ? m.id : ''));
   }
-  // Full-screen photo viewer
+
+  // ---------- Photos (every photo sent in the team chat, in one grid) ----------
+  // Started the first time someone opens Photos. Ends at sign-out, like the chat.
+  function gallerySync(start) {
+    if (chatAllowed() && start && !Gallery.sub) {
+      // Only photo messages have photo.key, so this skips plain text messages.
+      const q = FB.F.query(FB.F.collection(FB.fs, 'messages'), FB.F.where('photo.key', '>=', 'chat/'));
+      Gallery.sub = FB.F.onSnapshot(q, (snap) => {
+        Gallery.list = snap.docs.map(msgFromDoc).filter((m) => m.photo).sort((a, b) => b.at - a.at);
+        Gallery.loaded = true; Gallery.err = false;
+        scheduleRender();
+        chatPhotoUrls();
+        viewerSync();
+      }, () => { Gallery.loaded = true; Gallery.err = true; scheduleRender(); });
+    } else if (!chatAllowed() && Gallery.sub) { Gallery.sub(); Gallery.sub = null; Gallery.list = []; Gallery.loaded = false; Gallery.err = false; }
+  }
+  // All photos we know about, newest first: the full list plus anything newer in the chat.
+  function photosAll() {
+    const seen = new Set(), out = [];
+    for (const m of Gallery.list.concat(Chat.list.filter((x) => x.photo))) if (!seen.has(m.id)) { seen.add(m.id); out.push(m); }
+    return out.sort((a, b) => b.at - a.at);
+  }
+  const photoHidden = (m) => isMuted(m.uid) && !Gallery.showMuted && !Chat.show.has(m.uid);
+  const photosShown = () => photosAll().filter((m) => !photoHidden(m));
+  const photoMsg = (id) => Chat.list.find((x) => x.id === id && x.photo) || Gallery.list.find((x) => x.id === id) || null;
+  function photoDay(t) {
+    const d = new Date(t);
+    return d.getFullYear() === new Date().getFullYear() ? chatDay(t) : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  function photoMonth(t) {
+    const d = new Date(t);
+    return d.toLocaleDateString(undefined, d.getFullYear() === new Date().getFullYear() ? { month: 'long' } : { month: 'long', year: 'numeric' });
+  }
+  function renderPhotos() {
+    if (!chatAllowed()) return `<div class="card empty"><img src="${LOGO}" alt=""><h3>Photos</h3><p>Sign in with an approved account to see the team’s photos.</p>${Access.user ? '' : '<button class="btn primary" data-act="authOpen" data-mode="signin">Sign in</button>'}</div>`;
+    let h = talkTabsHTML();
+    if (!Gallery.loaded && !Chat.list.some((m) => m.photo)) return h + '<div class="loading"><div>Loading photos…</div></div>';
+    const all = photosAll(), shown = all.filter((m) => !photoHidden(m));
+    const hidden = all.length - shown.length;
+    if (!shown.length) {
+      h += `<div class="card empty"><h3>No photos yet</h3><p>Every photo sent in the team chat shows up here, newest first.</p>${workerUrl() ? '<button class="btn primary" data-act="talk" data-v="chat">Go to team chat</button>' : ''}</div>`;
+    } else {
+      h += `<p class="small muted photos-count">${shown.length} photo${shown.length === 1 ? '' : 's'}, newest first. Tap one to see it full size.</p>`;
+      let month = '';
+      h += '<div class="photos">';
+      for (const m of shown) {
+        const mm = photoMonth(m.at), dd = photoDay(m.at);
+        if (mm !== month) { h += `${month ? '</div>' : ''}<h2 class="sec">${esc(mm)}</h2><div class="photo-grid">`; month = mm; }
+        const u = chatPhotoUrl(m.photo.key);
+        h += `<button class="ph" data-act="photoOpen" data-id="${esc(m.id)}" aria-label="Photo from ${esc(m.uid === Access.user.uid ? 'you' : m.name)}, ${esc(dd)}${m.text ? ': ' + esc(m.text.slice(0, 80)) : ''}">${u ? `<img src="${esc(u)}" alt="" loading="lazy" decoding="async">` : ''}</button>`;
+      }
+      h += '</div></div>';
+    }
+    if (hidden) h += `<div class="chat-muted">${MUTE_ICON}<span>${hidden} photo${hidden === 1 ? '' : 's'} from people you muted</span><button class="btn ghost sm" data-act="photosMuted">Show</button></div>`;
+    else if (Gallery.showMuted && all.some((m) => isMuted(m.uid))) h += '<div class="row" style="justify-content:center"><button class="btn ghost sm" data-act="photosMuted">Hide photos from people you muted</button></div>';
+    if (Gallery.err) h += '<p class="small muted" style="margin:0 4px">Showing photos from the latest 300 chat messages. Older ones couldn’t load right now.</p>';
+    return h;
+  }
+
+  // Full-screen photo viewer. Swipe (or use the arrows) to go through the photos, newest first.
   let ViewerId = null;
   function viewerOpen(id) {
-    const m = Chat.list.find((x) => x.id === id);
+    const m = photoMsg(id);
     if (!m || !m.photo) return;
     viewerClose();
     ViewerId = id;
     const canDel = m.uid === Access.user.uid || Access.isAdmin;
     const u = chatPhotoUrl(m.photo.key);
+    const seq = photosShown(), i = seq.findIndex((x) => x.id === id);
+    const prev = i > 0 ? seq[i - 1] : null, next = i >= 0 && i < seq.length - 1 ? seq[i + 1] : null;
     const el = document.createElement('div');
     el.className = 'viewer';
     el.id = 'viewer';
     el.setAttribute('role', 'dialog');
     el.setAttribute('aria-label', 'Photo from ' + m.name);
     el.dataset.act = 'viewerClose';
-    el.innerHTML = `<div class="viewer-top"><div class="viewer-who"><b>${esc(m.uid === Access.user.uid ? 'You' : m.name)}</b>${m.coach ? ' (Coach)' : ''} · ${esc(chatDay(m.at))} ${esc(chatTime(m.at))}</div><button class="viewer-x" data-act="viewerClose" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
-      <div class="viewer-img">${u ? `<img src="${esc(u)}" alt="">` : '<span class="wait">Loading the photo…</span>'}</div>
+    el.innerHTML = `<div class="viewer-top"><div class="viewer-who"><b>${esc(m.uid === Access.user.uid ? 'You' : m.name)}</b>${m.coach ? ' (Coach)' : ''} · ${esc(photoDay(m.at))} ${esc(chatTime(m.at))}</div>${i >= 0 && seq.length > 1 ? `<span class="viewer-n">${i + 1} of ${seq.length}</span>` : ''}<button class="viewer-x" data-act="viewerClose" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+      <div class="viewer-img">${u ? `<img src="${esc(u)}" alt="">` : '<span class="wait">Loading the photo…</span>'}
+        ${prev ? `<button class="viewer-nav prev" data-act="viewerGo" data-id="${esc(prev.id)}" aria-label="Newer photo"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>` : ''}
+        ${next ? `<button class="viewer-nav next" data-act="viewerGo" data-id="${esc(next.id)}" aria-label="Older photo"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>` : ''}</div>
       ${m.text ? `<div class="viewer-cap">${esc(m.text)}</div>` : ''}
-      <div class="viewer-acts">${canDel ? `<button class="del" data-act="msgDelete" data-id="${esc(m.id)}">Delete photo</button>` : ''}<span>Press and hold the photo to save it to your phone.</span></div>`;
+      <div class="viewer-acts">${canDel ? `<button class="del" data-act="msgDelete" data-id="${esc(m.id)}">Delete photo</button>` : ''}<span>Press and hold the photo to save it to your phone.${seq.length > 1 ? ' Swipe for more.' : ''}</span></div>`;
+    el.dataset.prev = prev ? prev.id : '';
+    el.dataset.next = next ? next.id : '';
+    let sx = 0, sy = 0;
+    el.addEventListener('touchstart', (e) => { if (e.touches.length === 1) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; } else sx = NaN; }, { passive: true });
+    el.addEventListener('touchend', (e) => {
+      const t = e.changedTouches[0];
+      const dx = t.clientX - sx, dy = t.clientY - sy;
+      if (!(Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5)) return;
+      const to = dx < 0 ? el.dataset.next : el.dataset.prev;
+      if (to) viewerOpen(to);
+    }, { passive: true });
     document.body.appendChild(el);
     document.body.classList.add('viewer-on');
     if (!u) chatPhotoUrls();
   }
+  function viewerStep(dir) {
+    const v = $('#viewer');
+    const to = v && (dir > 0 ? v.dataset.next : v.dataset.prev);
+    if (to) viewerOpen(to);
+  }
   function viewerSync() {
     if (!ViewerId) return;
-    const m = Chat.list.find((x) => x.id === ViewerId);
+    const m = photoMsg(ViewerId);
     if (!m || !m.photo) { viewerClose(); return; }
     const u = chatPhotoUrl(m.photo.key), box = $('#viewer .viewer-img');
-    if (u && box && !box.querySelector('img')) box.innerHTML = `<img src="${esc(u)}" alt="">`;
+    if (u && box && !box.querySelector('img')) { const w = box.querySelector('.wait'); if (w) w.outerHTML = `<img src="${esc(u)}" alt="">`; }
   }
   function viewerClose() {
     const v = $('#viewer');
@@ -2178,7 +2278,7 @@ body.viewer-on { overflow: hidden; }
   }
   try { const t = localStorage.getItem('gs-baseball-tab'); if (t) UI.tab = t; } catch (e) { /* per-viewer convenience only */ }
   const hashTab = (location.hash || '').slice(1);
-  if (['games', 'live', 'stats', 'scout', 'team', 'chat', 'news', 'iq', 'swing'].includes(hashTab)) UI.tab = hashTab;
+  if (['games', 'live', 'stats', 'scout', 'team', 'chat', 'news', 'photos', 'iq', 'swing'].includes(hashTab)) UI.tab = hashTab;
 
   // ---------- storage backends ----------
   const LS_KEY = 'gs-baseball-v1';
@@ -2684,13 +2784,13 @@ body.viewer-on { overflow: hidden; }
     $('#team-name').textContent = Data.team.name || 'GS Baseball';
     syncPill();
     for (const b of document.querySelectorAll('#tabs button')) {
-      const cur = UI.tab === 'news' ? 'chat' : UI.tab === 'swing' ? (UI.swingFrom || 'stats') : UI.tab;
+      const cur = UI.tab === 'news' || UI.tab === 'photos' ? 'chat' : UI.tab === 'swing' ? (UI.swingFrom || 'stats') : UI.tab;
       if (b.dataset.tab === cur) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     }
     $('#live-dot').hidden = !Object.values(Data.games).some((g) => g.status === 'live');
-    if ((UI.tab === 'chat' || UI.tab === 'news') && Backend.kind !== 'fb' && UI.ready) UI.tab = 'games';
+    if ((UI.tab === 'chat' || UI.tab === 'news' || UI.tab === 'photos') && Backend.kind !== 'fb' && UI.ready) UI.tab = 'games';
     $('#chat-tab').hidden = !chatAllowed();
-    $('#chat-dot').hidden = !(UI.tab !== 'chat' && UI.tab !== 'news' && (chatUnread() || newsUnread()));
+    $('#chat-dot').hidden = !(UI.tab !== 'chat' && UI.tab !== 'news' && UI.tab !== 'photos' && (chatUnread() || newsUnread()));
     const bar = document.querySelector('.bar');
     if (bar) document.documentElement.style.setProperty('--bar-h', bar.offsetHeight + 'px');
     const chatOn = UI.tab === 'chat' && chatAllowed();
@@ -2717,6 +2817,7 @@ body.viewer-on { overflow: hidden; }
       else if (UI.tab === 'scout') h = renderScout();
       else if (UI.tab === 'chat') h = renderChat();
       else if (UI.tab === 'news') h = renderNews();
+      else if (UI.tab === 'photos') { gallerySync(true); h = renderPhotos(); }
       else if (UI.tab === 'iq') h = renderIQ();
       else h = renderTeam();
     } catch (err) {
@@ -4408,6 +4509,7 @@ body.viewer-on { overflow: hidden; }
       if (d.tab === 'games') UI.gameId = null;
       if (d.tab === 'chat') {
         if (newsUnread() || (UI.talk === 'news' && !chatUnread())) return A.talk({ v: 'news' });
+        if (UI.talk === 'photos' && !chatUnread()) return A.talk({ v: 'photos' });
         Chat.forceBottom = true; Chat.delId = null; render(); return;
       }
       try { localStorage.setItem('gs-baseball-tab', d.tab); } catch (e) { /* ignore */ }
@@ -5015,7 +5117,7 @@ body.viewer-on { overflow: hidden; }
     },
     talk(d) {
       if (d.v === 'news') News.mark = newsSeen();
-      UI.tab = d.v === 'news' ? 'news' : 'chat';
+      UI.tab = d.v === 'news' ? 'news' : d.v === 'photos' ? 'photos' : 'chat';
       UI.talk = UI.tab; UI.feeId = null; Chat.delId = null;
       if (UI.tab === 'chat') { Chat.forceBottom = true; render(); return; }
       render();
@@ -5050,6 +5152,8 @@ body.viewer-on { overflow: hidden; }
     muteManage() { openSheet({ type: 'mutes' }); },
     muteOff(d) { const n = Chat.mute[d.uid] || 'them'; muteSet(d.uid, n, false); toast('Unmuted ' + n); },
     photoOpen(d) { viewerOpen(d.id); },
+    viewerGo(d) { viewerOpen(d.id); },
+    photosMuted() { Gallery.showMuted = !Gallery.showMuted; render(); },
     viewerClose() { viewerClose(); },
     photoClear() { chatPhotoClear(); render(); },
     async msgDelete(d) {
@@ -5057,7 +5161,7 @@ body.viewer-on { overflow: hidden; }
       viewerClose();
       render();
       try {
-        await chatDeleteMsg(Chat.list.find((x) => x.id === d.id) || { id: d.id });
+        await chatDeleteMsg(photoMsg(d.id) || Chat.list.find((x) => x.id === d.id) || { id: d.id });
         try { localStorage.setItem(CHAT_DELHINT, '1'); } catch (e) { /* per-device only */ }
         toast('Message deleted');
       } catch (e) {
@@ -5867,6 +5971,7 @@ body.viewer-on { overflow: hidden; }
   });
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape' && ViewerId) { viewerClose(); return; }
+    if ((ev.key === 'ArrowRight' || ev.key === 'ArrowLeft') && ViewerId) { ev.preventDefault(); viewerStep(ev.key === 'ArrowRight' ? 1 : -1); return; }
     if (ev.key === 'Escape' && UI.sheet) closeSheet();
     if (ev.key === 'Enter' && !ev.shiftKey && ev.target && ev.target.id === 'chat-input' && !('ontouchstart' in window)) { ev.preventDefault(); chatSend(); }
   });
