@@ -74,6 +74,16 @@ The scoring phone keeps working when the field has no service:
 - **Before game day,** open the Hub once with signal on each scoring phone (after any update) so the phone has its saved copy. Viewing works offline too, but families see the last score that reached them.
 - Live video, chat photos, roster scanning and scouting reports need signal.
 
+## Announcements
+
+The **Chat** tab has two tabs at the top: **Announcements** and **Team chat**. Only coaches (and you, the owner) can post announcements; everyone with an approved account reads them. Use it for game times, schedule changes and reminders that shouldn't get buried in the chat.
+
+- **Coaches:** Chat → **Announcements → New announcement**, write it, and tap **Post**. Links become tappable. Coaches can **Edit** or **Delete** any announcement (editing doesn't send a second notification).
+- **Families** see a banner on the Games tab with the newest announcement they haven't read, a red dot on Chat, and a **New** tag on each unread announcement. Tapping **Chat** opens Announcements first when there's one they haven't read.
+- **Notifications:** everyone with notifications on gets each announcement, even if they turned team chat notifications off or muted that coach in the chat.
+
+Needs the latest `firestore.rules` published, and the latest `worker.js` for the notifications.
+
 ## Team chat
 
 The **Chat** tab is one group conversation for everyone with an approved account: coaches, families and camera operators. People watching through "Anyone with the link" without signing in don't see it. Coaches' messages show a **Coach** tag. To delete a message, tap it and then tap **Delete message**. Anyone can delete their own messages; coaches can delete any message. A hint under the latest message says so until you've deleted a message or muted someone. A red dot on the Chat tab means there are new messages. The chat keeps the latest 300 messages on screen.

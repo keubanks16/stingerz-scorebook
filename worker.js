@@ -447,6 +447,15 @@ async function notifyRun(env, self, site) {
   // or about people they muted.
   const chatNew = first ? [] : msgs;
 
+  // Coach announcements go to everyone with notifications on (not the coach who posted),
+  // even if they turned team chat notifications off or muted that coach in the chat.
+  const annFirst = !state.annAt;
+  const annSince = state.annAt || Date.now();
+  const anns = await db.query('announcements', 'at', 'GREATER_THAN', { timestampValue: new Date(annSince).toISOString() }, 'at', 10).catch(() => []);
+  if (anns.length) state.annAt = Math.max(...anns.map((a) => a.at || 0));
+  else if (annFirst) state.annAt = annSince;
+  const annNew = annFirst ? [] : anns;
+
   // Games in progress: start, runs, half-innings, final
   const live = await db.query('games', 'status', 'EQUAL', { stringValue: 'live' }, null, 10);
   let teamName = state.team || 'GS Baseball';
@@ -483,7 +492,7 @@ async function notifyRun(env, self, site) {
 
   if (JSON.stringify(state) === before) return { sent: 0 };
   if (!(await db.saveState(state, cur ? cur._updateTime : null))) return { sent: 0, raced: true };
-  if (!out.length && !chatNew.length) return { sent: 0 };
+  if (!out.length && !chatNew.length && !annNew.length) return { sent: 0 };
 
   // Who gets what: approved members (or the owner) with the matching setting on, never the sender,
   // and no chat messages from people they muted (prefs/{uid}.mute, a map of muted uid -> name).
@@ -497,6 +506,7 @@ async function notifyRun(env, self, site) {
   const items = [];
   for (const t of tokens) {
     if (!t.token || !ok.has(t.uid)) continue;
+    for (const a of annNew) if (a.uid !== t.uid) items.push({ id: t._id, token: t.token, title: '📣 ' + (a.name || 'Coach'), body: String(a.text || '').slice(0, 180), tag: 'ann-' + a._id, link: site + '/#news', icon });
     if (chatNew.length && t.chat !== false) {
       const mute = muted.get(t.uid) || {};
       const see = chatNew.filter((m) => m.uid !== t.uid && !mute[m.uid]);

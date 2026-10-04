@@ -148,6 +148,24 @@ service cloud.firestore {
       }
     }
 
+    // Announcements: only coaches (and the owner) post, edit or delete; every approved member reads.
+    match /announcements/{id} {
+      allow read: if isApproved() || isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'text', 'at'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.name is string && request.resource.data.name.size() <= 60
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
+        && request.resource.data.at == request.time;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'edited'])
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
+        && request.resource.data.edited is int;
+      allow delete: if isAdmin();
+    }
+
     // Each person's own chat settings: who they muted (a map of uid -> name). Private to them;
     // the Worker reads it with the service account to skip notifications from muted people.
     match /prefs/{uid} {

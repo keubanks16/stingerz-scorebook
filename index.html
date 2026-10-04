@@ -564,6 +564,25 @@ body.cam-on { overflow: hidden; }
 .chat-muted { align-self: flex-start; display: flex; align-items: center; gap: 8px; max-width: 82%; margin-top: 8px; padding: 4px 4px 4px 12px; border: 1px dashed var(--line); border-radius: 16px; color: var(--ink-3); font-size: 13px; }
 .chat-muted svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .chat-muted span { min-width: 0; }
+.talk-top { position: sticky; top: calc(env(safe-area-inset-top, 0px) + var(--bar-h, 58px)); z-index: 15; background: var(--ground); margin: -16px -16px -6px; padding: 10px 16px 8px; }
+.talk-seg { display: flex; width: 100%; }
+.talk-seg button { flex: 1; position: relative; }
+.talk-seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.talk-seg .sdot { position: absolute; top: 7px; right: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--strike); }
+.news { display: flex; flex-direction: column; gap: 10px; }
+.news-item { padding: 14px; display: grid; gap: 8px; }
+.news-item.new { border-color: var(--accent); }
+.news-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-3); }
+.news-meta b { color: var(--ink); font-size: 15px; }
+.news-meta .chip.new { background: var(--accent); color: var(--accent-ink); }
+.news-text { font-size: 16px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.news-text a { color: var(--accent); }
+.news-acts { gap: 6px; }
+.news-post { align-self: flex-start; white-space: nowrap; gap: 8px; }
+.news-post svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.news-banner { background: var(--accent-soft); }
+.news-banner .grow { overflow-wrap: anywhere; }
+textarea.input { resize: vertical; min-height: 140px; font-family: inherit; line-height: 1.4; }
 .chat-hint { align-self: center; font-size: 12px; color: var(--ink-3); margin-top: 10px; text-align: center; }
 body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
 .chat-bar { position: fixed; left: 0; right: 0; bottom: calc(57px + env(safe-area-inset-bottom, 0px)); z-index: 29; background: var(--surface); border-top: 1px solid var(--line); padding: 8px max(12px, calc((100% - 760px) / 2 + 12px)); display: flex; gap: 8px; align-items: flex-end; }
@@ -1160,6 +1179,7 @@ body.viewer-on { overflow: hidden; }
     } else if (!(X.isAdmin || X.isCamera) && WorkerSub) { WorkerSub(); WorkerSub = null; X.worker = null; }
     if (chatAllowed() && !Chat.sub) chatSubscribe();
     muteSync();
+    newsSync();
     feesSync();
     if (chatAllowed() && pushLocal() && !Push.listening && 'Notification' in window && Notification.permission === 'granted') pushMessaging().catch(() => {});
     else if (!chatAllowed() && Chat.sub) { Chat.sub(); Chat.sub = null; Chat.list = []; Chat.loaded = false; }
@@ -1555,10 +1575,10 @@ body.viewer-on { overflow: hidden; }
   }
   function renderChat() {
     if (!chatAllowed()) return `<div class="card empty"><img src="${LOGO}" alt=""><h3>Team chat</h3><p>Sign in with an approved account to see the team chat.</p>${Access.user ? '' : '<button class="btn primary" data-act="authOpen" data-mode="signin">Sign in</button>'}</div>`;
-    if (!Chat.loaded) return '<div class="loading"><div>Loading the team chat…</div></div>';
-    if (!Chat.list.length) return `<div class="card empty"><h3>Team chat</h3><p>One conversation for coaches and players' families. Say hi to the team.</p></div>`;
+    if (!Chat.loaded) return talkTabsHTML() + '<div class="loading"><div>Loading the team chat…</div></div>';
+    if (!Chat.list.length) return talkTabsHTML() + `<div class="card empty"><h3>Team chat</h3><p>One conversation for coaches and players' families. Say hi to the team.</p></div>`;
     const me = Access.user.uid;
-    let h = '<div class="chat">', lastDay = '', prev = null, run = null;
+    let h = talkTabsHTML() + '<div class="chat">', lastDay = '', prev = null, run = null;
     // Messages from someone you muted fold into one quiet line you can open.
     const flush = () => {
       if (!run) return;
@@ -1621,6 +1641,74 @@ body.viewer-on { overflow: hidden; }
     Chat.sending = false;
   }
   function chatGrow() { const box = $('#chat-input'); if (!box) return; box.style.height = 'auto'; box.style.height = Math.min(120, box.scrollHeight) + 'px'; }
+
+  // ---------- Announcements (coaches post, everyone approved reads) ----------
+  // announcements/{id}: { uid, name, text, at, edited? }. Shown as a second tab at the top of Chat,
+  // with a banner on the Games tab when there's one you haven't read. Everyone with notifications
+  // on gets them (the Worker sends them), even if team chat notifications are off.
+  const News = { sub: null, list: [], loaded: false, mark: null };
+  const NEWS_SEEN = 'gs-hub-news-seen:';
+  const MEGAPHONE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10v4h3l7 4.5v-13l-7 4.5z"/><path d="M17 9.5a3.5 3.5 0 0 1 0 5M6.5 14l1.2 5h2.6l-1-4.3"/></svg>';
+  function newsSeen() { try { return Number(localStorage.getItem(NEWS_SEEN + (Access.user ? Access.user.uid : ''))) || 0; } catch (e) { return 0; } }
+  function newsMarkSeen() {
+    const last = News.list.length ? News.list[0].at : 0;
+    if (last > newsSeen()) { try { localStorage.setItem(NEWS_SEEN + Access.user.uid, String(last)); } catch (e) { /* per-device only */ } }
+  }
+  function newsUnreadList() {
+    if (!chatAllowed() || !News.list.length) return [];
+    const me = Access.user.uid, seen = newsSeen();
+    return News.list.filter((a) => a.uid !== me && a.at > seen);
+  }
+  const newsUnread = () => newsUnreadList().length > 0;
+  function newsSync() {
+    if (chatAllowed() && !News.sub) {
+      const q = FB.F.query(FB.F.collection(FB.fs, 'announcements'), FB.F.orderBy('at', 'desc'), FB.F.limit(100));
+      News.sub = FB.F.onSnapshot(q, (snap) => {
+        News.list = snap.docs.map((d) => {
+          const x = d.data({ serverTimestamps: 'estimate' }) || {};
+          const at = x.at && typeof x.at.toMillis === 'function' ? x.at.toMillis() : Number(x.at) || Date.now();
+          return { id: d.id, uid: String(x.uid || ''), name: String(x.name || 'Coach'), text: String(x.text || ''), at, edited: Number(x.edited) || 0 };
+        });
+        News.loaded = true;
+        scheduleRender();
+      }, () => { News.loaded = true; scheduleRender(); });
+    } else if (!chatAllowed() && News.sub) { News.sub(); News.sub = null; News.list = []; News.loaded = false; }
+  }
+  // Web links in an announcement become tappable; everything else is shown as plain text.
+  function linkify(t) {
+    const re = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g;
+    let out = '', i = 0, m;
+    while ((m = re.exec(t))) { out += esc(t.slice(i, m.index)) + `<a href="${esc(m[0])}" target="_blank" rel="noopener">${esc(m[0])}</a>`; i = m.index + m[0].length; }
+    return out + esc(t.slice(i));
+  }
+  function talkTabsHTML() {
+    const nd = UI.tab !== 'news' && newsUnread(), cd = UI.tab !== 'chat' && chatUnread();
+    return `<div class="talk-top"><div class="seg talk-seg"><button data-act="talk" data-v="news" aria-pressed="${UI.tab === 'news'}">Announcements${nd ? '<span class="sdot" aria-label="new"></span>' : ''}</button><button data-act="talk" data-v="chat" aria-pressed="${UI.tab === 'chat'}">Team chat${cd ? '<span class="sdot" aria-label="new"></span>' : ''}</button></div></div>`;
+  }
+  function renderNews() {
+    if (!chatAllowed()) return `<div class="card empty"><img src="${LOGO}" alt=""><h3>Announcements</h3><p>Sign in with an approved account to see announcements from the coaches.</p>${Access.user ? '' : '<button class="btn primary" data-act="authOpen" data-mode="signin">Sign in</button>'}</div>`;
+    let h = talkTabsHTML();
+    if (Access.isAdmin) h += `<button class="btn primary news-post" data-act="newsNew">${MEGAPHONE}<span>New announcement</span></button>`;
+    if (!News.loaded) return h + '<div class="loading"><div>Loading announcements…</div></div>';
+    if (News.mark === null) News.mark = newsSeen(); // opened straight from a link or notification
+    if (!News.list.length) return h + `<div class="card empty"><h3>No announcements yet</h3><p>${Access.isAdmin ? 'Post game times, schedule changes and reminders here. Only coaches can post, and everyone with notifications on gets one.' : 'Coaches post game times, schedule changes and reminders here.'}</p></div>`;
+    h += '<div class="news">' + News.list.map((a) => {
+      const isNew = a.uid !== Access.user.uid && a.at > News.mark;
+      return `<article class="card news-item${isNew ? ' new' : ''}"><div class="news-meta"><b>${esc(a.name)}</b><span>· ${esc(chatDay(a.at))}, ${esc(chatTime(a.at))}${a.edited ? ' · edited' : ''}</span>${isNew ? '<span class="chip new">New</span>' : ''}</div>
+        <div class="news-text">${linkify(a.text)}</div>
+        ${Access.isAdmin ? `<div class="row news-acts"><button class="btn ghost sm" data-act="newsEdit" data-id="${esc(a.id)}">Edit</button><button class="btn ghost sm" data-act="newsDelete" data-id="${esc(a.id)}">Delete</button></div>` : ''}</article>`;
+    }).join('') + '</div>';
+    if (!Access.isAdmin) h += '<p class="small muted" style="margin:0 4px">Only coaches can post announcements.</p>';
+    return h;
+  }
+  // On the Games tab: the newest announcement you haven't read (from the last two weeks).
+  function newsBanner() {
+    const a = newsUnreadList().find((x) => Date.now() - x.at < 14 * 86400000);
+    if (!a) return '';
+    const more = newsUnreadList().length - 1;
+    const t = a.text.length > 140 ? a.text.slice(0, 137).replace(/\s+\S*$/, '') + '…' : a.text;
+    return `<div class="banner news-banner"><span class="grow"><b>📣 ${esc(a.name)}:</b> ${esc(t)}${more > 0 ? ` <span class="muted">(+${more} more)</span>` : ''}</span><button class="btn sm primary" data-act="talk" data-v="news">Read</button></div>`;
+  }
 
   // ---------- Team chat photos ----------
   // Photos go to the team's Cloudflare Worker, which keeps them in private R2 storage and writes
@@ -1807,7 +1895,8 @@ body.viewer-on { overflow: hidden; }
       Push.listening = true;
       Push.M.onMessage(Push.messaging, (m) => {
         const n = (m && m.notification) || {};
-        if (UI.tab === 'chat' && /^chat/.test((m.fcmOptions && m.fcmOptions.link) || '')) return;
+        const link = String((m.fcmOptions && m.fcmOptions.link) || '');
+        if ((UI.tab === 'chat' && /#chat$/.test(link)) || (UI.tab === 'news' && /#news$/.test(link))) return;
         if (n.title) toast(n.title + (n.body ? ': ' + n.body : ''));
       });
     }
@@ -1829,6 +1918,7 @@ body.viewer-on { overflow: hidden; }
     else if (stt === 'off') body = `<p style="margin:0">Get chat messages, game starts, runs and final scores on your lock screen, even when the app is closed.</p><div><button class="btn primary" data-act="pushOn" ${Push.busy ? 'disabled' : ''}>${Push.busy ? 'Turning on…' : 'Turn on notifications'}</button></div>`;
     else body = `<p style="margin:0">On for this phone.</p>
       <div><span class="field-lbl">Team chat</span>${segB('pushChat', v.chat ? 'on' : 'off', [['on', 'On'], ['off', 'Off']])}</div>
+      <p class="small muted" style="margin:0">Coach announcements always come through while notifications are on.</p>
       <div><span class="field-lbl">Game updates</span>${segB('pushScores', v.scores, [['runs', 'Runs & final'], ['all', 'Every half-inning'], ['off', 'Off']])}</div>
       <p class="small muted" style="margin:0">Each game update replaces the last one, so your lock screen works like a live scoreboard.</p>
       <div><button class="btn sm" data-act="pushOff">Turn off on this phone</button></div>`;
@@ -1895,7 +1985,7 @@ body.viewer-on { overflow: hidden; }
   }
   try { const t = localStorage.getItem('gs-baseball-tab'); if (t) UI.tab = t; } catch (e) { /* per-viewer convenience only */ }
   const hashTab = (location.hash || '').slice(1);
-  if (['games', 'live', 'stats', 'scout', 'team', 'chat', 'iq'].includes(hashTab)) UI.tab = hashTab;
+  if (['games', 'live', 'stats', 'scout', 'team', 'chat', 'news', 'iq'].includes(hashTab)) UI.tab = hashTab;
 
   // ---------- storage backends ----------
   const LS_KEY = 'gs-baseball-v1';
@@ -2389,12 +2479,14 @@ body.viewer-on { overflow: hidden; }
     $('#team-name').textContent = Data.team.name || 'GS Baseball';
     syncPill();
     for (const b of document.querySelectorAll('#tabs button')) {
-      if (b.dataset.tab === UI.tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+      if (b.dataset.tab === (UI.tab === 'news' ? 'chat' : UI.tab)) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     }
     $('#live-dot').hidden = !Object.values(Data.games).some((g) => g.status === 'live');
-    if (UI.tab === 'chat' && Backend.kind !== 'fb' && UI.ready) UI.tab = 'games';
+    if ((UI.tab === 'chat' || UI.tab === 'news') && Backend.kind !== 'fb' && UI.ready) UI.tab = 'games';
     $('#chat-tab').hidden = !chatAllowed();
-    $('#chat-dot').hidden = !(UI.tab !== 'chat' && chatUnread());
+    $('#chat-dot').hidden = !(UI.tab !== 'chat' && UI.tab !== 'news' && (chatUnread() || newsUnread()));
+    const bar = document.querySelector('.bar');
+    if (bar) document.documentElement.style.setProperty('--bar-h', bar.offsetHeight + 'px');
     const chatOn = UI.tab === 'chat' && chatAllowed();
     $('#chat-bar').hidden = !chatOn;
     $('#chat-pic').hidden = !(chatOn && workerUrl());
@@ -2412,6 +2504,7 @@ body.viewer-on { overflow: hidden; }
       else if (UI.tab === 'stats') h = renderStats();
       else if (UI.tab === 'scout') h = renderScout();
       else if (UI.tab === 'chat') h = renderChat();
+      else if (UI.tab === 'news') h = renderNews();
       else if (UI.tab === 'iq') h = renderIQ();
       else h = renderTeam();
     } catch (err) {
@@ -2423,6 +2516,7 @@ body.viewer-on { overflow: hidden; }
       if (nearBottom && Chat.loaded) { Chat.forceBottom = false; window.scrollTo(0, document.documentElement.scrollHeight); }
       chatMarkSeen();
     }
+    if (UI.tab === 'news' && chatAllowed() && News.loaded) newsMarkSeen();
     try { renderDock(); } catch (err) { console.error(err); }
     if (Cam.open) camBug();
   }
@@ -2456,7 +2550,7 @@ body.viewer-on { overflow: hidden; }
     const finals = games.filter((g) => g.status === 'final').reverse();
     let w = 0, l = 0, t = 0, rf = 0, ra = 0;
     for (const g of finals) { const r = result(g); rf += r.us; ra += r.them; if (r.us > r.them) w++; else if (r.us < r.them) l++; else t++; }
-    let h = sampleBanner() + feeBanner();
+    let h = sampleBanner() + newsBanner() + feeBanner();
     const next = upcoming[0];
     h += `<section class="board season"><span class="lbl">Season record</span>
       <span class="rec num">${w}<small>–</small>${l}${t ? '<small>–</small>' + t : ''}</span>
@@ -3357,6 +3451,13 @@ body.viewer-on { overflow: hidden; }
         + (sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : '')
         + `<div class="row"><button class="btn primary" data-act="authSubmit" ${sh.busy ? 'disabled' : ''}>${sh.busy ? 'Working…' : btn}</button></div>` + links;
     },
+    news(sh) {
+      return head(sh.id ? 'Edit announcement' : 'New announcement') + `
+        <label><span class="field-lbl">Announcement</span><textarea class="input" data-bind="text" rows="6" maxlength="2000" placeholder="Game time moved to 10am Saturday. Be there by 9:15 in white jerseys.">${esc(sh.text)}</textarea></label>
+        <p class="small muted" style="margin:0">${sh.id ? 'Editing doesn’t send another notification.' : 'Everyone on the team sees it on the Announcements tab, and anyone with notifications on gets one.'}</p>
+        ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
+        <div class="row"><button class="btn primary" data-act="newsSave">${sh.id ? 'Save' : 'Post'}</button><button class="btn" data-act="close">Cancel</button></div>`;
+    },
     mutes() {
       const list = mutedList();
       return head('Muted in team chat') + `<p class="small muted" style="margin:0">You don’t see their messages or get notified when they post. They aren’t told, and only you see this list.</p>
@@ -3959,7 +4060,10 @@ body.viewer-on { overflow: hidden; }
       UI.tab = d.tab;
       UI.feeId = null;
       if (d.tab === 'games') UI.gameId = null;
-      if (d.tab === 'chat') { Chat.forceBottom = true; Chat.delId = null; render(); return; }
+      if (d.tab === 'chat') {
+        if (newsUnread() || (UI.talk === 'news' && !chatUnread())) return A.talk({ v: 'news' });
+        Chat.forceBottom = true; Chat.delId = null; render(); return;
+      }
       try { localStorage.setItem('gs-baseball-tab', d.tab); } catch (e) { /* ignore */ }
       render();
       window.scrollTo(0, 0);
@@ -4484,6 +4588,39 @@ body.viewer-on { overflow: hidden; }
       toast('Unmuted ' + m.name);
     },
     muteShow(d) { Chat.show.add(d.uid); render(); },
+    talk(d) {
+      if (d.v === 'news') News.mark = newsSeen();
+      UI.tab = d.v === 'news' ? 'news' : 'chat';
+      UI.talk = UI.tab; UI.feeId = null; Chat.delId = null;
+      if (UI.tab === 'chat') { Chat.forceBottom = true; render(); return; }
+      render();
+      window.scrollTo(0, 0);
+    },
+    newsNew() { if (Access.isAdmin) openSheet({ type: 'news', id: null, text: '', err: '' }); },
+    newsEdit(d) { const a = News.list.find((x) => x.id === d.id); if (a && Access.isAdmin) openSheet({ type: 'news', id: a.id, text: a.text, err: '' }); },
+    newsSave() {
+      const sh = UI.sheet;
+      const text = String(sh.text || '').trim().slice(0, 2000);
+      if (!text) { sh.err = 'Write something first.'; return renderSheet(); }
+      const again = (e) => { openSheet({ type: 'news', id: sh.id, text, err: e && e.code === 'permission-denied' ? 'Couldn’t post. Only coaches can post, and the latest security rules need to be published.' : 'Couldn’t post. Check your connection and try again.' }); };
+      closeSheet();
+      if (sh.id) {
+        FB.F.updateDoc(FB.F.doc(FB.fs, 'announcements', sh.id), { text, edited: Date.now() }).catch(again);
+        toast('Announcement updated');
+      } else {
+        FB.F.addDoc(FB.F.collection(FB.fs, 'announcements'), { uid: Access.user.uid, name: chatName().slice(0, 60), text, at: FB.F.serverTimestamp() }).then(() => pingNotify()).catch(again);
+        toast('Posted to the team');
+        window.scrollTo(0, 0);
+      }
+    },
+    newsDelete(d) {
+      const a = News.list.find((x) => x.id === d.id);
+      if (!a) return;
+      confirmSheet('Delete this announcement?', 'It’s removed for everyone.', 'Delete', async () => {
+        try { await FB.F.deleteDoc(FB.F.doc(FB.fs, 'announcements', a.id)); toast('Announcement deleted'); }
+        catch (e) { toast(e && e.code === 'permission-denied' ? 'Couldn’t delete. Check that the latest security rules are published.' : 'Couldn’t delete. Check your connection and try again.'); }
+      }, true);
+    },
     muteHide(d) { Chat.show.delete(d.uid); Chat.delId = null; render(); },
     muteManage() { openSheet({ type: 'mutes' }); },
     muteOff(d) { const n = Chat.mute[d.uid] || 'them'; muteSet(d.uid, n, false); toast('Unmuted ' + n); },
