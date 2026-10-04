@@ -443,12 +443,9 @@ async function notifyRun(env, self, site) {
   const msgs = await db.query('messages', 'at', 'GREATER_THAN', { timestampValue: new Date(since).toISOString() }, 'at', 25);
   if (msgs.length) state.msgAt = Math.max(...msgs.map((m) => m.at || 0));
   else if (first) state.msgAt = since;
-  if (!first) {
-    const link = site + '/#chat';
-    const say = (m, n) => (m.photo ? '📷 Photo' + (m.text ? ': ' : '') : '') + String(m.text || '').slice(0, n);
-    if (msgs.length <= 3) for (const m of msgs) out.push({ kind: 'chat', title: (m.name || 'Team chat') + (m.coach ? ' (Coach)' : ''), body: say(m, 160), tag: 'chat-' + m._id, link, except: m.uid });
-    else { const last = msgs[msgs.length - 1]; out.push({ kind: 'chat', title: msgs.length + ' new messages in team chat', body: (last.name || '') + ': ' + say(last, 120), tag: 'chat', link }); }
-  }
+  // Chat notifications are worked out per person below, so nobody hears about their own messages
+  // or about people they muted.
+  const chatNew = first ? [] : msgs;
 
   // Games in progress: start, runs, half-innings, final
   const live = await db.query('games', 'status', 'EQUAL', { stringValue: 'live' }, null, 10);
@@ -486,18 +483,27 @@ async function notifyRun(env, self, site) {
 
   if (JSON.stringify(state) === before) return { sent: 0 };
   if (!(await db.saveState(state, cur ? cur._updateTime : null))) return { sent: 0, raced: true };
-  if (!out.length) return { sent: 0 };
+  if (!out.length && !chatNew.length) return { sent: 0 };
 
-  // Who gets what: approved members (or the owner) with the matching setting on, never the sender.
-  const [tokens, members, setup] = await Promise.all([db.list('pushTokens'), db.list('members'), db.get('config/setup')]);
+  // Who gets what: approved members (or the owner) with the matching setting on, never the sender,
+  // and no chat messages from people they muted (prefs/{uid}.mute, a map of muted uid -> name).
+  const [tokens, members, setup, prefs] = await Promise.all([db.list('pushTokens'), db.list('members'), db.get('config/setup'), chatNew.length ? db.list('prefs').catch(() => []) : []]);
   const ok = new Set(members.filter((m) => m.status === 'approved').map((m) => m._id));
   if (setup && setup.owner) ok.add(setup.owner);
+  const muted = new Map(prefs.map((x) => [x._id, x.mute && typeof x.mute === 'object' ? x.mute : {}]));
   const icon = site + '/icons/icon-192.png';
+  const link = site + '/#chat';
+  const say = (m, n) => (m.photo ? '📷 Photo' + (m.text ? ': ' : '') : '') + String(m.text || '').slice(0, n);
   const items = [];
-  for (const n of out) {
-    for (const t of tokens) {
-      if (!t.token || !ok.has(t.uid) || t.uid === n.except) continue;
-      if (n.kind === 'chat' && t.chat === false) continue;
+  for (const t of tokens) {
+    if (!t.token || !ok.has(t.uid)) continue;
+    if (chatNew.length && t.chat !== false) {
+      const mute = muted.get(t.uid) || {};
+      const see = chatNew.filter((m) => m.uid !== t.uid && !mute[m.uid]);
+      if (see.length <= 3) for (const m of see) items.push({ id: t._id, token: t.token, title: (m.name || 'Team chat') + (m.coach ? ' (Coach)' : ''), body: say(m, 160), tag: 'chat-' + m._id, link, icon });
+      else { const last = see[see.length - 1]; items.push({ id: t._id, token: t.token, title: see.length + ' new messages in team chat', body: (last.name || '') + ': ' + say(last, 120), tag: 'chat', link, icon }); }
+    }
+    for (const n of out) {
       if (n.kind === 'score' && (t.scores === 'off' || (n.level === 'all' && t.scores !== 'all'))) continue;
       items.push({ id: t._id, token: t.token, title: n.title, body: n.body, tag: n.tag, link: n.link, icon });
     }

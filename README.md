@@ -76,7 +76,11 @@ The scoring phone keeps working when the field has no service:
 
 ## Team chat
 
-The **Chat** tab is one group conversation for everyone with an approved account: coaches, families and camera operators. People watching through "Anyone with the link" without signing in don't see it. Coaches' messages show a **Coach** tag. To delete a message, tap it and then tap **Delete message**. Anyone can delete their own messages; coaches can delete any message. A hint under the latest message says so until you've deleted one. A red dot on the Chat tab means there are new messages. The chat keeps the latest 300 messages on screen.
+The **Chat** tab is one group conversation for everyone with an approved account: coaches, families and camera operators. People watching through "Anyone with the link" without signing in don't see it. Coaches' messages show a **Coach** tag. To delete a message, tap it and then tap **Delete message**. Anyone can delete their own messages; coaches can delete any message. A hint under the latest message says so until you've deleted a message or muted someone. A red dot on the Chat tab means there are new messages. The chat keeps the latest 300 messages on screen.
+
+### Muting someone
+
+Anyone can mute anyone in the chat, anytime. Tap one of their messages, then **Mute**. Their messages fold into a quiet "messages from … (muted)" line you can open with **Show**, and you stop getting notifications when they post. Muting only changes what *you* see. They aren't told, they can still post, and everyone else still sees their messages. To unmute, tap one of their messages after **Show**, or go to **Team → Account → Muted in team chat → Manage**. Your mute list follows your account to every phone you sign in on. It needs the latest `firestore.rules` published (and the latest `worker.js` for the notification part).
 
 ### Photos in the chat
 

@@ -148,6 +148,15 @@ service cloud.firestore {
       }
     }
 
+    // Each person's own chat settings: who they muted (a map of uid -> name). Private to them;
+    // the Worker reads it with the service account to skip notifications from muted people.
+    match /prefs/{uid} {
+      allow read, delete: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid && (isApproved() || isAdmin())
+        && request.resource.data.keys().hasOnly(['mute', 'updatedAt'])
+        && request.resource.data.mute is map && request.resource.data.mute.size() <= 300;
+    }
+
     // Team chat: one group conversation for signed-in, approved members (not link-only viewers).
     match /messages/{id} {
       allow read: if isApproved() || isAdmin();

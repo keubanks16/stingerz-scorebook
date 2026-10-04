@@ -558,7 +558,12 @@ body.cam-on { overflow: hidden; }
 .msg.me .bubble { background: var(--accent); color: var(--accent-ink); border-color: transparent; border-radius: 16px 16px 4px 16px; }
 .msg[data-act] { cursor: pointer; }
 .msg.sel .bubble { box-shadow: 0 0 0 2px var(--bad); }
-.msg-acts { display: flex; gap: 4px; align-items: center; }
+.msg.sel:not(.me) .bubble, .msg.sel:not(.me) .photo { box-shadow: 0 0 0 2px var(--accent); }
+.msg-acts { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.msg.hushed .bubble, .msg.hushed .photo { opacity: .6; }
+.chat-muted { align-self: flex-start; display: flex; align-items: center; gap: 8px; max-width: 82%; margin-top: 8px; padding: 4px 4px 4px 12px; border: 1px dashed var(--line); border-radius: 16px; color: var(--ink-3); font-size: 13px; }
+.chat-muted svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.chat-muted span { min-width: 0; }
 .chat-hint { align-self: center; font-size: 12px; color: var(--ink-3); margin-top: 10px; text-align: center; }
 body.chat-on main { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
 .chat-bar { position: fixed; left: 0; right: 0; bottom: calc(57px + env(safe-area-inset-bottom, 0px)); z-index: 29; background: var(--surface); border-top: 1px solid var(--line); padding: 8px max(12px, calc((100% - 760px) / 2 + 12px)); display: flex; gap: 8px; align-items: flex-end; }
@@ -1154,6 +1159,7 @@ body.viewer-on { overflow: hidden; }
       }, () => { X.worker = null; });
     } else if (!(X.isAdmin || X.isCamera) && WorkerSub) { WorkerSub(); WorkerSub = null; X.worker = null; }
     if (chatAllowed() && !Chat.sub) chatSubscribe();
+    muteSync();
     feesSync();
     if (chatAllowed() && pushLocal() && !Push.listening && 'Notification' in window && Notification.permission === 'granted') pushMessaging().catch(() => {});
     else if (!chatAllowed() && Chat.sub) { Chat.sub(); Chat.sub = null; Chat.list = []; Chat.loaded = false; }
@@ -1268,6 +1274,10 @@ body.viewer-on { overflow: hidden; }
     if (X.user) {
       const role = X.isOwner ? 'Admin (team owner)' : X.isAdmin ? 'Coach (admin)' : X.isCamera ? 'Camera operator (streams games)' : X.isApproved ? 'Family (view only)' : 'Waiting for approval';
       h += `<div class="row"><div class="grow"><b>${esc((X.member && X.member.name) || X.user.displayName || X.user.email)}</b><div class="small muted">${esc(X.user.email || '')} · ${esc(role)}</div></div><button class="btn sm" data-act="signOut">Sign out</button></div>`;
+      if (chatAllowed()) {
+        const muted = mutedList();
+        h += `<div class="hr"></div><div class="row" id="muted"><div class="grow"><b>Muted in team chat</b><div class="small muted">${muted.length ? esc(muted.map(([, n]) => n).join(', ')) : 'Nobody. To mute someone, tap one of their messages in Chat.'}</div></div>${muted.length ? '<button class="btn sm" data-act="muteManage">Manage</button>' : ''}</div>`;
+      }
     } else {
       h += '<div class="row"><span class="grow">Coaches sign in here to score games.</span><button class="btn sm primary" data-act="authOpen" data-mode="signin">Sign in</button></div>';
     }
@@ -1467,7 +1477,7 @@ body.viewer-on { overflow: hidden; }
   }
 
   // ---------- Team chat (one group conversation for everyone approved) ----------
-  const Chat = { sub: null, list: [], loaded: false, delId: null, forceBottom: false, sending: false, pending: null, urls: new Map(), urlBusy: false, urlRetry: 0 };
+  const Chat = { sub: null, list: [], loaded: false, delId: null, forceBottom: false, sending: false, pending: null, urls: new Map(), urlBusy: false, urlRetry: 0, mute: {}, muteSub: null, muteUid: '', show: new Set() };
   const CHAT_SEEN = 'gs-baseball-chat-seen';
   const CHAT_DELHINT = 'gs-baseball-chat-delhint';
   function chatDelHintDone() { try { return localStorage.getItem(CHAT_DELHINT) === '1'; } catch (e) { return false; } }
@@ -1481,7 +1491,43 @@ body.viewer-on { overflow: hidden; }
   function chatUnread() {
     if (!chatAllowed() || !Chat.list.length) return false;
     const me = Access.user.uid, seen = chatSeen();
-    return Chat.list.some((m) => m.uid !== me && m.at > seen);
+    return Chat.list.some((m) => m.uid !== me && m.at > seen && !isMuted(m.uid));
+  }
+  // Muting is personal: anyone can mute anyone, anytime. It hides that person's messages for you
+  // and stops notifications from them; they aren't told. Saved in prefs/{your uid} (private to you,
+  // read by the Worker for notifications) and on this phone so it applies right away.
+  const CHAT_MUTE = 'gs-hub-mute:';
+  const MUTE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>';
+  function muteCache() { try { localStorage.setItem(CHAT_MUTE + Chat.muteUid, JSON.stringify(Chat.mute)); } catch (e) { /* per-device copy only */ } }
+  function muteSync() {
+    const uid = chatAllowed() ? Access.user.uid : '';
+    if (uid === Chat.muteUid) return;
+    if (Chat.muteSub) { Chat.muteSub(); Chat.muteSub = null; }
+    Chat.muteUid = uid; Chat.mute = {}; Chat.show.clear();
+    if (!uid) return;
+    try { const c = JSON.parse(localStorage.getItem(CHAT_MUTE + uid) || 'null'); if (c && typeof c === 'object' && !Array.isArray(c)) Chat.mute = c; } catch (e) { /* nothing saved here */ }
+    Chat.muteSub = FB.F.onSnapshot(FB.F.doc(FB.fs, 'prefs', uid), (snap) => {
+      if (!snap.exists() && snap.metadata && snap.metadata.fromCache) return; // offline, nothing cached yet: keep this phone's copy
+      const x = snap.exists() ? snap.data() : null;
+      Chat.mute = x && x.mute && typeof x.mute === 'object' ? Object.assign({}, x.mute) : {};
+      muteCache(); scheduleRender();
+      if (UI.sheet && UI.sheet.type === 'mutes') renderSheet();
+    }, () => {});
+  }
+  function isMuted(uid) { return !!uid && !!Chat.mute[uid] && !(Access.user && uid === Access.user.uid); }
+  function mutedList() { return Object.entries(Chat.mute).filter(([u]) => !(Access.user && u === Access.user.uid)).sort((a, b) => String(a[1]).localeCompare(String(b[1]))); }
+  function muteSet(uid, name, on) {
+    if (!chatAllowed() || !uid || uid === Access.user.uid) return;
+    const before = Object.assign({}, Chat.mute);
+    if (on) Chat.mute[uid] = String(name || 'Team member').slice(0, 60);
+    else { delete Chat.mute[uid]; Chat.show.delete(uid); }
+    muteCache(); render();
+    if (UI.sheet && UI.sheet.type === 'mutes') renderSheet();
+    FB.F.setDoc(FB.F.doc(FB.fs, 'prefs', Access.user.uid), { mute: Object.assign({}, Chat.mute), updatedAt: Date.now() }).catch((e) => {
+      Chat.mute = before; muteCache(); render();
+      if (UI.sheet && UI.sheet.type === 'mutes') renderSheet();
+      toast(e && e.code === 'permission-denied' ? 'Couldn’t save that. Check that the latest security rules are published.' : 'Couldn’t save that. Check your connection and try again.');
+    });
   }
   function chatSubscribe() {
     const q = FB.F.query(FB.F.collection(FB.fs, 'messages'), FB.F.orderBy('at', 'desc'), FB.F.limit(300));
@@ -1512,29 +1558,48 @@ body.viewer-on { overflow: hidden; }
     if (!Chat.loaded) return '<div class="loading"><div>Loading the team chat…</div></div>';
     if (!Chat.list.length) return `<div class="card empty"><h3>Team chat</h3><p>One conversation for coaches and players' families. Say hi to the team.</p></div>`;
     const me = Access.user.uid;
-    let h = '<div class="chat">', lastDay = '', prev = null, anyDel = false;
+    let h = '<div class="chat">', lastDay = '', prev = null, run = null;
+    // Messages from someone you muted fold into one quiet line you can open.
+    const flush = () => {
+      if (!run) return;
+      h += `<div class="chat-muted">${MUTE_ICON}<span>${run.n} message${run.n === 1 ? '' : 's'} from ${esc(run.name)} (muted)</span><button class="btn ghost sm" data-act="muteShow" data-uid="${esc(run.uid)}">Show</button></div>`;
+      run = null; prev = null;
+    };
     for (const m of Chat.list) {
       const day = chatDay(m.at);
-      if (day !== lastDay) { h += `<div class="chat-day">${esc(day)}</div>`; lastDay = day; prev = null; }
+      if (day !== lastDay) { flush(); h += `<div class="chat-day">${esc(day)}</div>`; lastDay = day; prev = null; }
       const mine = m.uid === me;
+      const hush = !mine && isMuted(m.uid);
+      if (hush && !Chat.show.has(m.uid)) {
+        if (run && run.uid !== m.uid) flush();
+        if (!run) run = { uid: m.uid, name: m.name, n: 0 };
+        run.n++; run.name = m.name;
+        continue;
+      }
+      flush();
       const grouped = prev && prev.uid === m.uid && m.at - prev.at < 5 * 60 * 1000;
-      const canDel = mine || Access.isAdmin;
-      const sel = canDel && Chat.delId === m.id;
-      if (canDel) anyDel = true;
-      h += `<div class="msg${mine ? ' me' : ''}${grouped ? ' grouped' : ''}${sel ? ' sel' : ''}"${canDel ? ` data-act="msgTap" data-id="${esc(m.id)}"` : ''}>`;
-      if (!grouped) h += `<div class="msg-meta">${mine ? '' : `<b>${esc(m.name)}</b>${m.coach ? '<span class="chip">Coach</span>' : ''} · `}${esc(chatTime(m.at))}</div>`;
+      const sel = Chat.delId === m.id;
+      h += `<div class="msg${mine ? ' me' : ''}${grouped ? ' grouped' : ''}${sel ? ' sel' : ''}${hush ? ' hushed' : ''}" data-act="msgTap" data-id="${esc(m.id)}">`;
+      if (!grouped) h += `<div class="msg-meta">${mine ? '' : `<b>${esc(m.name)}</b>${m.coach ? '<span class="chip">Coach</span>' : ''}${hush ? '<span class="chip">Muted</span>' : ''} · `}${esc(chatTime(m.at))}</div>`;
       if (m.photo) {
         const u = chatPhotoUrl(m.photo.key);
         const ar = m.photo.w && m.photo.h ? Math.min(2, Math.max(0.5, m.photo.w / m.photo.h)) : 0.75;
         h += `<button class="photo" data-act="photoOpen" data-id="${esc(m.id)}" style="aspect-ratio:${ar.toFixed(3)}" aria-label="Open photo from ${esc(m.name)}">${u ? `<img src="${esc(u)}" alt="">` : ''}</button>`;
       }
       if (m.text) h += `<div class="bubble">${esc(m.text)}</div>`;
-      if (sel) h += `<div class="msg-acts"><button class="btn sm danger" data-act="msgDelete" data-id="${esc(m.id)}">Delete message</button><button class="btn sm ghost" data-act="msgCancel">Cancel</button></div>`;
+      if (sel) {
+        const nm = esc(String(m.name || 'them').slice(0, 30));
+        h += '<div class="msg-acts">'
+          + (mine ? '' : hush ? `<button class="btn sm" data-act="msgUnmute" data-id="${esc(m.id)}">Unmute ${nm}</button><button class="btn sm ghost" data-act="muteHide" data-uid="${esc(m.uid)}">Hide</button>` : `<button class="btn sm" data-act="msgMute" data-id="${esc(m.id)}">Mute ${nm}</button>`)
+          + (mine || Access.isAdmin ? `<button class="btn sm danger" data-act="msgDelete" data-id="${esc(m.id)}">Delete message</button>` : '')
+          + '<button class="btn sm ghost" data-act="msgCancel">Cancel</button></div>';
+      }
       h += '</div>';
       prev = m;
     }
-    // Deleting is a tap on the message, which nobody would guess, so say so until they've done it once.
-    if (anyDel && !Chat.delId && !chatDelHintDone()) h += `<div class="chat-hint">Tap ${Access.isAdmin ? 'any message' : 'one of your messages'} to delete it</div>`;
+    flush();
+    // Deleting and muting are a tap on the message, which nobody would guess, so say so until they've done one.
+    if (!Chat.delId && !chatDelHintDone()) h += `<div class="chat-hint">${Access.isAdmin ? 'Tap a message to delete it or mute someone' : 'Tap your message to delete it, or someone else’s to mute them'}</div>`;
     return h + '</div>';
   }
   async function chatSend() {
@@ -3292,6 +3357,12 @@ body.viewer-on { overflow: hidden; }
         + (sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : '')
         + `<div class="row"><button class="btn primary" data-act="authSubmit" ${sh.busy ? 'disabled' : ''}>${sh.busy ? 'Working…' : btn}</button></div>` + links;
     },
+    mutes() {
+      const list = mutedList();
+      return head('Muted in team chat') + `<p class="small muted" style="margin:0">You don’t see their messages or get notified when they post. They aren’t told, and only you see this list.</p>
+        ${list.length ? `<div class="card" style="padding:0 14px;box-shadow:none">${list.map(([u, n]) => `<div class="who" style="cursor:default"><span class="nm"><b>${esc(n)}</b></span><button class="btn sm" data-act="muteOff" data-uid="${esc(u)}">Unmute</button></div>`).join('')}</div>` : '<p class="muted" style="margin:0">Nobody is muted.</p>'}
+        <div class="row"><button class="btn" data-act="close">Done</button></div>`;
+    },
     member(sh) {
       const m = Access.members.find((x) => x.uid === sh.uid);
       if (!m) return head('Account') + '<p class="muted">This account was removed.</p>';
@@ -4397,6 +4468,25 @@ body.viewer-on { overflow: hidden; }
       render();
     },
     msgCancel() { Chat.delId = null; render(); },
+    msgMute(d) {
+      const m = Chat.list.find((x) => x.id === d.id);
+      if (!m) return;
+      Chat.delId = null;
+      try { localStorage.setItem(CHAT_DELHINT, '1'); } catch (e) { /* per-device only */ }
+      muteSet(m.uid, m.name, true);
+      toast('Muted ' + (/[.!?]$/.test(m.name) ? m.name : m.name + '.') + ' They won’t know. Unmute anytime.');
+    },
+    msgUnmute(d) {
+      const m = Chat.list.find((x) => x.id === d.id);
+      if (!m) return;
+      Chat.delId = null;
+      muteSet(m.uid, m.name, false);
+      toast('Unmuted ' + m.name);
+    },
+    muteShow(d) { Chat.show.add(d.uid); render(); },
+    muteHide(d) { Chat.show.delete(d.uid); Chat.delId = null; render(); },
+    muteManage() { openSheet({ type: 'mutes' }); },
+    muteOff(d) { const n = Chat.mute[d.uid] || 'them'; muteSet(d.uid, n, false); toast('Unmuted ' + n); },
     photoOpen(d) { viewerOpen(d.id); },
     viewerClose() { viewerClose(); },
     photoClear() { chatPhotoClear(); render(); },
