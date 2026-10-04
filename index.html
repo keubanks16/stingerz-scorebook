@@ -1433,7 +1433,7 @@ body.viewer-on { overflow: hidden; }
     if (!canInvite()) return '';
     const me = Access.user.uid;
     let h = `<h2 class="sec">Invite family to watch <button class="btn ghost sm" data-act="inviteNew">+ Invite</button></h2><section class="card stack" style="padding:14px">
-      <p style="margin:0">Send grandparents and other family a link to follow games: the live score, every play, the live video, box scores and stats. They don’t need an account, and they can’t see the chat or fees.</p>`;
+      <p style="margin:0">Send grandparents and other family a link to follow games: the live score, every play, the live video and box scores. They don’t need an account, and they can’t see the chat or fees.</p>`;
     if (Invites.list.length) {
       h += '<div class="invite-list">' + Invites.list.map((v) => `<div class="row invite-row"><div class="grow" style="min-width:0"><b>${esc(v.name || 'Family')}</b><div class="small muted">Sent ${esc(inviteDate(v.at))}${v.by !== me ? ' · from ' + esc(v.byName || 'a family') : ''}</div></div>${v.by === me ? `<button class="btn sm" data-act="inviteShare" data-id="${esc(v.id)}">Share</button>` : ''}<button class="btn sm ghost" data-act="inviteOff" data-id="${esc(v.id)}">Turn off</button></div>`).join('') + '</div>';
     }
@@ -1557,7 +1557,7 @@ body.viewer-on { overflow: hidden; }
     let h = '<h2 class="sec">Account</h2><section class="card stack" style="padding:14px">';
     if (X.user && X.user.isAnonymous) {
       const iv = X.guestInvite || {};
-      h += `<div class="row"><div class="grow"><b>Watching as a guest${iv.name ? ' (' + esc(iv.name) + ')' : ''}</b><div class="small muted">Invited by ${esc(iv.byName || 'a team family')}. You can follow games and stats.</div></div><button class="btn sm" data-act="signOut">Stop watching</button></div>`;
+      h += `<div class="row"><div class="grow"><b>Watching as a guest${iv.name ? ' (' + esc(iv.name) + ')' : ''}</b><div class="small muted">Invited by ${esc(iv.byName || 'a team family')}. You can follow games live.</div></div><button class="btn sm" data-act="signOut">Stop watching</button></div>`;
       h += '<div class="hr"></div><div class="row"><span class="grow small muted">Coach or team family with an account?</span><button class="btn sm" data-act="authOpen" data-mode="signin">Sign in</button></div>';
     } else if (X.user) {
       const role = X.isOwner ? 'Admin (team owner)' : X.isAdmin ? 'Coach (admin)' : X.isCamera ? 'Camera operator (streams games)' : X.isScorer ? 'Scorekeeper (scores games)' : X.isApproved ? 'Family (view only)' : 'Waiting for approval';
@@ -3837,7 +3837,7 @@ body.viewer-on { overflow: hidden; }
     },
     invite(sh) {
       if (!sh.token) {
-        return head('Invite family to watch') + `<p style="margin:0">They get a link that opens the team’s games: the live score, every play, the live video, box scores and stats. No account needed. They can’t see the chat or fees.</p>
+        return head('Invite family to watch') + `<p style="margin:0">They get a link that opens the team’s games: the live score, every play, the live video and box scores. No account needed. They can’t see the chat or fees.</p>
           <label><span class="field-lbl">Who is it for?</span>${inp('name', sh.name, `placeholder="${esc(invitePlaceholder())}" autocomplete="off" maxlength="60"`)}</label>
           ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
           <div class="row"><button class="btn primary" data-act="inviteMake" ${sh.busy ? 'disabled' : ''}>${sh.busy ? 'Making the link…' : 'Make the link'}</button><button class="btn" data-act="close">Cancel</button></div>`;
