@@ -25,6 +25,10 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 - **Who can watch** (same screen): **Approved families**, where parents create an account and a coach approves it, or **Anyone with the link**, with no sign-in needed to watch.
 - The database itself enforces these rules (`firestore.rules`). Hiding buttons isn't the only protection. After updating `firestore.rules` here, paste it into Firebase again and **Publish**.
 
+## Practice games
+
+Coaches and scorekeepers can practice scoring without anyone else knowing: on the Games tab tap **+ Practice game** (or switch **Kind of game** to **Practice** on any game). A practice game works like a real one, but families never see it, nobody gets notifications for it, and it never counts in the season record, stats, spray charts or scouting. It shows a dashed **Practice** tag. Delete it when you're done, or leave it.
+
 ## Fixing a play
 
 Only the owner can do this. Open a game, tap **Plays**, and tap any play, during the game or after it's final.
@@ -115,7 +119,7 @@ The **Chat** tab is one group conversation for everyone with an approved account
 
 ### Reactions
 
-Tap a message, then tap 👍, 👎, ❤️ or ⚾️ in the row that pops up. The counts show under the message; tap one of those to add the same reaction (or take yours back). Each person gets one reaction per message, so picking a different one switches it. When a message is selected, it lists who reacted with what. Photos have the same four buttons in the full-screen view. Reactions don't send notifications. Needs the latest `firestore.rules` published.
+Tap a message, then tap 👍, 👎, ❤️ or ⚾️ in the row that pops up. The counts show under the message; tap one of those to add the same reaction (or take yours back). Each person gets one reaction per message, so picking a different one switches it. When a message is selected, it lists who reacted, like "Coach Ray ❤️, Dana Ruiz 👍". Photos have the same four buttons in the full-screen view. Reactions don't send notifications. Needs the latest `firestore.rules` published.
 
 ### Muting someone
 

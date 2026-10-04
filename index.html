@@ -165,6 +165,7 @@ h2.sec { margin: 4px 0 -6px; font-size: 13px; letter-spacing: .12em; text-transf
 .chip.l { background: var(--bad); color: var(--on-signal); border-color: transparent; }
 .chip.live { background: var(--strike); color: var(--on-signal); border-color: transparent; }
 .chip.sample { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.chip.practice { background: var(--surface-2); color: var(--ink-2); border: 1px dashed var(--ink-3); }
 
 .banner { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 14px; border-radius: var(--radius); background: var(--accent-soft); color: var(--ink); font-size: 15px; }
 .banner .grow { min-width: 200px; }
@@ -1804,11 +1805,12 @@ body.viewer-on { overflow: hidden; }
     const mine = (m.react || {})[Access.user.uid];
     return `<div class="${cls}" role="group" aria-label="React to this message">${REACTS.map(([k, e, l]) => `<button data-act="react" data-id="${esc(m.id)}" data-r="${k}" data-close="1" aria-pressed="${mine === k}" aria-label="${l}">${e}</button>`).join('')}</div>`;
   }
+  // Who reacted, name first: "Coach Ray ❤️, Dana Ruiz 👍, You ⚾️".
   function reactWhoHTML(m) {
-    const by = {};
-    for (const u in m.react || {}) (by[m.react[u]] = by[m.react[u]] || []).push(personName(u));
-    const parts = REACTS.filter(([k]) => by[k]).map(([k, e]) => `${e} ${by[k].sort((a, b) => (a === 'You' ? -1 : b === 'You' ? 1 : a.localeCompare(b))).map(esc).join(', ')}`);
-    return parts.length ? `<div class="react-who">${parts.join(' · ')}</div>` : '';
+    const order = REACTS.map(([k]) => k);
+    const rows = Object.entries(m.react || {}).map(([u, k]) => [personName(u), k])
+      .sort((a, b) => (a[0] === 'You') - (b[0] === 'You') || order.indexOf(a[1]) - order.indexOf(b[1]) || a[0].localeCompare(b[0]));
+    return rows.length ? `<div class="react-who">${rows.map(([n, k]) => `${esc(n)} ${REACT_EMOJI[k]}`).join(', ')}</div>` : '';
   }
   function chatSubscribe() {
     const q = FB.F.query(FB.F.collection(FB.fs, 'messages'), FB.F.orderBy('at', 'desc'), FB.F.limit(300));
@@ -2431,7 +2433,8 @@ body.viewer-on { overflow: hidden; }
   const saveTeam = () => Saver.put('team/main', Data.team);
   function saveGame(g) {
     g.updatedAt = Date.now();
-    try { const s = st(g); g.sum = { a: s.score.away, h: s.score.home, i: s.inning, half: s.half, o: s.outs, us: s.us }; } catch (e) { /* summary is optional */ }
+    if (g.practice) delete g.sum; // no summary means the Worker never sends notifications for it
+    else try { const s = st(g); g.sum = { a: s.score.away, h: s.score.home, i: s.inning, half: s.half, o: s.outs, us: s.us }; } catch (e) { /* summary is optional */ }
     Saver.put('games/' + g.id, g);
     pingNotify();
   }
@@ -2470,6 +2473,10 @@ body.viewer-on { overflow: hidden; }
     return s;
   }
   const gamesList = () => Object.values(Data.games).sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
+  // Practice games are for coaches and scorekeepers to try scoring: families don't see them, they send
+  // no notifications (no score summary is saved for the Worker) and they never count in stats or scouting.
+  const realGames = () => gamesList().filter((g) => !g.practice);
+  const shownGames = () => (canEdit() ? gamesList() : realGames());
   const playerById = (id) => Data.team.players.find((p) => p.id === id);
   const sortedRoster = () => Data.team.players.slice().sort((a, b) => (parseInt(a.num, 10) || 999) - (parseInt(b.num, 10) || 999) || a.name.localeCompare(b.name));
   const oppEntry = (g, ref) => g.oppLineup.find((o) => o.id === ref) || g.oppSubs.find((o) => o.id === ref);
@@ -2501,8 +2508,8 @@ body.viewer-on { overflow: hidden; }
   }
   function liveGame() {
     const g = UI.liveId && Data.games[UI.liveId];
-    if (g && g.status === 'live') return g;
-    const live = gamesList().filter((x) => x.status === 'live');
+    if (g && g.status === 'live' && (!g.practice || canEdit())) return g;
+    const live = shownGames().filter((x) => x.status === 'live');
     return live.length ? live[live.length - 1] : null;
   }
   const canEdit = () => !UI.readOnly;
@@ -2843,7 +2850,7 @@ body.viewer-on { overflow: hidden; }
       const cur = UI.tab === 'news' || UI.tab === 'photos' ? 'chat' : UI.tab === 'swing' ? (UI.swingFrom || 'stats') : UI.tab;
       if (b.dataset.tab === cur) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     }
-    $('#live-dot').hidden = !Object.values(Data.games).some((g) => g.status === 'live');
+    $('#live-dot').hidden = !shownGames().some((g) => g.status === 'live');
     if ((UI.tab === 'chat' || UI.tab === 'news' || UI.tab === 'photos') && Backend.kind !== 'fb' && UI.ready) UI.tab = 'games';
     $('#chat-tab').hidden = !chatAllowed();
     $('#chat-dot').hidden = !(UI.tab !== 'chat' && UI.tab !== 'news' && UI.tab !== 'photos' && (chatUnread() || newsUnread()));
@@ -2906,25 +2913,26 @@ body.viewer-on { overflow: hidden; }
     if (startBtn) res = `<button class="btn sm primary" data-act="lineup" data-id="${esc(g.id)}" data-start="1">Start</button>`;
     return `<${startBtn ? 'div' : 'button'} class="game-row" ${startBtn ? 'style="cursor:default"' : `data-act="openGame" data-id="${esc(g.id)}"`}>
       <span class="gr-date"><span>${d.toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase()}</span><span class="d">${d.getDate()}</span><span>${d.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}</span></span>
-      <span style="min-width:0"><span class="gr-opp" style="display:block">${esc(opp)} ${g.sample ? '<span class="chip sample">Sample</span>' : ''}</span><span class="gr-meta" style="display:block">${esc(meta)}</span></span>
+      <span style="min-width:0"><span class="gr-opp" style="display:block">${esc(opp)} ${g.sample ? '<span class="chip sample">Sample</span>' : ''}</span><span class="gr-meta" style="display:block">${g.practice ? '<span class="chip practice">Practice</span> ' : ''}${esc(meta)}</span></span>
       <span class="gr-res">${res}</span></${startBtn ? 'div' : 'button'}>`;
   }
 
   function renderGames() {
-    if (UI.gameId && Data.games[UI.gameId]) return renderGameDetail(Data.games[UI.gameId]);
+    if (UI.gameId && Data.games[UI.gameId] && (!Data.games[UI.gameId].practice || canEdit())) return renderGameDetail(Data.games[UI.gameId]);
     UI.gameId = null;
-    const games = gamesList();
+    const games = shownGames();
     const live = games.filter((g) => g.status === 'live');
     const upcoming = games.filter((g) => g.status === 'scheduled');
     const finals = games.filter((g) => g.status === 'final').reverse();
     let w = 0, l = 0, t = 0, rf = 0, ra = 0;
-    for (const g of finals) { const r = result(g); rf += r.us; ra += r.them; if (r.us > r.them) w++; else if (r.us < r.them) l++; else t++; }
+    for (const g of finals) {
+      if (g.practice) continue; const r = result(g); rf += r.us; ra += r.them; if (r.us > r.them) w++; else if (r.us < r.them) l++; else t++; }
     let h = sampleBanner() + newsBanner() + feeBanner();
-    const next = upcoming[0];
+    const next = upcoming.find((g) => !g.practice);
     h += `<section class="board season"><span class="lbl">Season record</span>
       <span class="rec num">${w}<small>–</small>${l}${t ? '<small>–</small>' + t : ''}</span>
-      <span class="facts"><span>Runs <b class="num">${rf}</b> for · <b class="num">${ra}</b> against</span>${next ? `<span>Next: <b>${esc(longDate(next.date))}</b> ${next.home ? 'vs' : '@'} <b>${esc(next.opponent)}</b></span>` : `<span>${finals.length} game${finals.length === 1 ? '' : 's'} played</span>`}</span></section>`;
-    if (canEdit()) h += `<button class="btn primary block" data-act="newGame">+ New game</button>`;
+      <span class="facts"><span>Runs <b class="num">${rf}</b> for · <b class="num">${ra}</b> against</span>${next ? `<span>Next: <b>${esc(longDate(next.date))}</b> ${next.home ? 'vs' : '@'} <b>${esc(next.opponent)}</b></span>` : `<span>${w + l + t} game${w + l + t === 1 ? '' : 's'} played</span>`}</span></section>`;
+    if (canEdit()) h += `<div class="row"><button class="btn primary grow" data-act="newGame">+ New game</button><button class="btn" data-act="newGame" data-practice="1">+ Practice game</button></div>`;
     if (!games.length) {
       h += `<div class="card empty"><img src="${LOGO}" alt=""><h3>No games yet</h3><p>Add your first game, set the lineup, and score it pitch by pitch. Stats, spray charts and scouting fill in as you go.</p></div>`;
       return h;
@@ -3021,7 +3029,8 @@ body.viewer-on { overflow: hidden; }
   function renderGameDetail(g) {
     const s = st(g);
     let status = g.status === 'final' ? 'Final' : g.status === 'live' ? 'Live · ' + innLabel(s) : 'Scheduled' + (g.time ? ' · ' + fmtTime(g.time) : '');
-    let h = `<div class="row"><button class="btn ghost" data-act="back">‹ All games</button><span class="grow"></span>${g.sample ? '<span class="chip sample">Sample</span>' : ''}</div>`;
+    let h = `<div class="row"><button class="btn ghost" data-act="back">‹ All games</button><span class="grow"></span>${g.sample ? '<span class="chip sample">Sample</span>' : ''}${g.practice ? '<span class="chip practice">Practice</span>' : ''}</div>`;
+    if (g.practice) h += PRACTICE_NOTE;
     h += `<section class="board stack"><span class="lbl">${esc(status)} · ${esc(longDate(g.date))}${g.location ? ' · ' + esc(g.location) : ''}</span>${lineScore(g, s)}</section>`;
     if (canEdit()) {
       const a = [];
@@ -3166,6 +3175,7 @@ body.viewer-on { overflow: hidden; }
     if (n !== delayTick) { delayTick = n; render(); }
   }, 1000);
 
+  const PRACTICE_NOTE = '<div class="banner practice-note"><span class="grow"><b>Practice game.</b> Only coaches and scorekeepers see it. Nobody gets notifications, and it doesn\u2019t count in stats or scouting.</span></div>';
   function renderLive() {
     const g = liveGame();
     if (!g) {
@@ -3186,6 +3196,7 @@ body.viewer-on { overflow: hidden; }
       <div class="lb-side"><span class="lbl">Inning</span><span class="lb-inn">${arrow}${s.inning}</span></div>
       <div class="lights"><span class="light-set"><span class="lbl">B</span>${lamps(s.balls, 3, 'b')}</span><span class="light-set"><span class="lbl">S</span>${lamps(s.strikes, 2, 's')}</span><span class="light-set"><span class="lbl">O</span>${lamps(s.outs, 2, 'o')}</span></div>
     </section>`;
+    if (g.practice) h += PRACTICE_NOTE;
     if (s.over && canEdit()) {
       const r = result(g);
       h += `<div class="over-banner"><span class="grow">That's the game by regulation: ${esc(Data.team.name)} ${r.us}, ${esc(g.opponent)} ${r.them}.</span><button class="btn primary sm" data-act="finish" data-id="${g.id}">Finish game</button></div>`;
@@ -3247,7 +3258,7 @@ body.viewer-on { overflow: hidden; }
   function seasonStats() {
     const bat = {}, pit = {};
     let games = 0;
-    for (const g of gamesList()) {
+    for (const g of realGames()) {
       if (!g.events.length) continue;
       games++;
       const s = st(g);
@@ -3342,7 +3353,7 @@ body.viewer-on { overflow: hidden; }
   // ----- scouting -----
   function scoutData() {
     const opps = new Map();
-    for (const g of gamesList()) {
+    for (const g of realGames()) {
       if (!g.events.length) continue;
       const s = st(g);
       const oname = (g.opponent || 'Opponent').trim();
@@ -3430,7 +3441,7 @@ body.viewer-on { overflow: hidden; }
       if (!by.has(id)) { const p = playerById(id); by.set(id, { id, num: p && p.num ? String(p.num) : '', name: p ? p.name : fallback || 'Former player', bats: (p && p.bats) || '', pas: [] }); }
       return by.get(id);
     };
-    for (const g of gamesList()) {
+    for (const g of realGames()) {
       if (!g.events.length) continue;
       const s = st(g);
       for (const pa of s.pas) if (pa.side === s.us && pa.loc) get(pa.ref).pas.push(Object.assign({ date: g.date }, pa));
@@ -3678,7 +3689,8 @@ body.viewer-on { overflow: hidden; }
     },
     game(sh) {
       const opps = [...new Set(Object.values(Data.games).map((g) => g.opponent))];
-      return head(sh.id ? 'Edit game' : 'New game') + `
+      return head(sh.id ? (sh.f.practice ? 'Edit practice game' : 'Edit game') : sh.f.practice ? 'New practice game' : 'New game') + `
+        <div><span class="field-lbl">Kind of game</span>${segB('gamePractice', sh.f.practice ? 'p' : 'r', [['r', 'Real game'], ['p', 'Practice']])}${sh.f.practice ? '<span class="small muted" style="display:block;margin-top:6px">For practicing scoring. Only coaches and scorekeepers see it, nobody gets notifications, and it never counts in stats or scouting.</span>' : ''}</div>
         <label><span class="field-lbl">Opponent</span>${inp('f.opponent', sh.f.opponent, 'list="opp-list" autocomplete="off" placeholder="Team name"')}<datalist id="opp-list">${opps.map((o) => `<option value="${esc(o)}">`).join('')}</datalist></label>
         <div class="grid2"><label><span class="field-lbl">Date</span>${inp('f.date', sh.f.date, 'type="date"')}</label><label><span class="field-lbl">Time</span>${inp('f.time', sh.f.time, 'type="time"')}</label></div>
         <div><span class="field-lbl">We are</span>${segB('gameHome', sh.f.home ? 'home' : 'away', [['home', 'Home'], ['away', 'Away']])}</div>
@@ -3960,7 +3972,7 @@ body.viewer-on { overflow: hidden; }
       const log = [];
       const tot = E.emptyBat();
       const ptot = E.emptyPit();
-      for (const g of gamesList()) {
+      for (const g of realGames()) {
         if (!g.events.length) continue;
         const s = st(g);
         const mine = s.pas.filter((x) => x.ref === sh.id && x.side === s.us);
@@ -4715,8 +4727,9 @@ body.viewer-on { overflow: hidden; }
     scrim(d, el, ev) { if (ev.target === el) closeSheet(); },
     confirmYes() { const fn = UI.sheet && UI.sheet.fn; closeSheet(); if (fn) fn(); },
 
-    newGame() { openSheet({ type: 'game', f: { opponent: '', date: todayISO(), time: '', home: true, location: '', innings: Data.team.innings || 7 } }); },
-    editGame(d) { const g = Data.games[d.id]; openSheet({ type: 'game', id: g.id, f: { opponent: g.opponent, date: g.date, time: g.time || '', home: !!g.home, location: g.location || '', innings: g.innings, video: g.video || '' } }); },
+    newGame(d) { const p = !!(d && d.practice); openSheet({ type: 'game', f: { opponent: p ? 'Practice team' : '', date: todayISO(), time: '', home: true, location: '', innings: Data.team.innings || 7, practice: p } }); },
+    editGame(d) { const g = Data.games[d.id]; openSheet({ type: 'game', id: g.id, f: { opponent: g.opponent, date: g.date, time: g.time || '', home: !!g.home, location: g.location || '', innings: g.innings, video: g.video || '', practice: !!g.practice } }); },
+    gamePractice(d) { const f = UI.sheet.f; f.practice = d.v === 'p'; if (f.practice && !String(f.opponent).trim()) f.opponent = 'Practice team'; if (!f.practice && f.opponent === 'Practice team') f.opponent = ''; renderSheet(); },
     gameHome(d) { UI.sheet.f.home = d.v === 'home'; renderSheet(); },
     saveGame(d) {
       const sh = UI.sheet, f = sh.f;
@@ -4728,7 +4741,7 @@ body.viewer-on { overflow: hidden; }
       if (!g) { g = normGame({ id: uid('g'), status: 'scheduled', events: [] }); Data.games[g.id] = g; }
       const video = String(f.video || '').trim();
       if (video && !videoEmbed(video)) { sh.err = "That video link doesn't look right. Paste a YouTube link, or leave it empty."; return renderSheet(); }
-      Object.assign(g, { opponent: String(f.opponent).trim(), date: f.date, time: f.time, home: !!f.home, location: String(f.location).trim(), innings, video });
+      Object.assign(g, { opponent: String(f.opponent).trim(), date: f.date, time: f.time, home: !!f.home, location: String(f.location).trim(), innings, video, practice: !!f.practice });
       saveGame(g);
       closeSheet();
       UI.tab = 'games'; UI.gameId = g.id;
