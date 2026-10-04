@@ -1420,6 +1420,13 @@ body.viewer-on { overflow: hidden; }
     const r = crypto.getRandomValues(new Uint8Array(32));
     return Array.from(r, (n) => abc[n % abc.length]).join('');
   }
+  // "Avery's Grandparents" when the family is linked to a player, otherwise a fill-in-the-blank.
+  function invitePlaceholder() {
+    const ids = (Access.member && Array.isArray(Access.member.players)) ? Access.member.players : [];
+    const p = ids.map(playerById).find(Boolean);
+    const first = p ? String(p.name || '').trim().split(/\s+/)[0] : '';
+    return (first ? first + '\u2019s' : 'Player Name\u2019s') + ' Grandparents';
+  }
   function inviteDate(t) { return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
   function invitesHTML() {
     if (!canInvite()) return '';
@@ -3819,7 +3826,7 @@ body.viewer-on { overflow: hidden; }
     invite(sh) {
       if (!sh.token) {
         return head('Invite family to watch') + `<p style="margin:0">They get a link that opens the team’s games: the live score, every play, the live video, box scores and stats. No account needed. They can’t see the chat or fees.</p>
-          <label><span class="field-lbl">Who is it for?</span>${inp('name', sh.name, 'placeholder="Grandma and Grandpa Ruiz" autocomplete="off" maxlength="60"')}</label>
+          <label><span class="field-lbl">Who is it for?</span>${inp('name', sh.name, `placeholder="${esc(invitePlaceholder())}" autocomplete="off" maxlength="60"`)}</label>
           ${sh.err ? `<div class="warn-text">${esc(sh.err)}</div>` : ''}
           <div class="row"><button class="btn primary" data-act="inviteMake" ${sh.busy ? 'disabled' : ''}>${sh.busy ? 'Making the link…' : 'Make the link'}</button><button class="btn" data-act="close">Cancel</button></div>`;
       }
