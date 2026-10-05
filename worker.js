@@ -404,6 +404,13 @@ function firestore(pid, tok) {
       const r = await fetch(base + ':commit', { method: 'POST', headers: H, body: JSON.stringify({ writes: [write] }) });
       return r.ok ? id : null;
     },
+    // Same as create, with a chosen id; does nothing if that document already exists.
+    async createAt(col, id, data, timeField) {
+      const write = { update: { name: 'projects/' + pid + '/databases/(default)/documents/' + col + '/' + id, fields: fsEnc(data).mapValue.fields }, currentDocument: { exists: false } };
+      if (timeField) write.updateTransforms = [{ fieldPath: timeField, setToServerValue: 'REQUEST_TIME' }];
+      const r = await fetch(base + ':commit', { method: 'POST', headers: H, body: JSON.stringify({ writes: [write] }) });
+      return r.ok;
+    },
     async del(path) { const r = await fetch(base + '/' + path, { method: 'DELETE', headers: H }).catch(() => null); return !!(r && (r.ok || r.status === 404)); },
     async query(col, field, op, value, order, limit) {
       const q = { from: [{ collectionId: col }], where: { fieldFilter: { field: { fieldPath: field }, op, value } }, limit };
@@ -420,6 +427,27 @@ function firestore(pid, tok) {
     },
     async remove(path) { await fetch(base + '/' + path, { method: 'DELETE', headers: H }).catch(() => {}); }
   };
+}
+function eastern(now) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' }).formatToParts(now).map((x) => [x.type, x.value]));
+  return { y: Number(parts.year), md: parts.month + '-' + parts.day, day: parts.year + '-' + parts.month + '-' + parts.day, hour: Number(parts.hour) };
+}
+async function birthdays(db, state) {
+  const E = eastern(new Date());
+  if (E.hour < 8 || state.bdayDay === E.day) return;
+  const [b, team] = await Promise.all([db.get('config/birthdays'), db.get('team/main')]);
+  const dates = (b && b.dates) || {};
+  const leap = (E.y % 4 === 0 && E.y % 100 !== 0) || E.y % 400 === 0;
+  for (const p of (team && team.players) || []) {
+    const v = String(dates[p.id] || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) continue;
+    let md = v.slice(5);
+    if (md === '02-29' && !leap) md = '02-28';
+    if (md !== E.md) continue;
+    const first = String(p.name || '').trim().split(/\s+/)[0] || 'Player';
+    await db.createAt('announcements', 'bday-' + E.day + '-' + String(p.id).replace(/[^A-Za-z0-9_-]/g, ''), { uid: 'birthday', name: (team && team.name) || 'GS Baseball', text: 'Happy Birthday, ' + first + '!', birthday: true }, 'at');
+  }
+  state.bdayDay = E.day;
 }
 const ORDN = (n) => n + ((n % 100 >= 11 && n % 100 <= 13) ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] || 'th'));
 async function notifyRun(env, self, site) {
@@ -446,6 +474,11 @@ async function notifyRun(env, self, site) {
   // Chat notifications are worked out per person below, so nobody hears about their own messages
   // or about people they muted.
   const chatNew = first ? [] : msgs;
+
+  // Birthdays: once a day, from 8 AM Eastern, post "Happy Birthday, First!" for each player whose
+  // birthday it is (config/birthdays, set by coaches). Feb 29 birthdays get Feb 28 in other years.
+  // The announcement id is fixed per player per day, so it can only ever post once.
+  try { await birthdays(db, state); } catch (e) { /* try again next minute */ }
 
   // Coach announcements go to everyone with notifications on (not the coach who posted),
   // even if they turned team chat notifications off or muted that coach in the chat.

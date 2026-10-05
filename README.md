@@ -25,6 +25,14 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 - **Who can watch** (same screen): **Approved families**, where parents create an account and a coach approves it, or **Anyone with the link**, with no sign-in needed to watch.
 - The database itself enforces these rules (`firestore.rules`). Hiding buttons isn't the only protection. After updating `firestore.rules` here, paste it into Firebase again and **Publish**.
 
+## Player birthdays
+
+Coaches add a birthday to each player: Team tab → tap the player → **Birthday** → **Save**. Only coaches see birthdays (the roster shows 🎂 and the date, and a banner lists anyone with a birthday in the next two weeks). They're stored in `config/birthdays`, which only coaches can read, never with the roster that families and guests load.
+
+On a player's birthday, starting at 8 AM Eastern, the Cloudflare Worker posts an announcement: **"Happy Birthday, Avery!"** (first name), and everyone with notifications on gets it like any other announcement. It posts once per player per day. A Feb 29 birthday is posted on Feb 28 in other years. Coaches can edit or delete the post like any announcement.
+
+Needs the latest `firestore.rules` published and the latest `worker.js` deployed (with the every-minute Cron Trigger).
+
 ## Inviting family to watch
 
 Parents (and coaches) can send grandparents and other family a **watch link**: Team tab → **Invite family to watch → + Invite someone** (or **Invite family** on the Live tab), type who it's for, and share or copy the link. Whoever opens it can follow games without an account. Guests only get the **Games** and **Live** tabs: the live score, every play, the live video and box scores. They can't see the chat, chat photos or fees, and practice games stay hidden from them.

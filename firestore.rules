@@ -67,6 +67,12 @@ service cloud.firestore {
         && request.resource.data.publicView is bool;
     }
 
+    // Player birthdays: { dates: { playerId: 'YYYY-MM-DD' } }. Coaches only; the Worker reads it
+    // with the service account to post "Happy Birthday" announcements.
+    match /config/birthdays {
+      allow read, write: if isAdmin();
+    }
+
     // Cloudflare Worker address and access code, shared with coaches and camera operators.
     match /config/worker {
       allow read: if isAdmin() || isCamera();
