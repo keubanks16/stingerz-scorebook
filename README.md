@@ -91,6 +91,12 @@ Open **Swing AI** from the card at the top of the **Stats** tab or on the **Inst
 
 Needs the latest `firestore.rules` published. The engine files in `swing/` come from GS Baseball Scout; `swing/app.js` is the Hub's Swing AI page.
 
+## Defense Drills (preview)
+
+A retro 8-bit field on the **Instincts** tab that plays out where all nine fielders go on a ball in play: grounders to each infielder, singles to each outfielder, doubles into the gaps and bunts, with no one on, a runner on 1st, 2nd, or 1st and 2nd. **Watch** has play/pause, replay, half speed, labels, movement lines, sound and a time slider, plus "the call" and every player's job. **Quiz** gives you a position and a situation 10 times ("You're the shortstop. Grounder to second, runner on 1st. Where do you go?") and plays it out after you answer. It uses standard youth positioning.
+
+For now only the owner account sees it (`drillsAllowed()` in `index.html`). The game itself is `retro/defense.js`.
+
 ## Baseball Instincts
 
 The **Instincts** tab is for the players: game situations they solve on a field diagram that shows the runners, the outs, where the ball is hit and where **YOU** are. They pick what they'd do, then see the play drawn on the field and a short reason why.
