@@ -27,7 +27,7 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 
 ## Player birthdays
 
-Coaches add a birthday to each player: Team tab → tap the player → **Birthday** → **Save**. Only coaches see birthdays (the roster shows 🎂 and the date, and a banner lists anyone with a birthday in the next two weeks). They're stored in `config/birthdays`, which only coaches can read, never with the roster that families and guests load.
+Coaches add a birthday to each player: Team tab → tap the player → **Birthday** → **Save**. Only coaches see birthdays (the roster shows 🎂 and the date). They're stored in `config/birthdays`, which only coaches can read, never with the roster that families and guests load.
 
 On a player's birthday, starting at 8 AM Eastern, the Cloudflare Worker posts an announcement: **"Happy Birthday, Avery!"** (first name), and everyone with notifications on gets it like any other announcement. It posts once per player per day. A Feb 29 birthday is posted on Feb 28 in other years. Coaches can edit or delete the post like any announcement.
 

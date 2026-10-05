@@ -1357,14 +1357,6 @@ body.viewer-on { overflow: hidden; }
   }
   const bdayOk = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
   function bdayShort(v) { const [y, m, d] = String(v).split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
-  function bdayNext(v, from) {
-    const [, m, d] = String(v).split('-').map(Number);
-    const t = from || new Date(); t.setHours(0, 0, 0, 0);
-    let y = t.getFullYear(), n = new Date(y, m - 1, d);
-    if (n < t) { y++; n = new Date(y, m - 1, d); }
-    return n;
-  }
-  function bdayAge(v, on) { const [y] = String(v).split('-').map(Number); return on.getFullYear() - y; }
   async function bdaySave(pid, v) {
     const before = Bday.dates[pid];
     if (v) Bday.dates[pid] = v; else delete Bday.dates[pid];
@@ -1374,15 +1366,6 @@ body.viewer-on { overflow: hidden; }
       toast(e && e.code === 'permission-denied' ? 'Couldn’t save the birthday. The latest security rules need to be published in Firebase.' : 'Couldn’t save the birthday. Check your connection and try again.');
       render();
     }
-  }
-  // Coaches see who has a birthday coming up in the next two weeks.
-  function bdayUpcomingHTML() {
-    if (!(Backend.kind === 'fb' && Access.isAdmin)) return '';
-    const now = new Date(); now.setHours(0, 0, 0, 0);
-    const soon = Data.team.players.filter((p) => bdayOk(Bday.dates[p.id])).map((p) => ({ p, on: bdayNext(Bday.dates[p.id], new Date()) }))
-      .filter((x) => (x.on - now) / 86400000 <= 14).sort((a, b) => a.on - b.on);
-    if (!soon.length) return '';
-    return `<div class="banner bday-banner"><span class="grow">🎂 ${soon.map((x) => { const days = Math.round((x.on - now) / 86400000); return `<b>${esc(String(x.p.name).split(/\s+/)[0])}</b> turns ${bdayAge(Bday.dates[x.p.id], x.on)} ${days === 0 ? '<b>today</b>' : days === 1 ? 'tomorrow' : 'on ' + esc(x.on.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }))}`; }).join(' · ')}. The Hub posts the birthday announcement that morning.</span></div>`;
   }
   function watchMember(user) {
     if (MemberSub) { MemberSub(); MemberSub = null; }
@@ -3795,7 +3778,6 @@ body.viewer-on { overflow: hidden; }
     let h = sampleBanner() + yourFeesHTML();
     h += `<section class="card brand-card"><div class="logo-tile"><img src="${LOGO}" alt="GS logo"></div><div class="stack" style="gap:4px;min-width:0"><h3>${esc(t.name)}</h3><span class="muted small">${t.players.length} player${t.players.length === 1 ? '' : 's'} · ${t.innings}-inning games · ${t.pitchLimit ? t.pitchLimit + '-pitch limit' : 'no pitch limit'}</span>${canManage() ? '<div><button class="btn sm" data-act="teamEdit">Edit team settings</button></div>' : ''}</div></section>`;
     h += feesHTML();
-    h += bdayUpcomingHTML();
     h += `<h2 class="sec">Roster ${canManage() ? '<button class="btn ghost sm" data-act="player">+ Add player</button>' : ''}</h2>`;
     if (!t.players.length) h += `<div class="card empty"><h3>Add your players</h3><p>Numbers, positions, and which side they hit from. Lineups and stats use this roster.</p>${canManage() ? '<button class="btn primary" data-act="player">+ Add player</button>' : ''}</div>`;
     else h += `<div class="card roster">${sortedRoster().map((p) => `<button class="player" data-act="${canManage() ? 'player' : 'playerCard'}" data-id="${esc(p.id)}"><span class="no">${esc(p.num || '–')}</span><span style="min-width:0"><span class="nm">${esc(p.name)}</span> ${p.sample ? '<span class="chip sample">Sample</span>' : ''}<span class="meta">${esc(p.pos || 'Position not set')} · B/T ${esc(p.bats || '?')}/${esc(p.throws || '?')}${canManage() && bdayOk(Bday.dates[p.id]) ? ' · 🎂 ' + esc(bdayShort(Bday.dates[p.id])) : ''}</span></span><span class="meta">${canManage() ? 'Edit' : ''}</span></button>`).join('')}</div>`;
