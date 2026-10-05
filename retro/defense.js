@@ -6,22 +6,37 @@ const W = 208, H = 178;
 const HOME = [104, 164], B1 = [135, 133], B2 = [104, 102], B3 = [73, 133], MOUND = [104, 135];
 const BASE = { H: HOME, 1: B1, 2: B2, 3: B3 };
 const BASE_NAME = { H: 'home', 1: '1st', 2: '2nd', 3: '3rd' };
-const START = { P: [104, 132], C: [104, 172], '1B': [139, 123], '2B': [123, 104], SS: [85, 104], '3B': [69, 123], LF: [50, 62], CF: [104, 40], RF: [158, 62] };
-const ORDER = ['P', 'C', '1B', '2B', 'SS', '3B', 'LF', 'CF', 'RF'];
-const POS_NAME = { P: 'pitcher', C: 'catcher', '1B': 'first baseman', '2B': 'second baseman', SS: 'shortstop', '3B': 'third baseman', LF: 'left fielder', CF: 'center fielder', RF: 'right fielder' };
+const START3 = { P: [104, 132], C: [104, 172], '1B': [139, 123], '2B': [123, 104], SS: [85, 104], '3B': [69, 123], LF: [50, 64], CF: [104, 44], RF: [158, 64] };
+const START4 = Object.assign({}, START3, { LF: [46, 70], LC: [80, 50], RC: [124, 60], RF: [162, 70] });
+delete START4.CF;
+const ORDER3 = ['P', 'C', '1B', '2B', 'SS', '3B', 'LF', 'CF', 'RF'];
+const ORDER4 = ['P', 'C', '1B', '2B', 'SS', '3B', 'LF', 'LC', 'RC', 'RF'];
+const POS_NAME = { P: 'pitcher', C: 'catcher', '1B': 'first baseman', '2B': 'second baseman', SS: 'shortstop', '3B': 'third baseman', LF: 'left fielder', CF: 'center fielder', RF: 'right fielder', LC: 'left-center fielder', RC: 'right-center fielder (short fielder)' };
 
-export const HITS = [
-  { k: 'S-LF', g: 'Base hits', l: 'Single to LF', short: 'Single to left', to: [56, 70], by: 'LF', type: 'single', side: 'L' },
-  { k: 'S-CF', g: 'Base hits', l: 'Single to CF', short: 'Single to center', to: [104, 54], by: 'CF', type: 'single', side: 'C' },
-  { k: 'S-RF', g: 'Base hits', l: 'Single to RF', short: 'Single to right', to: [152, 70], by: 'RF', type: 'single', side: 'R' },
-  { k: 'D-LC', g: 'Doubles', l: 'Gap: left-center', short: 'Double to the left-center gap', to: [72, 26], by: 'LF', type: 'double', side: 'L' },
-  { k: 'D-RC', g: 'Doubles', l: 'Gap: right-center', short: 'Double to the right-center gap', to: [136, 26], by: 'RF', type: 'double', side: 'R' },
+const HITS3 = [
+  { k: 'S-LF', g: 'Base hits', l: 'Single to LF', short: 'Single to left', to: [56, 72], by: 'LF', type: 'single', side: 'L' },
+  { k: 'S-CF', g: 'Base hits', l: 'Single to CF', short: 'Single to center', to: [104, 56], by: 'CF', type: 'single', side: 'C' },
+  { k: 'S-RF', g: 'Base hits', l: 'Single to RF', short: 'Single to right', to: [152, 72], by: 'RF', type: 'single', side: 'R' },
+  { k: 'D-LC', g: 'Doubles', l: 'Gap: left-center', short: 'Double to the left-center gap', to: [70, 40], by: 'LF', type: 'double', side: 'L' },
+  { k: 'D-RC', g: 'Doubles', l: 'Gap: right-center', short: 'Double to the right-center gap', to: [138, 40], by: 'RF', type: 'double', side: 'R' }
+];
+const HITS4 = [
+  { k: 'S-LF', g: 'Base hits', l: 'Single to LF', short: 'Single to left', to: [54, 76], by: 'LF', type: 'single', side: 'L' },
+  { k: 'S-LC', g: 'Base hits', l: 'Single to LC', short: 'Single to left-center', to: [86, 60], by: 'LC', type: 'single', side: 'L' },
+  { k: 'S-RC', g: 'Base hits', l: 'Single to RC', short: 'Single to right-center', to: [122, 66], by: 'RC', type: 'single', side: 'R' },
+  { k: 'S-RF', g: 'Base hits', l: 'Single to RF', short: 'Single to right', to: [154, 76], by: 'RF', type: 'single', side: 'R' },
+  { k: 'D-LC', g: 'Doubles', l: 'Gap: LF–LC', short: 'Double to the gap between LF and LC', to: [62, 44], by: 'LF', type: 'double', side: 'L' },
+  { k: 'D-RC', g: 'Doubles', l: 'Gap: RC–RF', short: 'Double to the gap between RC and RF', to: [146, 44], by: 'RF', type: 'double', side: 'R' }
+];
+const INFIELD = [
   { k: 'G-3B', g: 'Grounders', l: 'To 3B', short: 'Grounder to third', to: [72, 121], by: '3B', type: 'grounder', side: 'L' },
   { k: 'G-SS', g: 'Grounders', l: 'To SS', short: 'Grounder to short', to: [89, 107], by: 'SS', type: 'grounder', side: 'L' },
   { k: 'G-2B', g: 'Grounders', l: 'To 2B', short: 'Grounder to second', to: [119, 107], by: '2B', type: 'grounder', side: 'R' },
   { k: 'G-1B', g: 'Grounders', l: 'To 1B', short: 'Grounder to first', to: [136, 121], by: '1B', type: 'grounder', side: 'R' },
   { k: 'BUNT', g: 'Bunts', l: 'Bunt (3B side)', short: 'Bunt down the third base line', to: [92, 150], by: '3B', type: 'bunt', side: 'L' }
 ];
+export const hitsFor = (of4) => (of4 ? HITS4 : HITS3).concat(INFIELD);
+export const HITS = hitsFor(false);
 export const RUNNERS = [['0', 'None'], ['1', '1st'], ['2', '2nd'], ['12', '1st & 2nd']];
 const RUN_TEXT = { 0: 'bases empty', 1: 'runner on 1st', 2: 'runner on 2nd', 12: 'runners on 1st & 2nd' };
 
@@ -38,81 +53,83 @@ const backupOf = (k, from, d) => add(BASE[k], mul(unit(sub(BASE[k], from)), d ||
 const behind = (spot, d) => add(spot, mul(unit(sub(spot, HOME)), d || 13));
 const between = (from, k, t) => lerp(BASE[k], from, t);
 
-export function buildPlay(hitKey, run) {
-  const h = HITS.find((x) => x.k === hitKey);
+// Keep anyone running out for a ball inside the fence.
+const inPark = (q) => { const v = sub(q, HOME), d = len(v); return d > 136 ? add(HOME, mul(v, 136 / d)) : [q[0], Math.max(26, q[1])]; };
+
+export function buildPlay(hitKey, run, of4) {
+  const hits = hitsFor(of4);
+  const h = hits.find((x) => x.k === hitKey) || hits.find((x) => x.k === 'G-SS');
+  const ORDER = of4 ? ORDER4 : ORDER3, START = of4 ? START4 : START3;
+  const OFS = of4 ? ['LF', 'LC', 'RC', 'RF'] : ['LF', 'CF', 'RF'];
   const F = h.to;
   const on1 = run === '1' || run === '12', on2 = run === '2' || run === '12';
   const J = {};
-  const set = (pos, job, to) => { if (!J[pos]) J[pos] = { job, to: to.map((v) => Math.round(v * 10) / 10) }; };
-  const throws = []; // [{ to: base key or pos spot, via }]
+  const set = (pos, job, to) => { if (!J[pos] && ORDER.includes(pos)) J[pos] = { job, to: inPark(to).map((v) => Math.round(v * 10) / 10) }; };
+  const throws = [];
   let call = '';
   const otherMI = (p) => (p === 'SS' ? '2B' : 'SS');
+  // Outfielders who aren't fielding it: the closest one backs up the ball, the rest back up bases.
+  const outfieldBackups = (by, kind) => {
+    const i = OFS.indexOf(by);
+    const order = OFS.map((o, k) => [o, Math.abs(k - i)]).sort((x, y) => x[1] - y[1]).map((x) => x[0]);
+    let backed = false;
+    for (const of of order) {
+      if (J[of]) continue;
+      if (kind === 'ball' && !backed && Math.abs(OFS.indexOf(of) - i) === 1) { set(of, `Back up the ${by}`, behind(F, 12)); backed = true; continue; }
+      if (of === 'LF') set('LF', 'Back up 3rd', add(BASE['3'], [-16, 8]));
+      else if (of === 'RF') set('RF', kind === 'ball' ? 'Back up 2nd' : 'Back up 1st', kind === 'ball' ? backupOf('2', F, 16) : add(BASE['1'], [16, 6]));
+      else set(of, 'Back up 2nd', add(BASE['2'], [of === 'LC' ? -8 : of === 'RC' ? 8 : 0, -18]));
+    }
+  };
 
   if (h.type === 'single' || h.type === 'double') {
-    const target = h.type === 'single' ? (on2 ? 'H' : on1 ? '3' : '2') : (run === '0' ? '3' : 'H');
-    set(h.by, `Field it, throw to ${target === 'H' ? 'the cutoff' : h.type === 'double' ? 'the relay' : target === '2' ? '2nd' : 'the cutoff'}`, F);
-    let cut = null;
     if (h.type === 'double') {
-      cut = h.side === 'L' ? 'SS' : '2B';
+      // SS and 2B are both tied up (relay and backup cut), so 1B trails the batter to cover 2nd.
+      set('1B', 'Trail the batter to 2nd (no one else can cover)', add(BASE['2'], [7, 4]));
+      const target = run === '0' ? '3' : 'H';
+      const cut = h.side === 'L' ? 'SS' : '2B';
       const relaySpot = between(F, target === 'H' ? '3' : target, 0.55);
-      set(cut, `Go out for the relay, throw to ${BASE_NAME[target]}`, relaySpot);
-      set(otherMI(cut), 'Trail the relay (backup cut)', lerp(relaySpot, BASE[target === 'H' ? '3' : target], 0.3));
-      if (target === 'H') {
-        set('1B', 'Cutoff to home', between(BASE['3'], 'H', 0.35));
-        set('3B', 'Cover 3rd', near('3', [-3, 0]));
-        set('P', 'Back up home', backupOf('H', BASE['3'], 13));
-      } else {
-        set('3B', 'Cover 3rd', near('3', [-3, 0]));
-        set('1B', 'Follow the batter, cover 2nd', near('2', [4, 2]));
-        set('P', 'Back up 3rd', backupOf('3', relaySpot, 14));
-      }
+      set(h.by, 'Field it, hit the relay', F);
+      set(cut, `Go out for the relay, throw ${target === "H" ? "home" : "to " + BASE_NAME[target]}`, relaySpot);
+      set(otherMI(cut), 'Trail the relay (backup cut)', lerp(relaySpot, BASE['3'], 0.3));
+      set('3B', 'Cover 3rd', near('3', [-3, 0]));
       set('C', 'Cover home', near('H', [0, 3]));
-      const cfBack = h.by === 'LF' ? 'CF' : 'CF';
-      set(cfBack, `Back up the ${h.by}`, behind(F, 12));
-      const far = h.side === 'L' ? 'RF' : 'LF';
-      set(far, far === 'RF' ? 'Back up 2nd' : 'Back up 3rd', far === 'RF' ? backupOf('2', relaySpot, 16) : add(BASE['3'], [-16, 8]));
-      throws.push({ to: cut }, { to: target === 'H' ? '1B' : target }, ...(target === 'H' ? [{ to: 'H' }] : []));
-      call = target === '3' ? 'Double: hit the relay, hold the batter at 2nd (throw to 3rd).' : 'Double: hit the relay, then the cutoff. Keep the run from scoring.';
+      set('P', target === 'H' ? 'Back up home' : 'Back up 3rd', target === 'H' ? backupOf('H', relaySpot, 13) : backupOf('3', relaySpot, 14));
+      throws.push({ to: cut }, { to: target });
+      call = target === '3' ? 'Double: hit the relay, relay throws to 3rd. Hold the batter at 2nd.' : 'Double: hit the relay, relay throws home. Keep the run from scoring.';
     } else {
-      // Singles
+      const target = on2 ? 'H' : on1 ? '3' : '2';
+      set(h.by, `Field it, throw to ${target === '2' ? '2nd' : 'the cutoff'}`, F);
+      // A middle infielder covers 2nd on singles, so 1B stays with the bag.
+      set('1B', 'Cover 1st, watch the batter touch it', near('1', [2, 0]));
       if (target === '2') {
-        cut = h.side === 'R' ? '2B' : 'SS';
+        const cut = h.side === 'R' ? '2B' : 'SS';
         set(cut, 'Cutoff to 2nd', between(F, '2', 0.4));
         set(otherMI(cut), 'Cover 2nd', near('2', [0, 2]));
-        set('1B', 'Watch the batter touch 1st, cover 1st', near('1', [2, 0]));
         set('3B', 'Cover 3rd', near('3', [-2, 0]));
         set('P', 'Back up 2nd', backupOf('2', F, 12));
-        set('C', 'Trail the batter to 1st', add(BASE['1'], [8, 12]));
+        set('C', 'Cover home', near('H', [0, 3]));
         throws.push({ to: cut }, { to: '2' });
         call = 'No one on: throw it to 2nd. Keep the batter at 1st.';
       } else if (target === '3') {
-        cut = 'SS';
         set('SS', 'Cutoff to 3rd', between(F, '3', 0.38));
         set('3B', 'Cover 3rd', near('3', [-2, 0]));
         set('2B', 'Cover 2nd', near('2', [0, 2]));
-        set('1B', 'Cover 1st', near('1', [2, 0]));
         set('P', 'Back up 3rd', backupOf('3', F, 15));
         set('C', 'Cover home', near('H', [0, 3]));
         throws.push({ to: 'SS' }, { to: '3' });
         call = 'Runner on 1st: throw to 3rd through the cutoff. Don’t let him go first to third.';
       } else {
-        cut = h.side === 'L' ? '3B' : '1B';
+        const cut = h.side === 'L' ? '3B' : 'P';
         set(cut, 'Cutoff to home', between(F, 'H', 0.32));
-        if (cut === '3B') { set('SS', 'Cover 3rd', near('3', [-2, 0])); set('2B', 'Cover 2nd', near('2', [0, 2])); set('1B', 'Cover 1st', near('1', [2, 0])); }
-        else { set('3B', 'Cover 3rd', near('3', [-2, 0])); set('2B', 'Cover 1st', near('1', [3, -2])); set('SS', 'Cover 2nd', near('2', [0, 2])); }
-        set('P', 'Back up home', backupOf('H', F, 13));
+        if (cut === '3B') { set('SS', 'Cover 3rd', near('3', [-2, 0])); set('2B', 'Cover 2nd', near('2', [0, 2])); set('P', 'Back up home', backupOf('H', F, 13)); }
+        else { set('3B', 'Cover 3rd', near('3', [-2, 0])); set('SS', 'Cover 2nd', near('2', [0, 2])); set('2B', 'Back up 2nd', add(BASE['2'], [12, -10])); }
         set('C', 'Cover home, call the cut', near('H', [0, 3]));
         throws.push({ to: cut }, { to: 'H' });
-        call = run === '12' ? 'Runners on 1st & 2nd: throw home through the cutoff. Cut it if the lead runner scores easy.' : 'Runner on 2nd: throw home through the cutoff.';
+        call = (run === '12' ? 'Runners on 1st & 2nd' : 'Runner on 2nd') + ': throw home through the cutoff. Catcher calls “cut” if there’s no play.';
       }
     }
-    for (const of of ['LF', 'CF', 'RF']) {
-      if (J[of]) continue;
-      if (h.by === 'CF') set(of, 'Back up the CF', behind(F, 10).map((v, i) => v + (i === 0 ? (of === 'LF' ? -8 : 8) : 0)));
-      else if (of === 'CF') set('CF', `Back up the ${h.by}`, behind(F, 12));
-      else if (of === 'RF') set('RF', target === 'H' ? 'Back up 2nd' : 'Back up 2nd', backupOf('2', F, 16));
-      else set('LF', 'Back up 3rd', add(BASE['3'], [-16, 8]));
-    }
+    outfieldBackups(h.by, 'ball');
   } else if (h.type === 'grounder') {
     const p = h.by;
     const cover2 = p === '3B' || p === 'SS' ? '2B' : 'SS';
@@ -128,43 +145,34 @@ export function buildPlay(hitKey, run) {
       : p === '1B' ? 'Field it, flip to the pitcher' : 'Field it, throw to 1st';
     set(p, job, F);
     set(cover1, 'Cover 1st', near('1', cover1 === 'P' ? [2, 4] : [2, 0]));
-    if (first === '2') set(cover2, 'Cover 2nd, turn two', near('2', [cover2 === 'SS' ? -2 : 2, 2]));
-    else set(cover2, 'Cover 2nd', near('2', [cover2 === 'SS' ? -2 : 2, 2]));
+    set(cover2, first === '2' ? 'Cover 2nd, turn two' : 'Cover 2nd', near('2', [cover2 === 'SS' ? -2 : 2, 2]));
     if (p !== '3B') set('3B', 'Cover 3rd', near('3', [-2, 0]));
-    if (p === '3B' && !J.SS) set('SS', 'Cover 3rd', near('3', [3, -3]));
-    if (!J.SS) set('SS', 'Cover 2nd', near('2', [-2, 2]));
-    if (!J['2B']) set('2B', 'Back up 1st', add(BASE['1'], [-4, -10]));
+    if (p === '3B') set('SS', 'Cover 3rd', near('3', [3, -3]));
+    set('SS', 'Cover 2nd', near('2', [-2, 2]));
+    set('2B', 'Back up 1st', add(BASE['1'], [-4, -10]));
     set('P', p === '1B' || p === '2B' ? 'Break to 1st' : 'Back up the throw to 1st', p === '1B' || p === '2B' ? near('1', [-6, 6]) : lerp(MOUND, BASE['1'], 0.45));
     set('C', run === '0' ? 'Back up 1st' : 'Cover home', run === '0' ? add(BASE['1'], [10, 14]) : near('H', [0, 3]));
-    set('LF', 'Back up 3rd', add(BASE['3'], [-16, 8]));
-    set('CF', 'Back up 2nd', add(BASE['2'], [0, -18]));
-    set('RF', 'Back up 1st', add(BASE['1'], [16, 6]));
-    throws.push({ to: first === '1' && cover1 === 'P' ? '1' : first });
+    throws.push({ to: first });
     if (second) throws.push({ to: second });
+    outfieldBackups(null, 'bases');
   } else {
-    // Bunt
-    const holdThird = on2;
-    const fielder = holdThird ? 'P' : '3B';
-    const target = run === '12' ? '3' : '1';
-    set(fielder, target === '3' ? 'Field it, throw to 3rd' : 'Field it, take the sure out at 1st', F);
-    if (holdThird) set('3B', 'Stay at 3rd', near('3', [-2, 0]));
-    else set('P', 'Charge the bunt', lerp(MOUND, F, 0.6));
-    set('1B', 'Charge the bunt', lerp(START['1B'], [110, 152], 1));
-    set('2B', 'Cover 1st', near('1', [2, -2]));
-    set('SS', 'Cover 2nd', near('2', [-2, 2]));
+    // Bunt to the 3rd base side: 3B and P charge, 1B stays at 1st, 2B covers 2nd, SS covers 3rd.
+    set('3B', 'Charge it, take the sure out at 1st', F);
+    set('P', 'Charge the bunt', lerp(MOUND, F, 0.6));
+    set('1B', 'Stay at 1st, take the throw', near('1', [2, 0]));
+    set('2B', 'Cover 2nd', near('2', [2, 2]));
+    set('SS', 'Cover 3rd', near('3', [-2, 0]));
     set('C', run === '0' || run === '1' ? 'Come out, call the throw' : 'Cover home', run === '0' || run === '1' ? lerp(HOME, F, 0.35) : near('H', [0, 3]));
-    set('LF', 'Back up 3rd', add(BASE['3'], [-16, 8]));
-    set('CF', 'Back up 2nd', add(BASE['2'], [0, -18]));
-    set('RF', 'Back up 1st', add(BASE['1'], [16, 6]));
-    throws.push({ to: target });
-    call = target === '3' ? 'Bunt, runners on 1st & 2nd: 3B stays home. Force at 3rd if you have it.' : holdThird ? 'Bunt, runner on 2nd: 3B stays at 3rd, pitcher fields it. Sure out at 1st.' : 'Bunt: everyone charges, take the sure out at 1st.';
+    throws.push({ to: '1' });
+    call = 'Bunt: 3B and P charge, 1B stays at 1st, 2B covers 2nd, SS covers 3rd. Take the sure out at 1st.';
+    outfieldBackups(null, 'bases');
   }
   for (const p of ORDER) if (!J[p]) J[p] = { job: 'Hold your spot', to: START[p] };
 
   const runners = [{ who: 'B', from: 'H', to: h.type === 'double' ? '2' : '1' }];
   if (on1) runners.push({ who: 'R1', from: '1', to: h.type === 'double' ? '3' : '2' });
-  if (on2) runners.push({ who: 'R2', from: '2', to: h.type === 'grounder' || h.type === 'bunt' ? '2' : h.type === 'single' && !on2 ? '3' : 'H' });
-  return { hit: h, run, J, throws, call, runners, title: `${h.short}, ${RUN_TEXT[run]}` };
+  if (on2) runners.push({ who: 'R2', from: '2', to: h.type === 'grounder' || h.type === 'bunt' ? '2' : 'H' });
+  return { hit: h, run, J, throws, call, runners, order: ORDER, start: START, of4: !!of4, title: `${h.short}, ${RUN_TEXT[run]}` };
 }
 
 // ---------- timeline ----------
@@ -194,17 +202,17 @@ function timeline(P) {
   const field = P.hit.to;
   const tBall = contact + len(sub(field, HOME)) / ballSpeed;
   const moves = {};
-  for (const p of ORDER) {
-    const d = len(sub(P.J[p].to, START[p]));
-    moves[p] = { from: START[p], to: P.J[p].to, t0: contact + 0.12, t1: contact + 0.12 + d / RUN };
+  for (const p of P.order) {
+    const d = len(sub(P.J[p].to, P.start[p]));
+    moves[p] = { from: P.start[p], to: P.J[p].to, t0: contact + 0.12, t1: contact + 0.12 + d / RUN };
   }
-  const fielder = ORDER.find((p) => P.J[p].to[0] === field[0] && P.J[p].to[1] === field[1]) || P.hit.by;
+  const fielder = P.order.find((p) => P.J[p].to[0] === field[0] && P.J[p].to[1] === field[1]) || P.hit.by;
   let t = Math.max(tBall, moves[fielder].t1) + 0.35;
   const segs = [{ kind: 'hit', from: HOME, to: field, t0: contact, t1: tBall, arc: P.hit.type === 'single' || P.hit.type === 'double' }];
   let at = field;
   let catchAt = t;
   for (const th of P.throws) {
-    const dest = BASE[th.to] ? (P.J[ORDER.find((p) => P.J[p].job.startsWith('Cover ' + BASE_NAME[th.to]))] || {}).to || BASE[th.to] : P.J[th.to].to;
+    const dest = BASE[th.to] ? (P.J[P.order.find((p) => P.J[p].job.startsWith('Cover ' + BASE_NAME[th.to]))] || {}).to || BASE[th.to] : P.J[th.to].to;
     const target = th.to === '3' && P.hit.k === 'G-3B' && P.run === '12' ? BASE['3'] : dest;
     const dist = len(sub(target, at));
     if (dist < 4) { at = target; t += 0.3; continue; }
@@ -218,7 +226,7 @@ function timeline(P) {
     return { who: r.who, pts, t0, t1: t0 + pathLen(pts) / (RUN * 0.95) };
   });
   const end = Math.max(t, ...runs.map((r) => r.t1), ...Object.values(moves).map((m) => m.t1)) + 0.8;
-  return { segs, moves, runs, contact, end, fielder, catchAt };
+  return { segs, moves, runs, contact, end, fielder, catchAt, order: P.order };
 }
 
 // ---------- drawing ----------
@@ -294,7 +302,7 @@ function sprite(ctx, x, y, team, you, t, moving) {
 
 function stateAt(TL, t) {
   const pos = {};
-  for (const p of ORDER) {
+  for (const p of TL.order) {
     const m = TL.moves[p];
     const k = t <= m.t0 ? 0 : t >= m.t1 ? 1 : (t - m.t0) / (m.t1 - m.t0);
     pos[p] = { at: lerp(m.from, m.to, k), moving: k > 0 && k < 1 };
@@ -321,17 +329,17 @@ function draw(ctx, P, TL, t, o) {
   const S = stateAt(TL, t);
   if (o.lines) {
     ctx.fillStyle = PAL.line;
-    for (const p of ORDER) {
+    for (const p of P.order) {
       const m = TL.moves[p], d = len(sub(m.to, m.from));
       if (d < 3) continue;
       for (let i = 0; i < d; i += 3) { const q = lerp(m.from, m.to, i / d); ctx.fillRect(Math.round(q[0]), Math.round(q[1]), 1, 1); }
       ctx.fillRect(Math.round(m.to[0]) - 1, Math.round(m.to[1]), 3, 1); ctx.fillRect(Math.round(m.to[0]), Math.round(m.to[1]) - 1, 1, 3);
     }
   }
-  const people = ORDER.map((p) => ({ y: S.pos[p].at[1], f: () => sprite(ctx, S.pos[p].at[0], S.pos[p].at[1], true, o.you === p, t, S.pos[p].moving) }));
+  const people = P.order.map((p) => ({ y: S.pos[p].at[1], f: () => sprite(ctx, S.pos[p].at[0], S.pos[p].at[1], true, o.you === p, t, S.pos[p].moving) }));
   S.runners.forEach((r) => people.push({ y: r.at[1], f: () => sprite(ctx, r.at[0], r.at[1], false, false, t, r.moving) }));
   people.sort((a, b) => a.y - b.y).forEach((x) => x.f());
-  if (o.labels) for (const p of ORDER) { const a = S.pos[p].at; text(ctx, o.you === p ? 'YOU' : p, a[0], a[1] - 14, o.you === p ? PAL.you : PAL.label); }
+  if (o.labels) for (const p of P.order) { const a = S.pos[p].at; text(ctx, o.you === p ? 'YOU' : p, a[0], a[1] - 14, o.you === p ? PAL.you : PAL.label); }
   if (o.target) { const [x, y] = o.target.map(Math.round); ctx.fillStyle = PAL.you; for (let i = -2; i <= 2; i++) { ctx.fillRect(x + i, y + i, 1, 1); ctx.fillRect(x + i, y - i, 1, 1); } }
   if (S.ball) {
     const b = S.ball;
@@ -397,13 +405,16 @@ const CSS = `
 @media (min-width:560px){.dd .grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 `;
 const BEST = 'gs-dd-best';
+const OF4 = 'gs-dd-of4';
+function of4Saved() { try { return localStorage.getItem(OF4) === '1'; } catch (e) { return false; } }
+const ofToggle = () => `<div class="panel"><p class="lbl">OUTFIELD</p><div class="grid"><button data-dd="of" data-v="3" aria-pressed="${!S.of4}">3 outfielders</button><button data-dd="of" data-v="4" aria-pressed="${S.of4}">4 outfielders</button></div>${S.of4 ? '<p class="note" style="margin:8px 0 0">LF, LC, RC (short fielder), RF.</p>' : ''}</div>`;
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
 let S = null;
 export function mount(root, hub) {
   if (!document.getElementById('dd-css')) { const st = document.createElement('style'); st.id = 'dd-css'; st.textContent = CSS; document.head.appendChild(st); }
-  S = { root, hub, mode: 'watch', hit: 'G-SS', run: '1', play: null, tl: null, t: 0, playing: false, speed: 1, labels: true, lines: true, sound: false, raf: 0, last: 0, quiz: null, sounded: {} };
+  S = { root, hub, of4: of4Saved(), mode: 'watch', hit: 'G-SS', run: '1', play: null, tl: null, t: 0, playing: false, speed: 1, labels: true, lines: true, sound: false, raf: 0, last: 0, quiz: null, sounded: {} };
   root.addEventListener('click', onClick);
   root.addEventListener('input', onInput);
   load();
@@ -420,7 +431,7 @@ export function unmount() {
 export function update() { /* nothing from the Hub changes this page */ }
 
 function load(you) {
-  S.play = buildPlay(S.hit, S.run);
+  S.play = buildPlay(S.hit, S.run, S.of4);
   S.tl = timeline(S.play);
   S.t = 0; S.sounded = {};
   S.you = you || null;
@@ -455,7 +466,7 @@ function frame() {
 }
 function syncControls() {
   const b = S.root.querySelector('[data-dd="play"]');
-  if (b) b.textContent = S.playing ? '❚❚ Pause' : S.t >= S.tl.end ? '↻ Replay' : '▶ Play';
+  if (b) b.textContent = S.playing ? '❚❚ Pause' : '▶ Play';
 }
 
 function controlsHTML() {
@@ -464,7 +475,7 @@ function controlsHTML() {
     <input class="time" type="range" min="0" max="1000" value="0" aria-label="Time">`;
 }
 function jobsHTML(P, you) {
-  return `<div class="jobs">${ORDER.map((p) => `<span class="p">${p}</span><span${p === you ? ' class="me"' : ''}>${esc(P.J[p].job)}</span>`).join('')}</div>`;
+  return `<div class="jobs">${P.order.map((p) => `<span class="p">${p}</span><span${p === you ? ' class="me"' : ''}>${esc(P.J[p].job)}</span>`).join('')}</div>`;
 }
 function paint() {
   const team = esc((S.hub && S.hub.teamName) || 'GS Baseball');
@@ -476,8 +487,9 @@ function paint() {
     const P = S.play;
     h += `<div class="screen"><canvas width="${W}" height="${H}"></canvas></div>${controlsHTML()}
       <div class="callbox"><b>THE CALL:</b> ${esc(P.call)}</div>
-      <div class="panel"><p class="lbl">BALL IN PLAY</p>${['Grounders', 'Base hits', 'Doubles', 'Bunts'].map((g) => `<p class="note" style="margin:8px 0 4px">${g.toUpperCase()}</p><div class="grid">${HITS.filter((x) => x.g === g).map((x) => `<button data-dd="hit" data-v="${x.k}" aria-pressed="${S.hit === x.k}">${esc(x.l)}</button>`).join('')}</div>`).join('')}</div>
+      <div class="panel"><p class="lbl">BALL IN PLAY</p>${['Grounders', 'Base hits', 'Doubles', 'Bunts'].map((g) => `<p class="note" style="margin:8px 0 4px">${g.toUpperCase()}</p><div class="grid">${hitsFor(S.of4).filter((x) => x.g === g).map((x) => `<button data-dd="hit" data-v="${x.k}" aria-pressed="${S.hit === x.k}">${esc(x.l)}</button>`).join('')}</div>`).join('')}</div>
       <div class="panel"><p class="lbl">RUNNERS</p><div class="grid">${RUNNERS.map(([k, l]) => `<button data-dd="run" data-v="${k}" aria-pressed="${S.run === k}">${l}</button>`).join('')}</div></div>
+      ${ofToggle()}
       <div class="panel"><p class="lbl">EVERYONE’S JOB · ${esc(P.title.toUpperCase())}</p>${jobsHTML(P)}</div>
       <p class="note">Standard youth positioning. Your coach may teach some plays differently.</p>`;
   } else h += quizHTML();
@@ -493,18 +505,19 @@ function newQuiz() {
   const seen = new Set();
   let guard = 0;
   while (qs.length < QN && guard++ < 500) {
-    const hit = HITS[Math.floor(Math.random() * HITS.length)].k;
+    const hs = hitsFor(S.of4);
+    const hit = hs[Math.floor(Math.random() * hs.length)].k;
     const run = RUNNERS[Math.floor(Math.random() * RUNNERS.length)][0];
-    const P = buildPlay(hit, run);
+    const P = buildPlay(hit, run, S.of4);
     const counts = {};
-    ORDER.forEach((p) => { counts[P.J[p].job] = (counts[P.J[p].job] || 0) + 1; });
-    const cands = ORDER.filter((p) => counts[P.J[p].job] === 1 && P.J[p].job !== 'Hold your spot');
+    P.order.forEach((p) => { counts[P.J[p].job] = (counts[P.J[p].job] || 0) + 1; });
+    const cands = P.order.filter((p) => counts[P.J[p].job] === 1 && P.J[p].job !== 'Hold your spot');
     if (!cands.length) continue;
     const you = cands[Math.floor(Math.random() * cands.length)];
     const key = hit + run + you;
     if (seen.has(key)) continue;
     seen.add(key);
-    const wrong = shuffle([...new Set(ORDER.filter((p) => p !== you).map((p) => P.J[p].job))].filter((j) => j !== P.J[you].job)).slice(0, 3);
+    const wrong = shuffle([...new Set(P.order.filter((p) => p !== you).map((p) => P.J[p].job))].filter((j) => j !== P.J[you].job)).slice(0, 3);
     qs.push({ hit, run, you, choices: shuffle([P.J[you].job, ...wrong]), answer: P.J[you].job });
   }
   return { qs, i: 0, score: 0, streak: 0, picked: null };
@@ -518,7 +531,7 @@ function quizLoad() {
 function quizHTML() {
   if (!S.quiz) {
     const b = bestScore();
-    return `<div class="panel" style="display:flex;flex-direction:column;gap:12px"><p class="q">WHERE DO YOU GO?</p><p class="t" style="margin:0">${QN} plays. You get a position and a situation. Pick your job before the ball gets there.</p>${b ? `<p class="note" style="margin:0">BEST: ${b} / ${QN}</p>` : ''}<button data-dd="qstart" aria-pressed="true" style="min-height:52px;font-size:12px">▶ Start</button></div>`;
+    return `<div class="panel" style="display:flex;flex-direction:column;gap:12px"><p class="q">WHERE DO YOU GO?</p><p class="t" style="margin:0">${QN} plays. You get a position and a situation. Pick your job before the ball gets there.</p>${b ? `<p class="note" style="margin:0">BEST: ${b} / ${QN}</p>` : ''}<button data-dd="qstart" aria-pressed="true" style="min-height:52px;font-size:12px">▶ Start</button></div>${ofToggle()}`;
   }
   const Q = S.quiz;
   if (Q.i >= Q.qs.length) {
@@ -551,6 +564,13 @@ function onClick(e) {
   const a = b.dataset.dd, v = b.dataset.v;
   if (a === 'back') { S.hub && S.hub.back(); return; }
   if (a === 'mode') { S.mode = v; if (v === 'watch') { load(); paint(); start(); } else { S.quiz = null; S.playing = false; paint(); } return; }
+  if (a === 'of') {
+    S.of4 = v === '4';
+    try { localStorage.setItem(OF4, S.of4 ? '1' : '0'); } catch (err) { /* per-device */ }
+    if (!hitsFor(S.of4).some((x) => x.k === S.hit)) S.hit = S.hit === 'S-CF' ? 'S-LC' : 'S-LF';
+    if (S.mode === 'watch') { load(); paint(); start(); } else { S.quiz = null; paint(); }
+    return;
+  }
   if (a === 'hit' || a === 'run') { S[a] = v; load(); paint(); start(); return; }
   if (a === 'play') { if (S.t >= S.tl.end) S.t = 0, S.sounded = {}; if (S.playing) S.playing = false; else start(); syncControls(); return; }
   if (a === 'replay') { S.t = 0; S.sounded = {}; start(); syncControls(); return; }
