@@ -1850,9 +1850,10 @@ body.viewer-on { overflow: hidden; }
         .catch((e) => { console.error(e); SwingUI.loading = null; SwingUI.err = 'Swing AI couldn’t load. Check your connection and try again.'; render(); });
     }
   }
-  // ---------- Defense Drills (retro/defense.js): owner-only preview for now ----------
+  // ---------- Defense Drills (retro/defense.js) ----------
   const DrillsUI = { mod: null, loading: null, err: '', mounted: false };
-  const drillsAllowed = () => (Backend.kind === 'fb' ? !!Access.isOwner : !UI.readOnly);
+  // Everyone with the Instincts tab (watch-link guests only get Games and Live).
+  const drillsAllowed = () => !(Backend.kind === 'fb' && Access.isGuest);
   function renderDrillsPage(v) {
     let root = v.querySelector(':scope > #drills-root');
     if (!root) { v.innerHTML = '<div id="drills-root"></div>'; root = v.firstElementChild; DrillsUI.mounted = false; }
@@ -1872,7 +1873,7 @@ body.viewer-on { overflow: hidden; }
   }
   function drillsCardHTML() {
     if (!drillsAllowed()) return '';
-    return `<button class="card drills-card" data-act="drillsOpen"><span class="drills-art" aria-hidden="true"><svg viewBox="0 0 16 12" shape-rendering="crispEdges"><rect width="16" height="12" fill="#0b1530"/><path fill="#2f8f3a" d="M0 5h16v7H0z"/><path fill="#b9784a" d="M5 8h6v1H5zM6 7h4v1H6zM7 6h2v1H7z"/><path fill="#f4f1e6" d="M7 10h2v1H7zM3 2h1v1H3zM12 2h1v1h-1z"/><path fill="#f2c94c" d="M8 3h1v1H8z"/></svg></span><span><span class="t"><b>Defense Drills</b><span class="chip soon">PREVIEW</span></span><span class="d">Retro 8-bit field: where all nine go on every play, plus a quiz. Only you can see this for now.</span></span><span class="fee-go" aria-hidden="true">›</span></button>`;
+    return `<button class="card drills-card" data-act="drillsOpen"><span class="drills-art" aria-hidden="true"><svg viewBox="0 0 16 12" shape-rendering="crispEdges"><rect width="16" height="12" fill="#0b1530"/><path fill="#2f8f3a" d="M0 5h16v7H0z"/><path fill="#b9784a" d="M5 8h6v1H5zM6 7h4v1H6zM7 6h2v1H7z"/><path fill="#f4f1e6" d="M7 10h2v1H7zM3 2h1v1H3zM12 2h1v1h-1z"/><path fill="#f2c94c" d="M8 3h1v1H8z"/></svg></span><span><span class="t"><b>Defense Drills</b><span class="chip soon">NEW</span></span><span class="d">Retro 8-bit field: watch where everyone goes on every play, then take the quiz.</span></span><span class="fee-go" aria-hidden="true">›</span></button>`;
   }
   function swingLeave() {
     if (SwingUI.mod && SwingUI.mounted) { try { SwingUI.mod.unmount(); } catch (e) { console.error(e); } }

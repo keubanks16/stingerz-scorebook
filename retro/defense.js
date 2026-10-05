@@ -120,10 +120,12 @@ export function buildPlay(hitKey, run, of4) {
         throws.push({ to: 'SS' }, { to: '3' });
         call = 'Runner on 1st: throw to 3rd through the cutoff. Don’t let him go first to third.';
       } else {
-        const cut = h.side === 'L' ? '3B' : 'P';
+        // SS cuts throws home from the left side (and center), 2B from the right side.
+        const cut = h.side === 'R' ? '2B' : 'SS';
         set(cut, 'Cutoff to home', between(F, 'H', 0.32));
-        if (cut === '3B') { set('SS', 'Cover 3rd', near('3', [-2, 0])); set('2B', 'Cover 2nd', near('2', [0, 2])); set('P', 'Back up home', backupOf('H', F, 13)); }
-        else { set('3B', 'Cover 3rd', near('3', [-2, 0])); set('SS', 'Cover 2nd', near('2', [0, 2])); set('2B', 'Back up 2nd', add(BASE['2'], [12, -10])); }
+        set(otherMI(cut), 'Cover 2nd', near('2', [0, 2]));
+        set('3B', 'Cover 3rd', near('3', [-2, 0]));
+        set('P', 'Back up home', backupOf('H', F, 13));
         set('C', 'Cover home, call the cut', near('H', [0, 3]));
         throws.push({ to: cut }, { to: 'H' });
         call = (run === '12' ? 'Runners on 1st & 2nd' : 'Runner on 2nd') + ': throw home through the cutoff. Catcher calls “cut” if there’s no play.';
@@ -481,7 +483,6 @@ function paint() {
   const team = esc((S.hub && S.hub.teamName) || 'GS Baseball');
   let h = `<div class="dd"><div class="row" style="justify-content:space-between"><button class="back" data-dd="back">‹ Instincts</button><span class="kick">${team}</span></div>
     <div><h2>DEFENSE <span>DRILLS</span></h2><p class="t" style="margin:6px 0 0">Watch where all nine go on every ball in play. Then quiz yourself.</p></div>
-    <div class="preview">PREVIEW · ONLY YOU CAN SEE THIS</div>
     <div class="tabs"><button data-dd="mode" data-v="watch" aria-pressed="${S.mode === 'watch'}">Watch</button><button data-dd="mode" data-v="quiz" aria-pressed="${S.mode === 'quiz'}">Quiz</button></div>`;
   if (S.mode === 'watch') {
     const P = S.play;
