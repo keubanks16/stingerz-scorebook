@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>GS Baseball</title>
+<meta name="description" content="GS Baseball — play as yourself.">
+<meta name="theme-color" content="#06142b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GS Baseball">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="preload" as="image" href="img/gs-logo-light.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="c"></canvas>
+  <div id="stage" class="layer"></div>
+
+  <!-- ===== HUD ===== -->
+  <div id="hud" class="hidden">
+    <div id="bug">
+      <div class="bugTeams">
+        <div class="bt" id="bugAway"><i></i><b>GS</b><span>0</span></div>
+        <div class="bt" id="bugHome"><i></i><b>RIV</b><span>0</span></div>
+      </div>
+      <div class="bugMid">
+        <div id="bugInn">▲1</div>
+        <svg id="bugBases" viewBox="0 0 40 30"><rect id="b2" x="15" y="2" width="10" height="10" transform="rotate(45 20 7)"/><rect id="b3" x="4" y="13" width="10" height="10" transform="rotate(45 9 18)"/><rect id="b1" x="26" y="13" width="10" height="10" transform="rotate(45 31 18)"/></svg>
+      </div>
+      <div class="bugCount"><div id="bugBS">0-0</div><div id="bugOuts"><i></i><i></i><i></i></div></div>
+    </div>
+    <div id="derbyBug" class="hidden"><div><b id="dHR">0</b><span>HR</span></div><div><b id="dOuts">10</b><span>OUTS LEFT</span></div><div><b id="dLong">—</b><span>LONGEST</span></div></div>
+    <div id="topRight"><button id="skipBtn" class="pill hidden">⏩ SKIP</button><button id="pauseBtn" class="pill">❚❚</button></div>
+    <div id="pitchInfo"></div>
+    <div id="contactInfo"></div>
+    <div id="banner"></div>
+    <div id="swingInfo"></div>
+    <div id="ticker"></div>
+    <div id="batterCard"><div class="bcNum">1</div><div><div class="bcName">MJ EUBANKS</div><div class="bcLine">0-0 TODAY</div></div></div>
+    <div id="batBtns" class="hidden"><button id="powerBtn" class="tog">POWER</button><button id="buntBtn" class="tog">BUNT</button><div class="hint">TAP THE BALL TO SWING</div></div>
+    <div id="pitchUI" class="hidden">
+      <div class="hint">TAP THE ZONE TO AIM · PICK A PITCH</div>
+      <div class="prow"><button data-p="FB">FASTBALL</button><button data-p="CH">CHANGEUP</button><button data-p="CB">CURVE</button><button data-p="SL">SLIDER</button></div>
+    </div>
+    <div id="meter" class="hidden"><div id="meterRing"></div><div id="meterCore"></div><div class="mlabel">TAP!</div></div>
+    <div id="throwUI" class="hidden">
+      <div class="hint">THROW TO</div>
+      <button data-b="2" class="tb tb2">2B</button><button data-b="3" class="tb tb3">3B</button><button data-b="1" class="tb tb1">1B</button><button data-b="0" class="tb tb0">HOME</button>
+      <button data-b="hold" class="tb tbh">HOLD</button>
+    </div>
+  </div>
+
+  <!-- ===== SCREENS ===== -->
+  <section id="sTitle" class="screen show">
+    <div class="titleWrap">
+      <div class="logo"><img src="img/gs-logo-light.png" alt="GS"><span class="bb">BASEBALL</span></div>
+      <div class="tag">PLAY AS YOURSELF</div>
+      <button class="big" id="tStart">PLAY BALL</button>
+      <button class="hubBack embedOnly" data-hub>‹ BACK TO GS HUB</button>
+      <div class="foot">Best played sideways 📱↻</div>
+    </div>
+  </section>
+
+  <section id="sPick" class="screen">
+    <div class="panel wide">
+      <h2>WHO ARE YOU?</h2>
+      <p class="sub">Pick yourself from the GS roster.</p>
+      <div id="roster" class="roster"></div>
+    </div>
+  </section>
+
+  <section id="sCard" class="screen">
+    <div class="panel side">
+      <h2 id="cardTitle">YOUR PLAYER</h2>
+      <div class="row"><label>BATS</label><div class="seg" data-k="bats"><button data-v="R">RIGHT</button><button data-v="L">LEFT</button></div></div>
+      <div class="row"><label>THROWS</label><div class="seg" data-k="throws"><button data-v="R">RIGHT</button><button data-v="L">LEFT</button></div></div>
+      <div class="row"><label>POSITION</label><div class="seg wrap" data-k="pos"></div></div>
+      <div class="row"><label>SKIN</label><div class="sw" data-k="skin"></div></div>
+      <div class="row"><label>HAIR</label><div class="sw" data-k="hair"></div></div>
+      <div class="row"><label>WALK-UP SONG</label><div class="songs" id="songPick"></div></div>
+      <button class="big" id="cardDone">DONE</button>
+    </div>
+  </section>
+
+  <section id="sMenu" class="screen">
+    <div class="panel side">
+      <div class="menuTop"><img class="menuLogo" src="img/gs-logo-light.png" alt="GS"><button class="hubBack embedOnly" data-hub>‹ GS HUB</button></div>
+      <div class="me"><div class="meNum" id="meNum">1</div><div><div class="meHi">WELCOME BACK</div><div class="meName" id="meName">MJ EUBANKS</div><div class="meLine" id="meLine"></div></div></div>
+      <div class="modes">
+      <button class="big" data-go="team">PLAY BALL<small>Control the whole GS team</small></button>
+      <button class="big alt" data-go="me">MY PLAYER<small>Only your at-bats and plays</small></button>
+      <button class="big alt" data-go="derby">HOME RUN DERBY<small>10 outs — how many can you hit?</small></button>
+      </div>
+      <div class="grid2">
+        <button data-go="stats">TEAM STATS</button><button data-go="card">EDIT PLAYER</button>
+        <button data-go="settings">SETTINGS</button><button data-go="help">HOW TO PLAY</button>
+        <button data-go="pick">SWITCH PLAYER</button><button data-go="install" class="appOnly">GET THE APP</button><button class="embedOnly" data-hub>BACK TO GS HUB</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="sSettings" class="screen">
+    <div class="panel side">
+      <h2>SETTINGS</h2>
+      <div class="row"><label>DIFFICULTY</label><div class="seg" data-s="difficulty"><button data-v="0">ROOKIE</button><button data-v="1">PRO</button><button data-v="2">ALL-STAR</button></div></div>
+      <div class="row"><label>INNINGS</label><div class="seg" data-s="innings"><button data-v="3">3</button><button data-v="6">6</button><button data-v="9">9</button></div></div>
+      <div class="row"><label>GS BATS</label><div class="seg" data-s="gsHome"><button data-v="false">FIRST (AWAY)</button><button data-v="true">SECOND (HOME)</button></div></div>
+      <div class="row"><label>STRIKE ZONE BOX</label><div class="seg" data-s="zone"><button data-v="true">SHOW</button><button data-v="false">HIDE</button></div></div>
+      <div class="row"><label>SOUND</label><div class="seg" data-s="sound"><button data-v="true">ON</button><button data-v="false">OFF</button></div></div>
+      <div class="row"><label>TEAM MUSIC</label><div class="seg" data-s="music"><button data-v="true">ON</button><button data-v="false">OFF</button></div></div>
+      <div class="row"><label>ANNOUNCER</label><div class="seg" data-s="announcer"><button data-v="true">ON</button><button data-v="false">OFF</button></div></div>
+      <button class="big" data-back>BACK</button>
+    </div>
+  </section>
+
+  <section id="sStats" class="screen">
+    <div class="panel wide">
+      <h2>GS TEAM STATS</h2>
+      <p class="sub">Saved on this device from every game played here.</p>
+      <div class="tableWrap"><table id="statsTable"></table></div>
+      <button class="big" data-back>BACK</button>
+    </div>
+  </section>
+
+  <section id="sHelp" class="screen">
+    <div class="panel wide help">
+      <h2>HOW TO PLAY</h2>
+      <h3>⚾ HITTING</h3>
+      <p>Watch the pitcher. <b>Tap the ball</b> as it reaches the plate. Tap too early and you'll pull it foul; too late and you'll hit it the other way. On Pro and All-Star, <b>where</b> you tap matters too: tap above the ball for a grounder, below it for a fly ball.</p>
+      <p><b>POWER</b> swings hit it harder but are harder to time. <b>BUNT</b> squares you up; tap to bunt.</p>
+      <h3>🎯 PITCHING</h3>
+      <p>Tap the strike zone to aim, then pick a pitch. A ring shrinks around your target: <b>tap when it lines up</b> for a perfect pitch. Mix fastballs with off-speed pitches to fool hitters.</p>
+      <h3>🧤 FIELDING</h3>
+      <p>Your fielders run to the ball on their own. When one of them catches it, <b>tap the base to throw to</b>. The glowing base is the smart play. If you wait too long, they'll make the throw themselves.</p>
+      <h3>🏃 RUNNING</h3>
+      <p>Runners are smart. They tag up, take extra bases when they can make it, and slide into close plays.</p>
+      <button class="big" data-back>GOT IT</button>
+    </div>
+  </section>
+
+  <section id="sInstall" class="screen">
+    <div class="panel wide help">
+      <h2>PUT GS BASEBALL ON YOUR PHONE</h2>
+      <h3> iPHONE / iPAD</h3>
+      <p>Open this page in <b>Safari</b> → tap the <b>Share</b> button (square with arrow) → <b>Add to Home Screen</b> → <b>Add</b>.</p>
+      <h3>🤖 ANDROID</h3>
+      <p>Open this page in <b>Chrome</b> → tap <b>⋮</b> → <b>Install app</b> (or <b>Add to Home screen</b>).</p>
+      <p>After that it opens full-screen like a regular app and works without internet.</p>
+      <button class="big hidden" id="installBtn">INSTALL NOW</button>
+      <button class="big" data-back>BACK</button>
+    </div>
+  </section>
+
+  <section id="sPause" class="screen dim">
+    <div class="panel small">
+      <h2>PAUSED</h2>
+      <button class="big" id="resumeBtn">RESUME</button>
+      <button class="big alt" data-go="help">HOW TO PLAY</button>
+      <button class="big alt" id="quitBtn">QUIT TO MENU</button>
+    </div>
+  </section>
+
+  <section id="sOver" class="screen dim">
+    <div class="panel wide">
+      <h2 id="overTitle">FINAL</h2>
+      <div class="tableWrap"><table id="lineTable" class="line"></table></div>
+      <div id="potg"></div>
+      <div class="tableWrap"><table id="boxTable"></table></div>
+      <div class="grid2"><button class="big" id="againBtn">PLAY AGAIN</button><button class="big alt" id="menuBtn">MENU</button></div>
+    </div>
+  </section>
+
+  <div id="rotate" class="hidden"><div>📱↻</div><p>Turn your phone sideways<br>for the best view</p><button id="rotateOk">PLAY ANYWAY</button></div>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -105,6 +105,17 @@ A retro 8-bit field on the **Instincts** tab that plays out where all nine field
 
 Everyone who has the Instincts tab can use it (watch-link guests don't). The game itself is `retro/defense.js`.
 
+## GS Baseball: The Game
+
+A full 3D baseball game, opened from the top card on the **Instincts** tab (or go to `#game`). It runs full-screen on top of the Hub. **‹ GS HUB** (or the phone's back button) closes it.
+
+- The Hub hands the game its **live roster** and the signed-in family's player(s), so each kid starts on his own player card: name and number on his jersey, and bats/throws/position from the Team tab (he can change his look and walk-up song in the game).
+- **Play Ball** (whole team), **My Player** (just your at-bats and plays), **Home Run Derby**. Rookie, Pro and All-Star difficulty.
+- Team songs play quietly underneath the whole game and come up for each GS batter's walk-up and home runs, then settle back down. The crowd cheers for GS and groans for the other team.
+- Stats and Derby bests are saved on each phone.
+
+Everyone who has the Instincts tab can play (watch-link guests don't). The game lives in `game/` and keeps its own offline copy (`game/sw.js`; bump `VERSION` there after changing game files). The Hub's service worker leaves `game/` alone.
+
 ## Baseball Instincts
 
 The **Instincts** tab is for the players: game situations they solve on a field diagram that shows the runners, the outs, where the ball is hit and where **YOU** are. They pick what they'd do, then see the play drawn on the field and a short reason why.

@@ -1,0 +1,17 @@
+{
+  "name": "GS Baseball",
+  "short_name": "GS Baseball",
+  "description": "GS Baseball — a 3D baseball game where you play as yourself.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#06142b",
+  "theme_color": "#06142b",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

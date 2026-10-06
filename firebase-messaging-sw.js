@@ -2,7 +2,7 @@
 // 1. Keeps a copy of the Hub on the phone so it opens and keeps scoring with no signal.
 // 2. Shows notifications when the app is closed (Firebase Cloud Messaging).
 
-const CACHE = 'gs-hub-v1';
+const CACHE = 'gs-hub-v2';
 const FB = 'https://www.gstatic.com/firebasejs/12.19.0/';
 const SHELL = ['./', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/icon-maskable-512.png'];
 const FB_MODULES = ['firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js', 'firebase-messaging.js'].map((f) => FB + f);
@@ -80,6 +80,8 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  // The baseball game (game/) has its own offline copy; leave it alone.
+  if (url.origin === self.location.origin && url.pathname.includes('/game/')) return;
   if (req.mode === 'navigate' && url.origin === self.location.origin) { event.respondWith(page(req)); return; }
   if (url.href.startsWith(FB) || TF_URL.test(url.href)) { event.respondWith(savedFirst(req)); return; }
   if (url.origin === self.location.origin && url.pathname.includes('/swing/model/')) { event.respondWith(savedFirst(req)); return; }
