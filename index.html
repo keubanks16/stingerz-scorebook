@@ -3172,7 +3172,7 @@ body.viewer-on { overflow: hidden; }
     h += `<section class="board season"><span class="lbl">Practice schedule</span><span class="rec num">${upcoming.length}</span><span class="facts"><span>upcoming practice${upcoming.length===1?'':'s'}</span>${upcoming[0]?`<span>Next: <b>${esc(longDate(upcoming[0].date))}</b>${upcoming[0].time?' · <b>'+esc(fmtTime(upcoming[0].time))+'</b>':''}</span>`:'<span>No upcoming practices scheduled</span>'}</span></section>`;
     if (canManage()) h += `<div class="row"><button class="btn primary grow" data-act="newPractice">+ Add practice</button></div>`;
     if (!practices.length) return h + `<div class="card empty"><img src="${LOGO}" alt=""><h3>No practices scheduled</h3><p>${canManage()?'Add the team’s practice dates, times and locations here.':'Your coaches have not added a practice yet.'}</p></div>`;
-    const row=(g)=>{const d=parseDate(g.date),meta=[fmtTime(g.time),g.location].filter(Boolean).join(' · ')||'Time/location TBD';return `<div class="game-row" style="cursor:default"><span class="gr-date"><span>${d.toLocaleDateString(undefined,{weekday:'short'}).toUpperCase()}</span><span class="d">${d.getDate()}</span><span>${d.toLocaleDateString(undefined,{month:'short'}).toUpperCase()}</span></span><span style="min-width:0"><span class="gr-opp" style="display:block">${esc(g.practiceTitle||'Team Practice')}</span><span class="gr-meta" style="display:block">${esc(meta)}</span>${g.practiceNote?`<span class="gr-meta" style="display:block">${esc(g.practiceNote)}</span>`:''}</span><span class="gr-res">${canManage()?`<button class="btn sm" data-act="editPractice" data-id="${esc(g.id)}">Edit</button>`:''}</span></div>`};
+    const row=(g)=>{const d=parseDate(g.date),meta=[fmtTime(g.time),g.location].filter(Boolean).join(' · ')||'Time/location TBD';return `<div class="game-row" style="cursor:default"><span class="gr-date"><span>${d.toLocaleDateString(undefined,{weekday:'short'}).toUpperCase()}</span><span class="d">${d.getDate()}</span><span>${d.toLocaleDateString(undefined,{month:'short'}).toUpperCase()}</span></span><span style="min-width:0"><span class="gr-opp" style="display:block">${esc(g.practiceTitle||'Team Practice')}</span><span class="gr-meta" style="display:block">${esc(meta)}</span>${g.practiceNote?`<span class="gr-meta" style="display:block">${esc(g.practiceNote)}</span>`:''}${(()=>{const a=g.practiceAttendance||{},m=Object.keys(a).filter(k=>a[k]==='present'||a[k]==='absent'),n=m.filter(k=>a[k]==='present').length;return m.length?`<span class="gr-meta" style="display:block">Attendance: <b>${n}/${m.length} present</b></span>`:''})()}</span><span class="gr-res">${canManage()?`<div class="stack" style="gap:6px"><button class="btn sm" data-act="practiceAttendance" data-id="${esc(g.id)}">Attendance</button><button class="btn sm" data-act="editPractice" data-id="${esc(g.id)}">Edit</button></div>`:''}</span></div>`};
     if(upcoming.length) h+=`<h2 class="sec">Upcoming</h2><div class="list">${upcoming.map(row).join('')}</div>`;
     if(past.length) h+=`<h2 class="sec">Past practices</h2><div class="list">${past.map(row).join('')}</div>`;
     return h;
@@ -3934,6 +3934,13 @@ body.viewer-on { overflow: hidden; }
     },
     confirm(sh) {
       return head(esc(sh.title)) + `<p style="margin:0">${esc(sh.text)}</p><div class="row"><button class="btn ${sh.danger ? 'danger' : 'primary'}" data-act="confirmYes">${esc(sh.yes || 'Confirm')}</button><button class="btn" data-act="close">Cancel</button></div>`;
+    },
+    practiceAttendance(sh) {
+      const g=Data.games[sh.id],a=sh.attendance||{},roster=sortedRoster();
+      return head('Practice Attendance')+`
+        <div class="small muted" style="margin-bottom:12px">${g?esc(longDate(g.date))+(g.time?' · '+esc(fmtTime(g.time)):''):''}</div>
+        ${roster.length?roster.map(p=>`<div class="row" style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,.08)"><div class="grow"><b>${p.num?'#'+esc(p.num)+' ':''}${esc(p.name)}</b></div><div class="seg"><button data-act="attendanceMark" data-id="${esc(p.id)}" data-v="present" aria-pressed="${a[p.id]==='present'}">Present</button><button data-act="attendanceMark" data-id="${esc(p.id)}" data-v="absent" aria-pressed="${a[p.id]==='absent'}">Absent</button></div></div>`).join(''):'<p class="muted">No players are on the roster.</p>'}
+        <div class="row" style="margin-top:14px"><button class="btn primary grow" data-act="attendanceSave">Save Attendance</button></div>`;
     },
     practice(sh) {
       return head(sh.id?'Edit practice':'Add practice') + `
@@ -4985,6 +4992,9 @@ body.viewer-on { overflow: hidden; }
     scrim(d, el, ev) { if (ev.target === el) closeSheet(); },
     confirmYes() { const fn = UI.sheet && UI.sheet.fn; closeSheet(); if (fn) fn(); },
 
+    practiceAttendance(d) { if(!canManage())return;const g=Data.games[d.id];if(g)openSheet({type:'practiceAttendance',id:g.id,attendance:Object.assign({},g.practiceAttendance||{})}); },
+    attendanceMark(d) { const sh=UI.sheet;if(!sh||sh.type!=='practiceAttendance')return;sh.attendance=sh.attendance||{};sh.attendance[d.id]=d.v;renderSheet(); },
+    attendanceSave() { const sh=UI.sheet;if(!canManage()||!sh||sh.type!=='practiceAttendance')return;const g=Data.games[sh.id];if(!g)return;g.practiceAttendance=Object.assign({},sh.attendance||{});saveGame(g);closeSheet();render();toast('Attendance saved'); },
     newPractice() { openSheet({type:'practice',f:{practiceTitle:'Team Practice',date:todayISO(),time:'',location:'',practiceNote:''}}); },
     editPractice(d) { const g=Data.games[d.id]; if(!g)return; openSheet({type:'practice',id:g.id,f:{practiceTitle:g.practiceTitle||'Team Practice',date:g.date||todayISO(),time:g.time||'',location:g.location||'',practiceNote:g.practiceNote||''}}); },
     savePractice() {
