@@ -3175,6 +3175,31 @@ body.viewer-on { overflow: hidden; }
     const row=(g)=>{const d=parseDate(g.date),meta=[fmtTime(g.time),g.location].filter(Boolean).join(' · ')||'Time/location TBD';return `<div class="game-row" style="cursor:default"><span class="gr-date"><span>${d.toLocaleDateString(undefined,{weekday:'short'}).toUpperCase()}</span><span class="d">${d.getDate()}</span><span>${d.toLocaleDateString(undefined,{month:'short'}).toUpperCase()}</span></span><span style="min-width:0"><span class="gr-opp" style="display:block">${esc(g.practiceTitle||'Team Practice')}</span><span class="gr-meta" style="display:block">${esc(meta)}</span>${g.practiceNote?`<span class="gr-meta" style="display:block">${esc(g.practiceNote)}</span>`:''}${(()=>{const a=g.practiceAttendance||{},m=Object.keys(a).filter(k=>a[k]==='present'||a[k]==='absent'),n=m.filter(k=>a[k]==='present').length;return m.length?`<span class="gr-meta" style="display:block">Attendance: <b>${n}/${m.length} present</b></span>`:''})()}</span><span class="gr-res">${canManage()?`<div class="stack" style="gap:6px"><button class="btn sm" data-act="practiceAttendance" data-id="${esc(g.id)}">Attendance</button><button class="btn sm" data-act="editPractice" data-id="${esc(g.id)}">Edit</button></div>`:''}</span></div>`};
     if(upcoming.length) h+=`<h2 class="sec">Upcoming</h2><div class="list">${upcoming.map(row).join('')}</div>`;
     if(past.length) h+=`<h2 class="sec">Past practices</h2><div class="list">${past.map(row).join('')}</div>`;
+
+    const attendancePractices = practices
+      .filter(g => g.practiceAttendance && Object.values(g.practiceAttendance).some(v => v === 'present' || v === 'absent'))
+      .sort((a,b) => String(a.date||'').localeCompare(String(b.date||'')));
+    if (attendancePractices.length) {
+      const roster = sortedRoster();
+      let teamPresent=0, teamMarked=0;
+      h += `<h2 class="sec">Practice Attendance</h2><div class="card">`;
+      for (const p of roster) {
+        let present=0, marked=0, dots='';
+        for (const g of attendancePractices) {
+          const v=(g.practiceAttendance||{})[p.id];
+          if(v==='present'){present++;marked++;teamPresent++;teamMarked++;dots+='<span title="Present" style="display:inline-block;width:14px;height:14px;border-radius:3px;background:#39b86b;margin:0 3px 3px 0"></span>';}
+          else if(v==='absent'){marked++;teamMarked++;dots+='<span title="Absent" style="display:inline-block;width:14px;height:14px;border-radius:3px;background:#d9534f;margin:0 3px 3px 0"></span>';}
+          else dots+='<span title="Not marked" style="display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid rgba(255,255,255,.25);margin:0 3px 3px 0"></span>';
+        }
+        const pct=marked?Math.round(present/marked*100):0;
+        h += `<div style="padding:11px 0;border-bottom:1px solid rgba(255,255,255,.08)">
+          <div class="row" style="margin:0"><div class="grow"><b>${p.num?'#'+esc(p.num)+' ':''}${esc(p.name)}</b><div class="small muted">${present} / ${marked} Practices</div></div><b>${marked?pct+'%':'—'}</b></div>
+          <div style="margin-top:7px">${dots}</div>
+        </div>`;
+      }
+      const teamPct=teamMarked?Math.round(teamPresent/teamMarked*100):0;
+      h += `<div class="row" style="margin:14px 0 0"><div class="grow"><b>TEAM ATTENDANCE</b></div><b>${teamMarked?teamPct+'%':'—'}</b></div></div>`;
+    }
     return h;
   }
 
@@ -3414,7 +3439,7 @@ body.viewer-on { overflow: hidden; }
   function renderLive() {
     const g = liveGame();
     if (!g) {
-      const up = gamesList().filter((x) => x.status === 'scheduled');
+      const up = gamesList().filter((x) => x.status === 'scheduled' && !x.practiceSchedule);
       let h = `<div class="card empty"><img src="${LOGO}" alt=""><h3>No game in progress</h3><p>${canEdit() ? 'Pick a scheduled game to set lineups and start scoring, or add a new one.' : 'When a game starts, the live score shows up here.'}</p>${canEdit() ? '<button class="btn primary" data-act="newGame">+ New game</button>' : ''}</div>`;
       if (up.length && canEdit()) h += `<h2 class="sec">Ready to start</h2><div class="list">${up.map((x) => gameRow(x, true)).join('')}</div>`;
       return h;
