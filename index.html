@@ -3174,8 +3174,6 @@ body.viewer-on { overflow: hidden; }
     if (!practices.length) return h + `<div class="card empty"><img src="${LOGO}" alt=""><h3>No practices scheduled</h3><p>${canManage()?'Add the team’s practice dates, times and locations here.':'Your coaches have not added a practice yet.'}</p></div>`;
     const row=(g)=>{const d=parseDate(g.date),meta=[fmtTime(g.time),g.location].filter(Boolean).join(' · ')||'Time/location TBD';return `<div class="game-row" style="cursor:default"><span class="gr-date"><span>${d.toLocaleDateString(undefined,{weekday:'short'}).toUpperCase()}</span><span class="d">${d.getDate()}</span><span>${d.toLocaleDateString(undefined,{month:'short'}).toUpperCase()}</span></span><span style="min-width:0"><span class="gr-opp" style="display:block">${esc(g.practiceTitle||'Team Practice')}</span><span class="gr-meta" style="display:block">${esc(meta)}</span>${g.practiceNote?`<span class="gr-meta" style="display:block">${esc(g.practiceNote)}</span>`:''}${(()=>{const a=g.practiceAttendance||{},m=Object.keys(a).filter(k=>a[k]==='present'||a[k]==='absent'),n=m.filter(k=>a[k]==='present').length;return m.length?`<span class="gr-meta" style="display:block">Attendance: <b>${n}/${m.length} present</b></span>`:''})()}</span><span class="gr-res">${canManage()?`<div class="stack" style="gap:6px"><button class="btn sm" data-act="practiceAttendance" data-id="${esc(g.id)}">Attendance</button><button class="btn sm" data-act="editPractice" data-id="${esc(g.id)}">Edit</button></div>`:''}</span></div>`};
     if(upcoming.length) h+=`<h2 class="sec">Upcoming</h2><div class="list">${upcoming.map(row).join('')}</div>`;
-    if(past.length) h+=`<h2 class="sec">Past practices</h2><div class="list">${past.map(row).join('')}</div>`;
-
     const attendancePractices = practices
       .filter(g => g.practiceAttendance && Object.values(g.practiceAttendance).some(v => v === 'present' || v === 'absent'))
       .sort((a,b) => String(a.date||'').localeCompare(String(b.date||'')));
@@ -3200,6 +3198,7 @@ body.viewer-on { overflow: hidden; }
       const teamPct=teamMarked?Math.round(teamPresent/teamMarked*100):0;
       h += `<div class="row" style="margin:14px 0 0"><div class="grow"><b>TEAM ATTENDANCE</b></div><b>${teamMarked?teamPct+'%':'—'}</b></div></div>`;
     }
+    if(past.length) h+=`<h2 class="sec">Past practices</h2><div class="list">${past.map(row).join('')}</div>`;
     return h;
   }
 
