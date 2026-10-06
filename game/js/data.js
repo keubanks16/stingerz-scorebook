@@ -22,7 +22,7 @@ export const SKINS = ['#f3cfb3', '#e0b08a', '#c68a5e', '#a8714a', '#7a4b2a', '#5
 export const HAIRS = ['#1a1a1a', '#3b2616', '#6b4a2b', '#a8743d', '#d9b46a', '#9c3d1e'];
 
 const KEY = 'gsbaseball.v3';
-const blank = () => ({ me: null, cards: {}, stats: {}, derby: {}, settings: { difficulty: 0, innings: 3, gsHome: false, sound: true, music: true, announcer: true, zone: true } });
+const blank = () => ({ me: null, cards: {}, stats: {}, derby: {}, settings: { difficulty: 0, innings: 3, gsHome: false, sound: true, music: true, announcer: true, zone: true, baserun: 'manual' } });
 let mem = null;
 export function load() {
   if (mem) return mem;
@@ -97,3 +97,48 @@ export function recordDerby(id, hr, longest) {
   return d;
 }
 export function avg(h, ab) { if (!ab) return '.000'; const v = (h / ab).toFixed(3); return v.startsWith('0') ? v.slice(1) : v; }
+
+// ---------- lineups ----------
+// A lineup is the batting order: [{ id, pos }]. pos is a field position, or 'EH' for an extra
+// hitter who bats but doesn't play the field (so a whole youth roster can hit).
+export function defaultLineup(meId) { return buildGSLineup(meId).map(p => ({ id: p.id, pos: p.pos })); }
+export const prefPos = id => { const c = card(id); return POSITIONS.includes(c.pos) ? c.pos : 'CF'; };
+export function fixLineup(entries) {
+  const known = new Set(GS_ROSTER.map(p => p.id));
+  const seen = new Set(), out = [];
+  for (const e of entries || []) {
+    if (!e || seen.has(e.id) || !(known.has(e.id) || /^sub\d+$/.test(e.id))) continue;
+    seen.add(e.id); out.push({ id: e.id, pos: e.pos });
+  }
+  // one player per position; duplicates become extra hitters
+  const used = new Set();
+  for (const e of out) { if (POSITIONS.includes(e.pos) && !used.has(e.pos)) used.add(e.pos); else e.pos = 'EH'; }
+  // fill open positions: extra hitters who play it, any extra hitter, then the bench
+  for (const pos of POSITIONS) {
+    if (used.has(pos)) continue;
+    let e = out.find(x => x.pos === 'EH' && prefPos(x.id) === pos) || out.find(x => x.pos === 'EH');
+    if (!e) {
+      const bench = GS_ROSTER.filter(p => !seen.has(p.id));
+      const b = bench.find(p => prefPos(p.id) === pos) || bench[0];
+      if (b) { e = { id: b.id, pos }; out.push(e); seen.add(b.id); }
+      else { let n = 1; while (seen.has('sub' + n)) n++; e = { id: 'sub' + n, pos }; out.push(e); seen.add(e.id); }
+    }
+    e.pos = pos; used.add(pos);
+  }
+  return out;
+}
+export function savedLineup(meId) { const s = load(); return fixLineup(s.lineup && s.lineup.length ? s.lineup : defaultLineup(meId)); }
+export function saveLineup(entries) { const s = load(); s.lineup = entries.map(e => ({ id: e.id, pos: e.pos })); save(); }
+// The Hub's batting order for a game (ids from the Hub roster)
+export function lineupFromHub(order) {
+  return fixLineup((order || []).map(id => 'h_' + id).filter(id => GS_ROSTER.some(p => p.id === id)).map(id => ({ id, pos: prefPos(id) })));
+}
+export function lineupPlayers(entries, meId) {
+  return entries.map(e => {
+    const p = gsPlayer(e.id);
+    if (p) return { ...p, pos: e.pos, me: e.id === meId };
+    const n = +String(e.id).replace('sub', '') || 1;
+    return { id: e.id, num: String(90 + n), name: 'GS Sub ' + n, pos: e.pos, gs: true, bats: 'R', throws: 'R' };
+  });
+}
+export function playerName(id) { const p = GS_ROSTER.find(x => x.id === id); return p ? p : { id, num: String(90 + (+String(id).replace('sub', '') || 1)), name: 'GS Sub ' + (+String(id).replace('sub', '') || 1) }; }

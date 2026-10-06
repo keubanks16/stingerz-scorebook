@@ -10,8 +10,8 @@ const rnd = PH.randn;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const polar = (d, a) => [Math.sin(a * Math.PI / 180) * d, -Math.cos(a * Math.PI / 180) * d];
 const SPOTS = { P: [0, -60.5], C: [0, 3.4], '1B': polar(98, 38), '2B': polar(142, 15), SS: polar(142, -15), '3B': polar(98, -38), LF: polar(270, -29), CF: polar(300, 0), RF: polar(270, 29) };
-const THROW = { P: 74, C: 80, '1B': 74, '2B': 76, SS: 82, '3B': 82, LF: 76, CF: 78, RF: 78 };
-const RELEASE = p => OUTFIELD.has(p) ? 0.8 : 0.45;
+const THROW = { P: 74, C: 66, '1B': 74, '2B': 76, SS: 82, '3B': 82, LF: 76, CF: 78, RF: 78 };
+const RELEASE = p => OUTFIELD.has(p) ? 0.8 : p === 'C' ? 0.6 : 0.45;
 const CUT_MIN = 150;   // outfield throws longer than this go through a cutoff man
 const POSWORD = { P: 'the pitcher', C: 'the catcher', '1B': 'first', '2B': 'second', SS: 'short', '3B': 'third', LF: 'left', CF: 'center', RF: 'right' };
 const BASEWORD = ['home', 'first', 'second', 'third', 'home'];
@@ -29,8 +29,9 @@ export class Game {
     this.t = 0; this.timers = []; this.timeScale = 1; this.fast = false;
     this.actors = new Map();
     this.diff = cfg.difficulty;
-    const gs = { ...TEAMS.GS, lineup: cfg.gsLineup, idx: 0, runs: 0, hits: 0, errors: 0, line: [], gs: true };
-    const rv = { ...TEAMS.RIV, lineup: cfg.rivals, idx: 0, runs: 0, hits: 0, errors: 0, line: [], gs: false };
+    // lineup = batting order (can be longer than 9 with extra hitters); defense = the nine in the field
+    const gs = { ...TEAMS.GS, lineup: cfg.gsLineup, defense: cfg.gsLineup.filter(p => p.pos !== 'EH').slice(0, 9), idx: 0, runs: 0, hits: 0, errors: 0, line: [], gs: true };
+    const rv = { ...TEAMS.RIV, lineup: cfg.rivals, defense: cfg.rivals, idx: 0, runs: 0, hits: 0, errors: 0, line: [], gs: false };
     this.teams = cfg.gsHome ? [rv, gs] : [gs, rv];
     this.inning = 1; this.half = 0; this.outs = 0; this.balls = 0; this.strikes = 0;
     this.box = {}; this.pbox = {};
@@ -40,6 +41,7 @@ export class Game {
     this.derby = cfg.mode === 'derby' ? { hr: 0, outs: 0, maxOuts: 10, longest: 0, last: null } : null;
     this.ump = new Player3D({ name: '', num: '', team: TEAMS.RIV, role: 'ump' }); this.scene.add(this.ump.root); this.ump.play('ump');
     this.tracer = [];
+    this.stealTune = { lead: [9.5, 14.5], delay: [0, 0.42], arm: [0.9, 1.1] };
     this.setupHalf(true);
   }
   // ---------- helpers ----------
@@ -58,11 +60,14 @@ export class Game {
   }
   show(a) { if (!a.root.parent) this.scene.add(a.root); }
   hide(a) { if (a.root.parent) a.root.parent.remove(a.root); }
-  boxOf(p) { return this.box[p.id] || (this.box[p.id] = { p, AB: 0, R: 0, H: 0, '2B': 0, '3B': 0, HR: 0, RBI: 0, BB: 0, K: 0 }); }
+  boxOf(p) { return this.box[p.id] || (this.box[p.id] = { p, AB: 0, R: 0, H: 0, '2B': 0, '3B': 0, HR: 0, RBI: 0, BB: 0, K: 0, SB: 0, CS: 0 }); }
   pboxOf(p) { return this.pbox[p.id] || (this.pbox[p.id] = { p, OUTS: 0, H: 0, R: 0, BB: 0, K: 0, PIT: 0 }); }
   isHumanBat() { if (this.cfg.autoplay) return false; const m = this.cfg.mode; if (m === 'derby') return true; if (!this.offense.gs) return false; return m === 'team' || !!this.batter?.p.me; }
   isHumanPitch() { if (this.cfg.autoplay) return false; const m = this.cfg.mode; if (m === 'derby' || !this.defense.gs) return false; return m === 'team' || !!this.pitcherEnt?.p.me; }
   isHumanField(f) { if (this.cfg.autoplay) return false; if (!this.defense.gs || this.cfg.mode === 'derby') return false; return this.cfg.mode === 'team' || !!f?.p.me; }
+  // the hitting team's coach (you) controls these runners
+  isHumanRun(r) { if (this.cfg.autoplay || this.derby || !this.offense.gs || !r) return false; return this.cfg.mode === 'team' || !!r.p.me; }
+  manualRunning() { return this.cfg.baserun !== 'auto'; }
   humanInvolved() { return this.isHumanBat() || this.isHumanPitch(); }
   // home crowd: cheers for GS, groans for the other team
   react(goodForGS, level) { if (this.fast && level < 1) return; if (goodForGS) sfx.cheer(level); else sfx.aww(Math.min(1, level)); }
@@ -74,7 +79,7 @@ export class Game {
     for (const a of this.actors.values()) this.hide(a);
     this.fielders = []; this.runners = []; this.batter = null;
     const def = this.defense;
-    for (const p of def.lineup) {
+    for (const p of def.defense) {
       const a = this.actor(p); this.show(a); a.setHeadgear(p.pos === 'C' ? 'helmet' : 'cap'); a.showBat(false);
       const [x, z] = SPOTS[p.pos];
       a.pos.set(x, groundY(x, z), z); a.faceToward(0, 0);
@@ -101,7 +106,7 @@ export class Game {
   startAtBat() {
     if (this.phase === 'over') return;
     const off = this.offense;
-    const p = off.lineup[off.idx % 9];
+    const p = off.lineup[off.idx % off.lineup.length];
     const a = this.actor(p); this.show(a); a.setHeadgear('helmet'); a.showBat(true);
     const s = p.bats === 'L' ? -1 : 1;
     a.pos.set(-2.7 * s, 0, 0.2); a.root.rotation.y = s * Math.PI / 2; a.play('stance', { restart: true });
@@ -143,6 +148,9 @@ export class Game {
     this.catcherEnt.a.anim.glove = { x: 0, y: 2.4, z: 2.3 };
     this.ball.mode = 'none';
     this.batter.a.play('stance', { restart: true }); this.bunting = false; this.power = false;
+    for (const r of this.runners) { r.steal = false; r.stealing = false; }
+    this.cpuSteals();
+    this.ui.runControls?.();
     this.camMode = this.isHumanPitch() ? 'pitch' : 'bat';
     this.showZone = this.isHumanPitch() || (this.isHumanBat() && this.cfg.showZone);
     this.ui.batControls?.(this.isHumanBat());
@@ -187,6 +195,18 @@ export class Game {
   }
   throwPitch(type, target, veloMul = 1) {
     this.phase = 'windup';
+    this.ui.runControls?.();
+    for (const r of this.runners) if (r.state === 'alive' && r.steal) {
+      // every steal is different: how big a lead, how good a jump
+      const T = this.stealTune;
+      this.after(T.delay[0] + Math.random() * (T.delay[1] - T.delay[0]), () => {
+        if (r.state !== 'alive' || !r.steal || !(this.phase === 'windup' || this.phase === 'pitch')) return;
+        const base = Math.round(r.s / 90);
+        r.stealing = true; r.stealFrom = base; r.target = base + 1; r.lead = T.lead[0] + Math.random() * (T.lead[1] - T.lead[0]); r.v = 10; r.forcedTo = null;
+        // the middle infielder (or third baseman) breaks to cover the bag
+        this.covers = {}; this.coverOf(base + 1);
+      });
+    }
     const P = this.pitcherEnt;
     P.a.play('pitch', { dur: 1.0, restart: true });
     const lefty = P.p.throws === 'L';
@@ -277,6 +297,7 @@ export class Game {
     const swung = !!((this.swing && this.swing.resolved) || (this.cpuSwing && this.cpuSwing.resolved));
     const strike = swung || PH.isStrike(cross.x, cross.y, PH.zoneOf());
     this.phase = 'between'; this.ball.mode = 'held'; this.ball.holder = this.catcherEnt;
+    const stealing = this.runners.some(r => r.state === 'alive' && r.stealing);
     const mph = Math.round(pt.mph);
     this.ui.pitchInfo?.(`${mph} MPH ${PH.PITCHES[pt.type].name}`, { x: cross.x, y: cross.y, strike, type: pt.type });
     if (this.derby) {
@@ -293,15 +314,17 @@ export class Game {
         this.ui.ticker?.(`${this.batter.p.name} strikes out ${swung ? 'swinging' : 'looking'}.`);
         this.batterDone();
         this.recordOut();
-        this.afterPlay(1.6);
-      } else { this.ui.banner?.(swung ? 'SWINGING STRIKE' : 'STRIKE', 'strike', 700); this.after(this.fast ? 0.3 : 1.0, () => this.prePitch()); }
+        if (stealing && this.outs < 3) this.startStealPlay(true); else this.afterPlay(1.6);
+      } else { this.ui.banner?.(swung ? 'SWINGING STRIKE' : 'STRIKE', 'strike', 700); if (stealing) this.startStealPlay(false); else this.after(this.fast ? 0.3 : 1.0, () => this.prePitch()); }
     } else {
       this.balls++;
       if (this.balls >= 4) {
         this.ui.banner?.('BALL FOUR', 'ball'); this.ui.ticker?.(`${this.batter.p.name} draws a walk.`);
         this.boxOf(this.batter.p).BB++; this.pboxOf(this.pitcherEnt.p).BB++;
+        // a runner who was stealing just takes the base he was going to
+        for (const r of this.runners) if (r.stealing) { r.s = r.target * 90; r.stealing = r.steal = false; this.placeRunner(r); this.boxOf(r.p).SB = (this.boxOf(r.p).SB || 0) + 1; }
         this.walk();
-      } else { this.ui.banner?.('BALL', 'ball', 600); this.after(this.fast ? 0.3 : 1.0, () => this.prePitch()); }
+      } else { this.ui.banner?.('BALL', 'ball', 600); if (stealing) this.startStealPlay(false); else this.after(this.fast ? 0.3 : 1.0, () => this.prePitch()); }
     }
     this.refresh();
   }
@@ -313,6 +336,7 @@ export class Game {
     const spray = back ? 160 + Math.random() * 40 : side * (50 + Math.random() * 30);
     const b = PH.launch(35 + Math.random() * 35, back ? 35 + Math.random() * 25 : 10 + Math.random() * 30, spray, { x: bp.x, y: bp.y, z: PH.CONTACT_Z });
     this.ball.mode = 'foul'; this.ball.b = b; this.phase = 'foul';
+    for (const r of this.runners) if (r.stealing) { r.s = r.stealFrom * 90; r.target = r.stealFrom; r.v = 0; r.stealing = r.steal = false; this.placeRunner(r); r.a.play('stand'); }
     this.ui.banner?.('FOUL BALL', 'strike', 800);
     if (this.derby) { this.after(0.6, () => this.derbyOut('Foul ball')); return; }
     if (this.strikes < 2) this.strikes++;
@@ -360,8 +384,8 @@ export class Game {
     else { bat.a.play('stand'); }
     this.play.batterRunner = br;
     // force chain
-    const on = [1, 2, 3].map(k => this.runnerOn(k));
-    for (const r of this.runners) { if (r !== br) { r.orig = r.s / 90; r.forcedTo = null; } }
+    for (const r of this.runners) { if (r !== br) { r.orig = r.stealing ? r.stealFrom : Math.floor(r.s / 90 + 1e-6); r.forcedTo = null; r.steal = r.stealing = false; } }
+    const on = [1, 2, 3].map(k => this.runners.find(r => r !== br && r.state === 'alive' && r.orig === k));
     if (on[0]) { on[0].forcedTo = 2; if (on[1]) { on[1].forcedTo = 3; if (on[2]) on[2].forcedTo = 4; } }
     this.offense.idx++;
     this.camMode = 'follow';
@@ -449,6 +473,7 @@ export class Game {
   update(dt) {
     this.t += dt;
     for (let i = 0; i < this.timers.length; i++) { const tm = this.timers[i]; if (this.t >= tm.at) { this.timers.splice(i--, 1); tm.fn(); } }
+    if (this.phase === 'windup' || this.phase === 'pitch') { if (this.runners.some(r => r.stealing)) this.updateRunners(dt); }
     if (this.phase === 'pitch') this.updatePitch(dt);
     if (this.phase === 'foul' && this.ball.b) { PH.stepBall(this.ball.b, dt, {}); this.ball.pos = this.ball.b; if (Math.abs(this.ball.b.x) > 200 || this.ball.b.z > 90) this.ball.mode = 'none'; }
     if (this.ball.mode === 'hr') {
@@ -461,7 +486,7 @@ export class Game {
     }
     // actor animation & positions
     for (const f of this.fielders) {
-      if (this.phase === 'live' || this.phase === 'dead') this.moveFielder(f, dt);
+      if (this.phase === 'live' || this.phase === 'dead' || (f.goal && (this.phase === 'windup' || this.phase === 'pitch' || this.phase === 'between'))) this.moveFielder(f, dt);
       f.a.update(dt);
     }
     for (const r of this.runners) r.a.update(dt);
@@ -517,7 +542,8 @@ export class Game {
     const moving = this.runners.some(r => r.state === 'alive' && (r.s !== r.target * 90 || r.delay > 0));
     if (!moving && ((b.mode === 'held' && !(b.holder && (b.holder.throwing || b.holder.carry))) || (pl.award && (b.mode === 'gone' || b.mode === 'hr')))) {
       pl.quiet = (pl.quiet || 0) + dt;
-      if (pl.quiet > (pl.award ? 0.2 : 0.55)) this.endPlay();
+      const coachTime = this.offense.gs && this.manualRunning() && this.runners.some(r => r.state === 'alive' && this.isHumanRun(r)) ? 1.3 : 0.55;
+      if (pl.quiet > (pl.award ? 0.2 : coachTime)) this.endPlay();
     } else if (pl) pl.quiet = 0;
     if (this.liveT > 25) this.endPlay(true);
   }
@@ -658,6 +684,16 @@ export class Game {
   }
   decideThrow(f) {
     if (OUTFIELD.has(f.pos)) return this.outfieldThrow(f);
+    // catcher on a steal: throw unless it's hopeless
+    if (this.play?.steal && f === this.catcherEnt) {
+      const r = this.runners.filter(x => x.state === 'alive' && x.stealing && x.s < x.target * 90).sort((a, b) => b.target - a.target)[0];
+      if (r) {
+        const [bx, bz] = bxz(r.target), d = dist2(f.a.pos.x, f.a.pos.z, bx, bz);
+        const td = 0.3 + d / THROW.C, tr = (r.target * 90 - r.s) / r.vmax;
+        if (tr - td > -0.7) return { type: 'throw', k: r.target % 4 };
+      }
+      return { type: 'hold' };
+    }
     const fx = f.a.pos.x, fz = f.a.pos.z, spd = THROW[f.pos];
     let best = null;
     const alive = this.runners.filter(r => r.state === 'alive');
@@ -706,7 +742,8 @@ export class Game {
       const h = f.a.handWorld(_tmpV);
       const d = dist2(h.x, h.z, bx, bz);
       const rd = dist2(recv.a.pos.x, recv.a.pos.z, bx, bz);
-      const T = Math.max(0.25, d / THROW[f.pos], rd / recv.spd + 0.15);
+      const arm = f.pos === 'C' && this.play?.steal ? (this.stealTune.arm[0] + Math.random() * (this.stealTune.arm[1] - this.stealTune.arm[0])) * (this.defense.gs ? 0.975 : [0.97, 0.98, 1.0][this.diff]) : 1;
+      const T = Math.max(0.25, d / (THROW[f.pos] * arm), rd / recv.spd + 0.15);
       const y1 = 4.2, vy = (y1 - h.y + 0.5 * PH.G * T * T) / T;
       this.ball.mode = 'thrown'; this.ball.holder = null;
       this.ball.throw = { x0: h.x, y0: h.y, z0: h.z, x1: bx, z1: bz, T, t: 0, vy, k: tk, cutK: tk < 0 ? k : null, recv, from: f };
@@ -843,6 +880,7 @@ export class Game {
     if (pl.flyHold && r !== pl.batterRunner) return;
     if (r.forcedTo && r.forcedTo > base) { r.target = Math.max(r.target, base + 1); return; }
     if (r.target > base) return;
+    if (this.isHumanRun(r) && this.manualRunning()) return;   // you call it
     const next = base + 1; if (next > 4) return;
     // blocked by runner ahead
     // never pass the runner ahead (runners keep their batting-order position on the bases)
@@ -879,7 +917,9 @@ export class Game {
       const goal = r.target * 90;
       if (r.s === goal) { r.v = 0; r.a.speed = 0; if (r.a.anim.name === 'run' || r.a.anim.name === 'slide') r.a.play('stand'); continue; }
       const dir = Math.sign(goal - r.s);
-      r.v = Math.min(r.vmax, r.v + 17 * dt);
+      if (r.lastDir && dir !== r.lastDir) r.v = Math.min(r.v, 3);
+      r.lastDir = dir;
+      r.v = Math.min(r.vmax, r.v + (r.stealing ? 21 : 17) * dt);
       if (r.lead && dir > 0) { r.s += Math.min(r.lead, goal - r.s - 1); r.lead = 0; }
       else if (dir < 0) r.lead = 0;
       const prev = r.s;
@@ -943,6 +983,99 @@ export class Game {
     } else if (this.ball.pos && this.phase === 'live') a.faceToward(this.ball.pos.x, this.ball.pos.z, dt, 6);
     a.pos.y = groundY(a.pos.x, a.pos.z);
   }
+  // ---------- steals ----------
+  cpuSteals() {
+    if (this.derby || this.outs >= 3) return;
+    const base = k => this.runnerOn(k);
+    const rate = this.offense.gs ? 0.06 : [0.04, 0.07, 0.1][this.diff];
+    const r1 = base(1), r2 = base(2);
+    if (r1 && !this.isHumanRun(r1) && !base(2) && Math.random() < rate) r1.steal = true;
+    else if (r2 && !this.isHumanRun(r2) && !base(3) && this.outs < 2 && Math.random() < rate * 0.35) r2.steal = true;
+  }
+  runnerSteal(id) {
+    if (this.phase !== 'prepitch') return false;
+    const r = this.runners.find(x => x.p.id === id && x.state === 'alive');
+    if (!r || !this.isHumanRun(r)) return false;
+    const b = Math.round(r.s / 90);
+    if (b >= 3 || this.runnerOn(b + 1)) return false;
+    r.steal = !r.steal; this.ui.runControls?.(); return true;
+  }
+  startStealPlay(abOver) {
+    this.phase = 'live'; this.liveT = 0; this.covers = {};
+    this.play = { steal: true, abOver, runs: [], outsOnPlay: 0, forceOuts: 0, startT: this.t - 5, batterRunner: null, maxDist: 0, award: false };
+    this.ball.mode = 'held'; this.ball.holder = this.catcherEnt;
+    for (const r of this.runners) if (r.state === 'alive') { r.orig = r.stealing ? r.stealFrom : Math.round(r.s / 90); r.forcedTo = null; }
+    // the middle infielders / third baseman break to cover
+    for (const r of this.runners) if (r.stealing) this.coverOf(r.target);
+    this.camMode = 'follow';
+    this.ui.batControls?.(false); this.ui.pitchControls?.(false);
+    this.afterPossession(this.catcherEnt, 0.3);
+  }
+  stealResult(pl) {
+    const words = { 2: 'second', 3: 'third', 4: 'home' };
+    const txt = [];
+    for (const r of this.runners) {
+      if (!r.stealing) continue;
+      if (r.state === 'out') { txt.push(`${r.p.name} is caught stealing ${words[r.target] || ''}!`); this.boxOf(r.p).CS = (this.boxOf(r.p).CS || 0) + 1; }
+      else if (r.state === 'alive' && r.s >= r.stealFrom * 90 + 90) { txt.push(`${r.p.name} steals ${words[Math.round(r.s / 90)] || 'a base'}!`); this.boxOf(r.p).SB = (this.boxOf(r.p).SB || 0) + 1; this.react(this.offense.gs, 0.5); }
+      r.stealing = r.steal = false;
+    }
+    if (txt.length) { this.ui.ticker?.(txt.join(' ')); this.ui.banner?.(/caught/.test(txt[0]) ? 'CAUGHT STEALING!' : 'STOLEN BASE!', /caught/.test(txt[0]) ? 'out' : 'safe', 1200); }
+  }
+  afterSteal(pl) {
+    this.after(1.4, () => {
+      if (this.checkGameOver()) return;
+      if (this.outs >= 3) return this.endHalf();
+      this.resetFielders(true); this.ball.mode = 'none'; this.tracer = [];
+      this.camMode = this.isHumanPitch() ? 'pitch' : 'bat';
+      if (pl.abOver) this.startAtBat();
+      else { const s = this.batter.s; this.batter.a.pos.set(-2.7 * s, 0, 0.2); this.batter.a.root.rotation.y = s * Math.PI / 2; this.batter.a.showBat(true); this.prePitch(); }
+    });
+  }
+  // ---------- you call it: send or hold a runner ----------
+  canCoachRunners() { return this.phase === 'live' && this.play && !this.play.award && this.runners.some(r => r.state === 'alive' && this.isHumanRun(r)); }
+  aheadOf(r, o) { return o !== r && o.state === 'alive' && (o.s > r.s || (o.s === r.s && o.orig > r.orig)); }
+  runnerGo(id) {
+    if (!this.canCoachRunners()) return false;
+    const r = this.runners.find(x => x.p.id === id && x.state === 'alive');
+    if (!r || !this.isHumanRun(r)) return false;
+    let next;
+    if (r.target * 90 > r.s) next = r.target + 1;                 // already running: keep going past it
+    else if (r.target * 90 < r.s) next = Math.ceil(r.s / 90 - 1e-6); // was heading back: turn around
+    else next = Math.round(r.s / 90) + 1;                          // standing on a base
+    if (next > 4) return false;
+    for (const o of this.runners) if (this.aheadOf(r, o) && o.target <= next && o.target < 4) return false;   // can't pass the runner ahead
+    r.target = next; r.returning = false; r.delay = Math.min(r.delay, 0.05);
+    return true;
+  }
+  runnerBack(id) {
+    if (!this.canCoachRunners()) return false;
+    const r = this.runners.find(x => x.p.id === id && x.state === 'alive');
+    if (!r || !this.isHumanRun(r) || r === this.play.batterRunner && r.s < 90) return false;
+    if (r.target * 90 <= r.s) return false;
+    const back = Math.floor(r.s / 90 + 1e-6);
+    if (r.forcedTo && r.forcedTo > back) return false;              // forced: he has to go
+    for (const o of this.runners) if (o !== r && o.state === 'alive' && !this.aheadOf(r, o) && o.target === back) return false;  // someone's coming to that base
+    r.target = back;
+    return true;
+  }
+  runControl() {
+    if (this.cfg.autoplay || this.derby || !this.offense.gs) return null;
+    const mine = this.runners.filter(r => r.state === 'alive' && this.isHumanRun(r) && r.s < 360);
+    if (!mine.length) return null;
+    let mode = null;
+    if (this.phase === 'prepitch') mode = 'steal';
+    else if (this.canCoachRunners()) mode = 'live';
+    else if ((this.phase === 'windup' || this.phase === 'pitch') && mine.some(r => r.steal)) mode = 'going';
+    if (!mode) return null;
+    const BN = ['HOME', '1B', '2B', '3B', 'HOME'];
+    return { mode, runners: mine.sort((a, b) => b.s - a.s).map(r => {
+      const b = Math.round(r.s / 90), onBase = Math.abs(r.s - b * 90) < 0.01;
+      const fwd = r.target * 90 > r.s, back = r.target * 90 < r.s;
+      return { id: r.p.id, num: r.p.num, name: r.p.name.split(' ').slice(-1)[0], at: onBase ? BN[b] : null, to: fwd || back ? BN[r.target] : null, back, steal: !!r.steal,
+        canSteal: mode === 'steal' && onBase && b < 3 && !this.runnerOn(b + 1), forced: !!(r.forcedTo && r.forcedTo * 90 > r.s) };
+    }) };
+  }
   // ---------- end of play ----------
   endPlay(timeout) {
     if (this.phase !== 'live') return;
@@ -957,6 +1090,7 @@ export class Game {
     for (const r of onb) { if (r.s < 90) { r.state = 'out'; this.hide(r.a); } else this.placeRunner(r); }
     for (const r of this.runners) if (r.state === 'alive') { r.target = r.s / 90; r.forcedTo = null; r.returning = false; r.orig = r.s / 90; }
     for (const f of this.fielders) { f.goal = null; f.chase = false; f.carry = false; f.throwing = null; f.cover = null; }
+    if (pl.steal) { this.stealResult(pl); this.runners = this.runners.filter(r => r.state === 'alive'); this.refresh(); this.afterSteal(pl); return; }
     if (!pl.walk) this.summarize(pl);
     this.runners = this.runners.filter(r => r.state === 'alive');
     this.refresh();

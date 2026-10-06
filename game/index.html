@@ -42,6 +42,7 @@
     <div id="swingInfo"></div>
     <div id="ticker"></div>
     <div id="batterCard"><div class="bcNum">1</div><div><div class="bcName">MJ EUBANKS</div><div class="bcLine">0-0 TODAY</div></div></div>
+    <div id="runUI" class="hidden"><div class="ruHead">RUNNERS <span id="ruHint"></span></div><div id="ruList"></div><div class="ruAll" id="ruAll"><button data-r="allback">◀ ALL BACK</button><button data-r="allgo">ALL GO ▶</button></div></div>
     <div id="batBtns" class="hidden"><button id="powerBtn" class="tog">POWER</button><button id="buntBtn" class="tog">BUNT</button><div class="hint">TAP THE BALL TO SWING</div></div>
     <div id="pitchUI" class="hidden">
       <div class="hint">TAP THE ZONE TO AIM · PICK A PITCH</div>
@@ -104,12 +105,25 @@
     </div>
   </section>
 
+  <section id="sLineup" class="screen">
+    <div class="panel wide lineup">
+      <div class="luHead"><div><h2>LINEUP</h2><p class="sub" id="luSub">Set the batting order and positions.</p></div>
+        <div class="luTools"><button id="luHub" class="pill hidden">USE HUB LINEUP</button><button id="luReset" class="pill">RESET</button></div></div>
+      <div id="luWarn" class="luWarn hidden"></div>
+      <div id="luList" class="luList"></div>
+      <div class="luBenchHead">BENCH <span>tap + to add a hitter</span></div>
+      <div id="luBench" class="luBench"></div>
+      <div class="grid2"><button class="big" id="luGo">PLAY BALL</button><button class="big alt" data-back>BACK</button></div>
+    </div>
+  </section>
+
   <section id="sSettings" class="screen">
     <div class="panel side">
       <h2>SETTINGS</h2>
       <div class="row"><label>DIFFICULTY</label><div class="seg" data-s="difficulty"><button data-v="0">ROOKIE</button><button data-v="1">PRO</button><button data-v="2">ALL-STAR</button></div></div>
       <div class="row"><label>INNINGS</label><div class="seg" data-s="innings"><button data-v="3">3</button><button data-v="6">6</button><button data-v="9">9</button></div></div>
       <div class="row"><label>GS BATS</label><div class="seg" data-s="gsHome"><button data-v="false">FIRST (AWAY)</button><button data-v="true">SECOND (HOME)</button></div></div>
+      <div class="row"><label>BASERUNNING</label><div class="seg" data-s="baserun"><button data-v="manual">YOU CALL IT</button><button data-v="auto">AUTO</button></div></div>
       <div class="row"><label>STRIKE ZONE BOX</label><div class="seg" data-s="zone"><button data-v="true">SHOW</button><button data-v="false">HIDE</button></div></div>
       <div class="row"><label>SOUND</label><div class="seg" data-s="sound"><button data-v="true">ON</button><button data-v="false">OFF</button></div></div>
       <div class="row"><label>TEAM MUSIC</label><div class="seg" data-s="music"><button data-v="true">ON</button><button data-v="false">OFF</button></div></div>
@@ -138,7 +152,9 @@
       <h3>🧤 FIELDING</h3>
       <p>Your fielders run to the ball on their own. When one of them catches it, <b>tap the base to throw to</b>. The glowing base is the smart play. If you wait too long, they'll make the throw themselves.</p>
       <h3>🏃 RUNNING</h3>
-      <p>Runners are smart. They tag up, take extra bases when they can make it, and slide into close plays.</p>
+      <p>You're the base coach. During a play, tap <b>GO ▶</b> to send a runner to the next base (tap again to keep him going) or <b>◀ BACK</b> to send him back. <b>ALL GO</b> and <b>ALL BACK</b> move everyone. Forced runners always run.</p>
+      <p>Between pitches, tap <b>STEAL</b> on a runner. He takes off when the pitcher starts his delivery, and the catcher will try to throw him out.</p>
+      <p>On a fly ball, runners wait at the base. After the catch, tap <b>GO</b> to tag up. In Settings, <b>Baserunning: Auto</b> lets the runners decide (you can still send or hold them).</p>
       <button class="big" data-back>GOT IT</button>
     </div>
   </section>

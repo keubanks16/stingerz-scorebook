@@ -1919,8 +1919,19 @@ body.viewer-on { overflow: hidden; }
     if (!drillsAllowed()) return '';
     return `<button class="card game-card" data-act="gameOpen"><span class="game-art" aria-hidden="true"><img src="game/img/gs-logo-light.png" alt=""></span><span><span class="t"><b>GS Baseball: The Game</b><span class="chip soon">NEW</span></span><span class="d">Play a real 3D ballgame as yourself: hit, pitch, field, Home Run Derby.</span></span><span class="fee-go" aria-hidden="true">›</span></button>`;
   }
+  // The batting order from the next game that has one (or the most recent), for the game's lineup screen.
+  function gameLineup() {
+    const withLu = realGames().filter((g) => Array.isArray(g.lineup) && g.lineup.length);
+    if (!withLu.length) return null;
+    const today = todayISO();
+    const next = withLu.filter((g) => String(g.date || '') >= today).sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))[0];
+    const g = next || withLu.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))[0];
+    let when = '';
+    try { when = g.date ? parseDate(g.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''; } catch (e) { /* no date */ }
+    return { order: g.lineup.slice(), label: ['vs ' + (g.opponent || 'Opponent'), when].filter(Boolean).join(' · ') };
+  }
   function gameRoster() {
-    return { source: 'gs-hub', type: 'roster', team: Data.team.name || 'GS Baseball', mine: myPlayers(),
+    return { source: 'gs-hub', type: 'roster', team: Data.team.name || 'GS Baseball', mine: myPlayers(), lineup: gameLineup(),
       players: sortedRoster().map((p) => ({ id: p.id, num: p.num || '', name: p.name, pos: p.pos || '', bats: p.bats || '', throws: p.throws || '' })) };
   }
   function gameOpen() {

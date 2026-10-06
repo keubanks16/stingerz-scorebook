@@ -167,7 +167,8 @@ function back() { screenStack.pop(); const prev = screenStack.pop() || (game ? '
 $$('[data-back]').forEach(b => b.addEventListener('click', () => { sfx.click(); back(); }));
 function go(where) {
   sfx.click();
-  if (where === 'team' || where === 'me' || where === 'derby') return startGame(where);
+  if (where === 'derby') return startGame(where);
+  if (where === 'team' || where === 'me') { openLineup(where); return; }
   if (where === 'pick') { buildRoster(); screen('sPick'); cam.mode = 'menu'; return; }
   if (where === 'card') { openCard(); return; }
   if (where === 'settings') { syncSettings(); screen('sSettings'); return; }
@@ -235,7 +236,7 @@ function syncSettings() {
     const k = seg.dataset.s;
     seg.querySelectorAll('button').forEach(b => {
       b.classList.toggle('on', String(S.settings[k]) === b.dataset.v);
-      b.onclick = () => { sfx.click(); let v = b.dataset.v; v = v === 'true' ? true : v === 'false' ? false : +v; S.settings[k] = v; D.save(); applySettings(); syncSettings(); };
+      b.onclick = () => { sfx.click(); let v = b.dataset.v; v = v === 'true' ? true : v === 'false' ? false : /^\d+$/.test(v) ? +v : v; S.settings[k] = v; D.save(); applySettings(); syncSettings(); };
     });
   });
 }
@@ -245,21 +246,137 @@ function applySettings() {
 }
 function buildStats() {
   const rows = D.GS_ROSTER.map(p => ({ p, t: S.stats[p.id] || {}, d: S.derby[p.id] }));
-  const head = ['PLAYER', 'G', 'AB', 'H', 'AVG', '2B', '3B', 'HR', 'RBI', 'R', 'BB', 'K', 'DERBY'];
+  const head = ['PLAYER', 'G', 'AB', 'H', 'AVG', '2B', '3B', 'HR', 'RBI', 'R', 'BB', 'K', 'SB', 'DERBY'];
   $('#statsTable').innerHTML = `<tr>${head.map(h => `<th>${h}</th>`).join('')}</tr>` + rows.map(({ p, t, d }) =>
-    `<tr class="${p.id === S.me ? 'mine' : ''}"><td>#${p.num} ${p.name}</td><td>${t.G || 0}</td><td>${t.AB || 0}</td><td>${t.H || 0}</td><td>${D.avg(t.H || 0, t.AB || 0)}</td><td>${t['2B'] || 0}</td><td>${t['3B'] || 0}</td><td>${t.HR || 0}</td><td>${t.RBI || 0}</td><td>${t.R || 0}</td><td>${t.BB || 0}</td><td>${t.K || 0}</td><td>${d ? d.best + ' HR' : '—'}</td></tr>`).join('');
+    `<tr class="${p.id === S.me ? 'mine' : ''}"><td>#${p.num} ${p.name}</td><td>${t.G || 0}</td><td>${t.AB || 0}</td><td>${t.H || 0}</td><td>${D.avg(t.H || 0, t.AB || 0)}</td><td>${t['2B'] || 0}</td><td>${t['3B'] || 0}</td><td>${t.HR || 0}</td><td>${t.RBI || 0}</td><td>${t.R || 0}</td><td>${t.BB || 0}</td><td>${t.K || 0}</td><td>${t.SB || 0}</td><td>${d ? d.best + ' HR' : '—'}</td></tr>`).join('');
 }
+
+// ---------- base coach: send / hold runners, steals ----------
+let ruSig = '';
+function renderRun(force) {
+  const rc = game && !paused ? game.runControl() : null;
+  const box = $('#runUI');
+  if (!rc) { if (!box.classList.contains('hidden')) { box.classList.add('hidden'); ruSig = ''; } return; }
+  const sig = rc.mode + '|' + rc.runners.map(r => [r.id, r.at, r.to, r.back, r.steal, r.canSteal, r.forced].join(',')).join(';');
+  if (!force && sig === ruSig) return;
+  ruSig = sig; box.classList.remove('hidden');
+  $('#ruHint').textContent = rc.mode === 'steal' ? 'tap STEAL before the pitch' : rc.mode === 'going' ? 'they\'re running!' : 'send or hold';
+  $('#ruList').innerHTML = rc.runners.map(r => {
+    const where = r.at ? `on <b>${r.at}</b>` : r.back ? `back to <b>${r.to}</b>` : `running to <b>${r.to}</b>`;
+    if (rc.mode === 'steal' || rc.mode === 'going') {
+      const nextB = { '1B': '2ND', '2B': '3RD' }[r.at] || '';
+      return `<div class="ruRow"><span class="who">#${r.num} ${r.name}<em>${where}</em></span><span></span>${r.canSteal || r.steal ? `<button class="steal${r.steal ? ' on' : ''}" data-r="steal" data-id="${r.id}" ${rc.mode === 'going' ? 'disabled' : ''}>${r.steal ? (rc.mode === 'going' ? 'STEALING!' : 'STEALING ✓') : 'STEAL ' + nextB}</button>` : '<span></span>'}</div>`;
+    }
+    return `<div class="ruRow"><span class="who">#${r.num} ${r.name}<em>${where}${r.forced ? ' · forced' : ''}</em></span><button class="back" data-r="back" data-id="${r.id}" ${r.forced || !r.to || r.back ? 'disabled' : ''}>◀</button><button class="go" data-r="go" data-id="${r.id}">GO ▶</button></div>`;
+  }).join('');
+  $('#ruAll').classList.toggle('hidden', rc.mode !== 'live' || rc.runners.length < 2);
+}
+hud.runControls = () => renderRun(true);
+$('#runUI').addEventListener('pointerdown', e => {
+  e.stopPropagation();
+  const b = e.target.closest('button'); if (!b || b.disabled || !game) return;
+  const a = b.dataset.r, id = b.dataset.id;
+  let ok = false;
+  if (a === 'go') ok = game.runnerGo(id);
+  if (a === 'back') ok = game.runnerBack(id);
+  if (a === 'steal') ok = game.runnerSteal(id);
+  if (a === 'allgo' || a === 'allback') {
+    const rc = game.runControl(); if (rc) for (const r of rc.runners) ok = (a === 'allgo' ? game.runnerGo(r.id) : game.runnerBack(r.id)) || ok;
+  }
+  if (ok) sfx.click(); else { b.animate([{ transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' }, { transform: 'none' }], { duration: 160 }); }
+  renderRun(true);
+});
+
+// ---------- lineup ----------
+// Batting order + positions before Play Ball / My Player. Saved on the device for next time.
+let LU = null, luMode = 'team', luOpen = -1, hubLineup = null;
+function openLineup(mode) {
+  luMode = mode; LU = D.savedLineup(S.me); luOpen = -1;
+  renderLineup(); screen('sLineup');
+}
+// who takes over a position: an extra hitter (one who plays it first), else a bench player
+function luReplacement(pos, excludeId) {
+  const prefer = list => list.find(x => D.prefPos(x.id) === pos) || list[0];
+  const ehs = LU.filter(x => x.pos === 'EH' && x.id !== excludeId);
+  if (ehs.length) return prefer(ehs);
+  const bench = D.GS_ROSTER.filter(p => p.id !== excludeId && !LU.some(x => x.id === p.id)).map(p => ({ id: p.id }));
+  if (!bench.length) return null;
+  const e = { id: prefer(bench).id, pos }; LU.push(e); return e;
+}
+let luNoteT = 0;
+function luNote(msg) { const el = $('#luSub'); el.textContent = msg; el.style.color = '#ff9fae'; clearTimeout(luNoteT); luNoteT = setTimeout(() => { el.style.color = ''; renderLineup(); }, 1800); }
+function luCommit() { LU = D.fixLineup(LU); D.saveLineup(LU); renderLineup(); }
+function renderLineup() {
+  if (!LU) return;
+  const nm = id => { const p = D.playerName(id); return `<small>#${p.num}</small>${p.name}`; };
+  const fielders = LU.filter(e => e.pos !== 'EH').length;
+  $('#luSub').textContent = `${LU.length} batters · ${LU.length - fielders} extra hitter${LU.length - fielders === 1 ? '' : 's'} · ${luMode === 'me' ? 'My Player' : 'Play Ball'}`;
+  $('#luList').innerHTML = LU.map((e, i) => `
+    <div class="luRow${e.id === S.me ? ' mine' : ''}" data-i="${i}">
+      <span class="o">${i + 1}</span>
+      <span class="nm">${nm(e.id)}${e.id === S.me ? '<i>YOU</i>' : ''}</span>
+      <button class="pos${e.pos === 'EH' ? ' eh' : ''}" data-a="pos">${e.pos}</button>
+      <button data-a="up" ${i ? '' : 'disabled'} aria-label="Move up">▲</button>
+      <button data-a="down" ${i < LU.length - 1 ? '' : 'disabled'} aria-label="Move down">▼</button>
+      <button data-a="bench" aria-label="Bench">✕</button>
+      ${luOpen === i ? `<div class="luPick">${[...D.POSITIONS, 'EH'].map(p => `<button data-a="set" data-p="${p}" class="${p === e.pos ? 'on' : ''}">${p === 'EH' ? 'BAT ONLY' : p}</button>`).join('')}</div>` : ''}
+    </div>`).join('');
+  const bench = D.GS_ROSTER.filter(p => !LU.some(e => e.id === p.id));
+  $('#luBench').innerHTML = bench.length ? bench.map(p => `<button data-add="${p.id}"><b>+</b>#${p.num} ${p.name}</button>`).join('') : '<span class="none">Everyone is in the lineup.</span>';
+  const meIn = LU.some(e => e.id === S.me);
+  const w = $('#luWarn');
+  if (luMode === 'me' && !meIn) { w.classList.remove('hidden'); w.innerHTML = `<span>You're on the bench. Put yourself in the lineup to play My Player.</span><button id="luMeIn">PUT ME IN</button>`; $('#luMeIn').onclick = () => { sfx.click(); LU.push({ id: S.me, pos: 'EH' }); luCommit(); }; }
+  else w.classList.add('hidden');
+  $('#luGo').disabled = luMode === 'me' && !meIn; $('#luGo').style.opacity = $('#luGo').disabled ? 0.45 : 1;
+  const hb = $('#luHub');
+  hb.classList.toggle('hidden', !hubLineup);
+  if (hubLineup) hb.textContent = 'USE HUB LINEUP' + (hubLineup.label ? ' · ' + hubLineup.label : '');
+}
+$('#luList').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const i = +b.closest('.luRow').dataset.i, a = b.dataset.a; sfx.click();
+  if (a === 'pos') { luOpen = luOpen === i ? -1 : i; renderLineup(); return; }
+  if (a === 'up' && i > 0) { [LU[i - 1], LU[i]] = [LU[i], LU[i - 1]]; luOpen = -1; }
+  if (a === 'down' && i < LU.length - 1) { [LU[i + 1], LU[i]] = [LU[i], LU[i + 1]]; luOpen = -1; }
+  if (a === 'bench') {
+    const e = LU[i];
+    if (e.pos !== 'EH') { const rep = luReplacement(e.pos, e.id); if (!rep) { luNote(`No one else can play ${e.pos} — need 9 in the field`); return; } rep.pos = e.pos; }
+    LU.splice(LU.indexOf(e), 1); luOpen = -1;
+  }
+  if (a === 'set') {
+    const p = b.dataset.p, e = LU[i], cur = e.pos;
+    if (p === cur) { luOpen = -1; renderLineup(); return; }
+    if (p === 'EH') {
+      // someone has to take his spot in the field: an extra hitter, or a bench player
+      const rep = luReplacement(cur, e.id);
+      if (!rep) { luNote(`No one else can play ${cur} — need 9 in the field`); return; }
+      rep.pos = cur;
+    } else {
+      const other = LU.find(x => x !== e && x.pos === p);
+      if (other) other.pos = cur;        // swap positions (an extra hitter swapping in sends that fielder to bat-only)
+    }
+    e.pos = p; luOpen = -1;
+  }
+  luCommit();
+});
+$('#luBench').addEventListener('click', e => {
+  const b = e.target.closest('[data-add]'); if (!b) return; sfx.click();
+  LU.push({ id: b.dataset.add, pos: 'EH' }); luCommit();
+});
+$('#luReset').addEventListener('click', () => { sfx.click(); LU = D.defaultLineup(S.me); luOpen = -1; luCommit(); });
+$('#luHub').addEventListener('click', () => { if (!hubLineup) return; sfx.click(); LU = D.lineupFromHub(hubLineup.order); luOpen = -1; luCommit(); luNote('Loaded the Hub lineup' + (hubLineup.label ? ' (' + hubLineup.label + ')' : '')); });
+$('#luGo').addEventListener('click', () => { if ($('#luGo').disabled) return; D.saveLineup(D.fixLineup(LU)); startGame(luMode); });
 
 // ---------- game lifecycle ----------
 function startGame(mode, extra = {}) {
   if (S.settings.music) music.background(); previewOff();
   quitGame();
   const st = S.settings;
-  const lineup = D.buildGSLineup(S.me);
+  const lineup = D.lineupPlayers(D.savedLineup(S.me), S.me);
   lineup.forEach(p => p.walkup = D.card(p.id).walkup);
-  let cfg = { mode, innings: st.innings, difficulty: st.difficulty, gsHome: mode === 'derby' ? false : st.gsHome, gsLineup: lineup, rivals: D.rivalsLineup(), showZone: st.zone, ...extra };
+  let cfg = { mode, innings: st.innings, difficulty: st.difficulty, gsHome: mode === 'derby' ? false : st.gsHome, gsLineup: lineup, rivals: D.rivalsLineup(), showZone: st.zone, baserun: st.baserun || 'manual', ...extra };
   if (mode === 'derby') {
-    const me = lineup.find(p => p.me) || lineup[0];
+    const me = { ...(D.gsPlayer(S.me) || lineup[0]), me: true };
     cfg.gsLineup = Array.from({ length: 9 }, () => me);
     cfg.innings = 99;
   }
@@ -277,7 +394,7 @@ function quitGame() {
   for (const a of game.actors.values()) if (a.root.parent) a.root.parent.remove(a.root);
   if (game.ump.root.parent) game.ump.root.parent.remove(game.ump.root);
   game = null; hud.throwControls(null); hud.pitchControls(false); hud.batControls(false); hud.stopMeter();
-  $('#hud').classList.add('hidden'); $('#rotate').classList.add('hidden');
+  $('#hud').classList.add('hidden'); $('#rotate').classList.add('hidden'); $('#runUI').classList.add('hidden'); ruSig = '';
   ballMesh.visible = false; ballShadow.visible = false; tracer.visible = false; zoneGroup.visible = false; reticle.visible = false;
 }
 function showGameOver(sum) {
@@ -293,7 +410,7 @@ function showGameOver(sum) {
   const seen = new Set();
   for (const b of gsBox) {
     seen.add(b.p.id);
-    D.addStats(b.p.id, { G: 1, AB: b.AB, H: b.H, '2B': b['2B'], '3B': b['3B'], HR: b.HR, RBI: b.RBI, R: b.R, BB: b.BB, K: b.K });
+    D.addStats(b.p.id, { G: 1, AB: b.AB, H: b.H, '2B': b['2B'], '3B': b['3B'], HR: b.HR, RBI: b.RBI, R: b.R, BB: b.BB, K: b.K, SB: b.SB || 0 });
   }
   const score = b => b.H * 2 + b.HR * 4 + b.RBI * 1.5 + b.R + b['2B'] + b['3B'] * 2 + b.BB * 0.5;
   const best = gsBox.slice().sort((a, b) => score(b) - score(a))[0];
@@ -326,6 +443,7 @@ function frame(now) {
     const steps = Math.ceil(dt / 0.02);
     for (let i = 0; i < steps; i++) game.update(dt / steps);
     syncWorld();
+    renderRun(false);
   } else if (preview) preview.update(rdt);
   updateCamera(rdt);
   renderer.render(scene, camera);
@@ -379,6 +497,8 @@ addEventListener('message', (e) => {
     D.save();
     if ($('#sPick').classList.contains('show')) buildRoster();
     if ($('#sMenu').classList.contains('show')) buildMenu();
+    hubLineup = d.lineup && Array.isArray(d.lineup.order) && d.lineup.order.length ? d.lineup : null;
+    if ($('#sLineup').classList.contains('show')) renderLineup();
   }
 });
 $$('[data-hub]').forEach(b => b.addEventListener('click', () => { quitGame(); music.stop(300); toHub({ type: 'close' }); }));
