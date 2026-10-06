@@ -12,6 +12,7 @@ const polar = (d, a) => [Math.sin(a * Math.PI / 180) * d, -Math.cos(a * Math.PI 
 const SPOTS = { P: [0, -60.5], C: [0, 3.4], '1B': polar(98, 38), '2B': polar(142, 15), SS: polar(142, -15), '3B': polar(98, -38), LF: polar(270, -29), CF: polar(300, 0), RF: polar(270, 29) };
 const THROW = { P: 74, C: 80, '1B': 74, '2B': 76, SS: 82, '3B': 82, LF: 76, CF: 78, RF: 78 };
 const RELEASE = p => OUTFIELD.has(p) ? 0.8 : 0.45;
+const CUT_MIN = 150;   // outfield throws longer than this go through a cutoff man
 const POSWORD = { P: 'the pitcher', C: 'the catcher', '1B': 'first', '2B': 'second', SS: 'short', '3B': 'third', LF: 'left', CF: 'center', RF: 'right' };
 const BASEWORD = ['home', 'first', 'second', 'third', 'home'];
 const OUTFIELD = new Set(['LF', 'CF', 'RF']);
@@ -418,6 +419,7 @@ export class Game {
   }
   assignCovers() {
     const used = new Set(this.fielders.filter(f => f.chase || f.carry || (this.ball.mode === 'held' && this.ball.holder === f)).map(f => f.pos));
+    this.planCutoff(used);
     const left = this.ball.b ? this.ball.b.x < 0 : true;
     const prefs = { 1: ['1B', '2B', 'P'], 2: left ? ['2B', 'SS', 'P'] : ['SS', '2B', 'P'], 3: ['3B', 'SS', 'P'], 0: ['C', 'P'] };
     this.covers = {};
@@ -588,7 +590,74 @@ export class Game {
     if (c.type === 'throw') this.startThrow(f, c.k);
     else if (c.type === 'run') { f.carry = true; const [x, z] = bxz(c.k); f.goal = { x, z }; f.carryTo = c.k; }
   }
+  // Where the lead runner is, and the base the outfield should throw to: the base after the one
+  // he's heading for (no one on + single = throw to 2nd; runner on 1st = throw to 3rd).
+  leadRunner() {
+    const alive = this.runners.filter(r => r.state === 'alive');
+    return alive.length ? alive.reduce((a, b) => (b.s > a.s ? b : a)) : null;
+  }
+  aheadBase() {
+    const L = this.leadRunner(); if (!L) return 2;
+    const base = Math.floor(L.s / 90 + 1e-6);
+    const going = L.target > base && L.s < L.target * 90 ? L.target : base;
+    return Math.min(4, going + 1);
+  }
+  outfieldThrow(f) {
+    const L = this.leadRunner();
+    if (!L) return { type: 'throw', k: 2 };
+    const fx = f.a.pos.x, fz = f.a.pos.z;
+    const k = L.target, [bx, bz] = bxz(k);
+    // a chance to get the lead runner where he's going? (force at 2nd, doubled off, or a sure tag)
+    if (L.s !== k * 90) {
+      const forced = L.forcedTo === k || L.s > k * 90;
+      const d = dist2(fx, fz, bx, bz);
+      const td = RELEASE(f.pos) + d / THROW[f.pos] + 0.1 + (d > CUT_MIN ? 0.45 : 0);
+      const tr = Math.abs(k * 90 - L.s) / L.vmax + Math.max(0, L.delay) + (L.v < 3 ? 0.3 : 0);
+      if (tr - td > (forced ? 0.15 : 0.45)) return { type: 'throw', k: k % 4 };
+    }
+    // otherwise keep him from taking another base: throw ahead of him
+    return { type: 'throw', k: this.aheadBase() % 4 };
+  }
+  // Cutoff man for long outfield throws: SS on throws to 3rd; 3B (ball to left) or 1B (center/right)
+  // on throws home; SS (left/center) or 2B (right) on long throws to 2nd. He lines up between the
+  // outfielder and the base.
+  planCutoff(used) {
+    this.cut = null;
+    const P = this.planInfo;
+    let from = null;
+    if (this.ball.mode === 'held' && this.ball.holder && OUTFIELD.has(this.ball.holder.pos)) from = { x: this.ball.holder.a.pos.x, z: this.ball.holder.a.pos.z };
+    else if (this.ball.mode === 'free' && P && P.chaser && OUTFIELD.has(P.chaser.pos) && P.point) from = { x: P.point.x, z: P.point.z };
+    if (!from) return;
+    const k = this.aheadBase() % 4;
+    if (k === 1) return;
+    const [bx, bz] = bxz(k);
+    const d = dist2(from.x, from.z, bx, bz);
+    if (d < CUT_MIN) return;
+    const pos = k === 0 ? (from.x < -40 ? '3B' : '1B') : k === 3 ? 'SS' : (from.x > 40 ? '2B' : 'SS');
+    if (used.has(pos)) return;
+    const f = this.fielders.find(x => x.pos === pos); if (!f) return;
+    const pt = this.cutPoint(from, k);
+    used.add(pos); f.goal = { x: pt.x, z: pt.z }; f.cover = null;
+    this.cut = { f, k, x: pt.x, z: pt.z };
+  }
+  planCutoffFor(f, k) {
+    if (k === 1) return;
+    const from = { x: f.a.pos.x, z: f.a.pos.z };
+    const pos = k === 0 ? (from.x < -40 ? '3B' : '1B') : k === 3 ? 'SS' : (from.x > 40 ? '2B' : 'SS');
+    const c = this.fielders.find(x => x.pos === pos);
+    // the cutoff can't be someone who has to cover the base the throw is going to
+    if (!c || c === this.covers?.[k] || c === f) return;
+    const pt = this.cutPoint(from, k);
+    this.cut = { f: c, k, x: pt.x, z: pt.z };
+  }
+  cutPoint(from, k) {
+    const [bx, bz] = bxz(k);
+    const d = dist2(from.x, from.z, bx, bz), ux = (from.x - bx) / d, uz = (from.z - bz) / d;
+    const dc = k === 0 ? Math.max(40, Math.min(60, d * 0.3)) : Math.max(55, Math.min(115, d * 0.42));
+    return { x: bx + ux * dc, z: bz + uz * dc };
+  }
   decideThrow(f) {
+    if (OUTFIELD.has(f.pos)) return this.outfieldThrow(f);
     const fx = f.a.pos.x, fz = f.a.pos.z, spd = THROW[f.pos];
     let best = null;
     const alive = this.runners.filter(r => r.state === 'alive');
@@ -619,10 +688,18 @@ export class Game {
     return { type: 'hold' };
   }
   startThrow(f, k) {
-    const recv = this.coverOf(k);
+    let recv = this.coverOf(k);
     if (!recv) return;
+    let [bx, bz] = bxz(k), tk = k;
+    // long throw from the outfield: hit the cutoff man instead of throwing all the way
+    if (OUTFIELD.has(f.pos) && dist2(f.a.pos.x, f.a.pos.z, bx, bz) > CUT_MIN) {
+      if (!this.cut || this.cut.k !== k || this.cut.f === f) { this.cut = null; this.planCutoffFor(f, k); }
+      if (this.cut && this.cut.k === k) {
+        const pt = this.cutPoint({ x: f.a.pos.x, z: f.a.pos.z }, k);
+        recv = this.cut.f; recv.goal = { x: pt.x, z: pt.z }; bx = pt.x; bz = pt.z; tk = -1;
+      }
+    }
     f.throwing = { k, t: 0 }; f.goal = null; f.v = 0; f.carry = false;
-    const [bx, bz] = bxz(k);
     f.a.faceToward(bx, bz); f.a.play('throw', { dur: 0.5, restart: true });
     this.after(0.27, () => {
       if (this.phase !== 'live' || this.ball.holder !== f) { f.throwing = null; return; }
@@ -632,7 +709,8 @@ export class Game {
       const T = Math.max(0.25, d / THROW[f.pos], rd / recv.spd + 0.15);
       const y1 = 4.2, vy = (y1 - h.y + 0.5 * PH.G * T * T) / T;
       this.ball.mode = 'thrown'; this.ball.holder = null;
-      this.ball.throw = { x0: h.x, y0: h.y, z0: h.z, x1: bx + (k === 0 ? 0 : 0), z1: bz, T, t: 0, vy, k, recv, from: f };
+      this.ball.throw = { x0: h.x, y0: h.y, z0: h.z, x1: bx, z1: bz, T, t: 0, vy, k: tk, cutK: tk < 0 ? k : null, recv, from: f };
+      if (tk < 0) this.ui.ticker?.(`${f.p.name} hits the cutoff man.`);
       this.after(0.25, () => { f.throwing = null; f.a.play('ready'); });
       this.decideAllRunners();
     });
@@ -767,7 +845,8 @@ export class Game {
     if (r.target > base) return;
     const next = base + 1; if (next > 4) return;
     // blocked by runner ahead
-    for (const o of this.runners) if (o !== r && o.state === 'alive' && o.s > r.s && o.target <= next) return;
+    // never pass the runner ahead (runners keep their batting-order position on the bases)
+    for (const o of this.runners) if (o !== r && o.state === 'alive' && (o.orig > r.orig || o.s > r.s) && o.target <= next) return;
     const runT = (next * 90 - r.s) / r.vmax + (r.v > 10 ? 0 : 0.35) + Math.max(0, r.delay);
     const defT = this.defenseTime(next);
     const margin = (next === 4 ? 0 : 0.25) - (this.outs === 2 ? 0.25 : 0);
@@ -871,7 +950,11 @@ export class Game {
     const pl = this.play; this.phase = 'dead';
     if (this.hrSkip) { this.hrSkip = false; this.setFast(false); }
     this.awaitHuman = null; this.ui.throwControls?.(null);
-    for (const r of this.runners) if (r.state === 'alive' && r.s % 90) { r.s = (r.s - Math.floor(r.s / 90) * 90 > 60 && r.target * 90 > r.s ? Math.ceil(r.s / 90) : Math.floor(r.s / 90)) * 90; if (r.s >= 360) r.s = 270; this.placeRunner(r); }
+    for (const r of this.runners) if (r.state === 'alive' && r.s % 90) { r.s = (r.s - Math.floor(r.s / 90) * 90 > 60 && r.target * 90 > r.s ? Math.ceil(r.s / 90) : Math.floor(r.s / 90)) * 90; if (r.s >= 360) r.s = 270; }
+    // one runner per base: anyone who'd land on an occupied base drops back one
+    const onb = this.runners.filter(r => r.state === 'alive').sort((a, b) => b.s - a.s || b.orig - a.orig);
+    for (let i = 1; i < onb.length; i++) if (onb[i].s >= onb[i - 1].s) onb[i].s = onb[i - 1].s - 90;
+    for (const r of onb) { if (r.s < 90) { r.state = 'out'; this.hide(r.a); } else this.placeRunner(r); }
     for (const r of this.runners) if (r.state === 'alive') { r.target = r.s / 90; r.forcedTo = null; r.returning = false; r.orig = r.s / 90; }
     for (const f of this.fielders) { f.goal = null; f.chase = false; f.carry = false; f.throwing = null; f.cover = null; }
     if (!pl.walk) this.summarize(pl);

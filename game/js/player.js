@@ -265,7 +265,7 @@ export class Player3D {
     const bottomLeft = s > 0; // RHB: left hand bottom
     _w.set(0, 0.12, 0); this.grip.localToWorld(_w); this.root.worldToLocal(_w);
     _w2.set(0, bunt ? 1.2 : 0.38, 0); this.grip.localToWorld(_w2); this.root.worldToLocal(_w2);
-    this.handTo(bottomLeft, _w, _poleFwd); this.handTo(!bottomLeft, _w2, _poleFwd);
+    this.handTo(bottomLeft, _w); this.handTo(!bottomLeft, _w2);
   }
   // pitcher delivery; a.dur
   pose_pitch(a) {
@@ -279,8 +279,8 @@ export class Player3D {
     const back = s > 0 ? [this.legR, this.kneeR] : [this.legL, this.kneeL];
     lead[0].rotation.x = k.lt; lead[1].rotation.x = k.lk; back[0].rotation.x = k.bt; back[1].rotation.x = k.bk;
     this.root.updateMatrixWorld(true);
-    this.handTo(s < 0, _v.set(k.h[0] * -s, k.h[1], k.h[2]), _poleUp);
-    this.handTo(s > 0, _v.set(k.g[0] * -s, k.g[1], k.g[2]), _poleFwd);
+    this.handTo(s < 0, _v.set(k.h[0] * -s, k.h[1], k.h[2]), s > 0 ? _poleThrowR : _poleThrowL);
+    this.handTo(s > 0, _v.set(k.g[0] * -s, k.g[1], k.g[2]));
     this.head.rotation.y = -this.spine.rotation.y * 0.8;
   }
   pose_throw(a) {
@@ -291,11 +291,11 @@ export class Player3D {
     this.legL.rotation.x = s > 0 ? -0.5 : 0.3; this.legR.rotation.x = s > 0 ? 0.3 : -0.5; this.kneeL.rotation.x = 0.4; this.kneeR.rotation.x = 0.4;
     this.root.updateMatrixWorld(true);
     let h;
-    if (t < 0.45) h = [lerpA([0.3, 4.3, 0.5], [1.4, 5.2, -0.7], t / 0.45)];
-    else if (t < 0.6) h = [lerpA([1.4, 5.2, -0.7], [0.5, 5.6, 1.2], (t - 0.45) / 0.15)];
-    else h = [lerpA([0.5, 5.6, 1.2], [-0.5, 2.8, 1.0], (t - 0.6) / 0.4)];
-    this.handTo(s < 0, _v.set(h[0][0] * -s, h[0][1], h[0][2]), _poleUp);
-    this.handTo(s > 0, _v.set(-0.8 * -s, 4.2, 0.9), _poleFwd);
+    if (t < 0.45) h = [lerpA([0.3, 3.7, 0.6], [1.25, 4.45, -0.55], t / 0.45)];
+    else if (t < 0.6) h = [lerpA([1.25, 4.45, -0.55], [0.45, 4.6, 1.15], (t - 0.45) / 0.15)];
+    else h = [lerpA([0.45, 4.6, 1.15], [-0.45, 2.9, 1.0], (t - 0.6) / 0.4)];
+    this.handTo(s < 0, _v.set(h[0][0] * -s, h[0][1], h[0][2]), s > 0 ? _poleThrowR : _poleThrowL);
+    this.handTo(s > 0, _v.set(-0.75 * -s, 3.75, 0.85));
   }
   pose_catch(a) {
     // glove reaching toward a.glove (world)
@@ -303,7 +303,7 @@ export class Player3D {
     if (a.low) { this.legL.rotation.x = -0.6; this.legR.rotation.x = -0.6; this.kneeL.rotation.x = 1; this.kneeR.rotation.x = 1; }
     this.root.updateMatrixWorld(true);
     _w2.copy(a.glove || _v2.set(0, 4, 2)); this.root.worldToLocal(_w2);
-    this.handTo(!this.throwsL, _w2, _poleFwd);
+    this.handTo(!this.throwsL, _w2);
     this.handTo(this.throwsL, _v.set(this.throwsL ? 0.5 : -0.5, 3.6, 0.6));
   }
   pose_celebrate(a) {
@@ -319,7 +319,9 @@ export class Player3D {
 }
 const _e = new THREE.Euler(), _d = new V3(), _u = new V3(), _p = new V3(), _x = new V3(), _y = new V3(), _z = new V3(), _m = new THREE.Matrix4();
 const _w = new V3(), _w2 = new V3(), _v = new V3(), _v2 = new V3(), _up = new V3(0, 1, 0);
-const _poleL = new V3(0.2, 0.1, 1), _poleR = new V3(-0.2, 0.1, 1), _poleUp = new V3(0, 1, 0.3), _poleFwd = new V3(0, -0.2, 1);
+const _poleL = new V3(-0.45, 1, 0.35), _poleR = new V3(0.45, 1, 0.35), _poleUp = new V3(0, 1, 0.3);
+// throwing arm: forearm points up, elbow out to the side at about shoulder height
+const _poleThrowR = new V3(0.6, 1, 0.1), _poleThrowL = new V3(-0.6, 1, 0.1);
 const lerpA = (a, b, t) => a.map((v, i) => lerp(v, b[i], clamp(t, 0, 1)));
 
 // batting keyframes in root frame (RHB, facing +z toward plate; pitcher at +x)
@@ -339,11 +341,11 @@ function sampleKeys(t) {
 }
 // pitching keyframes (RHP, facing +z). h = throwing hand (x mirrored to -x in code), g = glove hand
 const PK = [
-  { t: 0, h: [0.15, 4.0, 0.55], g: [0.1, 4.0, 0.6], lt: 0, lk: 0, bt: 0, bk: 0, drop: 0, lean: 0.05, yaw: 0, hy: 0 },
-  { t: 0.32, h: [0.1, 4.3, 0.4], g: [0.05, 4.3, 0.45], lt: -1.5, lk: 1.8, bt: 0, bk: 0.15, drop: 0.05, lean: -0.05, yaw: -0.6, hy: -0.5 },
-  { t: 0.55, h: [1.2, 4.9, -0.9], g: [-0.9, 4.4, 0.9], lt: -0.95, lk: 0.55, bt: 0.45, bk: 0.5, drop: 0.45, lean: 0.1, yaw: -0.5, hy: -0.2 },
-  { t: 0.68, h: [0.45, 5.6, 1.4], g: [-0.6, 3.6, 0.5], lt: -0.7, lk: 0.5, bt: 0.6, bk: 0.7, drop: 0.5, lean: 0.45, yaw: 0.35, hy: 0.3 },
-  { t: 1, h: [-0.6, 2.6, 1.2], g: [-0.6, 3.4, 0.2], lt: -0.6, lk: 0.6, bt: 1.0, bk: 1.3, drop: 0.55, lean: 0.85, yaw: 0.7, hy: 0.5 },
+  { t: 0, h: [0.15, 3.85, 0.55], g: [0.1, 3.85, 0.6], lt: 0, lk: 0, bt: 0, bk: 0, drop: 0, lean: 0.05, yaw: 0, hy: 0 },
+  { t: 0.32, h: [0.1, 4.0, 0.45], g: [0.05, 4.0, 0.5], lt: -1.5, lk: 1.8, bt: 0, bk: 0.15, drop: 0.05, lean: -0.05, yaw: -0.6, hy: -0.5 },
+  { t: 0.55, h: [1.15, 4.35, -0.75], g: [-0.85, 3.75, 0.85], lt: -0.95, lk: 0.55, bt: 0.45, bk: 0.5, drop: 0.45, lean: 0.1, yaw: -0.5, hy: -0.2 },
+  { t: 0.68, h: [0.4, 4.45, 1.35], g: [-0.55, 3.3, 0.45], lt: -0.7, lk: 0.5, bt: 0.6, bk: 0.7, drop: 0.5, lean: 0.45, yaw: 0.35, hy: 0.3 },
+  { t: 1, h: [-0.6, 2.3, 1.15], g: [-0.55, 3.0, 0.25], lt: -0.6, lk: 0.6, bt: 1.0, bk: 1.3, drop: 0.55, lean: 0.85, yaw: 0.7, hy: 0.5 },
 ];
 function samplePitch(t) {
   let i = 0; while (i < PK.length - 2 && t > PK[i + 1].t) i++;
