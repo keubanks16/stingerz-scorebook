@@ -117,6 +117,14 @@ h2.sec { margin: 4px 0 -6px; font-size: 13px; letter-spacing: .12em; text-transf
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .grow { flex: 1; min-width: 0; }
 
+/* ---------- expandable lists (roster, coaches, families, opponents) ---------- */
+.more-row { display: flex; justify-content: center; border-top: 1px solid var(--line); }
+.more-row button { flex: 1; background: transparent; border: 0; padding: 12px; font-weight: 700; color: var(--accent); display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; }
+.more-row svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
+.more-row button[aria-expanded="true"] svg { transform: rotate(180deg); }
+h2.sec .cnt { color: var(--ink-3); font-weight: 600; letter-spacing: .04em; margin-left: 6px; }
+h2.sec .sec-l { display: inline-flex; align-items: center; gap: 2px; }
+
 /* ---------- buttons ---------- */
 .btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px 14px; border-radius: 8px; font-weight: 600; font-size: 15px; line-height: 1.2; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; }
 .btn:hover { border-color: var(--accent); }
@@ -1621,12 +1629,17 @@ body.viewer-on { overflow: hidden; }
     if (Backend.kind !== 'fb' || !Access.isAdmin) return '';
     const X = Access;
     const pending = X.members.filter((m) => m.status === 'pending').sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-    const others = X.members.filter((m) => m.status !== 'pending').sort((a, b) => (a.role === b.role ? memberLabel(a).localeCompare(memberLabel(b)) : a.role === 'admin' ? -1 : 1));
+    const others = X.members.filter((m) => m.status !== 'pending').sort((a, b) => (a.uid === X.owner ? -1 : b.uid === X.owner ? 1 : a.role === b.role ? memberLabel(a).localeCompare(memberLabel(b)) : a.role === 'admin' ? -1 : b.role === 'admin' ? 1 : memberLabel(a).localeCompare(memberLabel(b))));
     let h = `<h2 class="sec">Families &amp; coaches</h2><section class="card stack" style="padding:14px">
       <div><span class="field-lbl">Who can watch games</span>${segB('setWatch', X.publicView ? 'public' : 'approved', [['approved', 'Approved families'], ['public', 'Anyone with the link']])}</div>
       <p class="small muted" style="margin:0">${X.publicView ? 'Anyone who opens the address can follow games and stats without signing in. Only coaches can change anything.' : 'Parents create an account and wait for a coach to approve it. Only approved families see games and stats.'}</p></section>`;
     if (pending.length) h += `<h2 class="sec">Waiting for approval (${pending.length})</h2><div class="card roster">${pending.map((m) => `<div class="player" style="cursor:default"><span class="no" style="font-size:14px">NEW</span><span style="min-width:0"><span class="nm">${esc(memberLabel(m))}</span><span class="meta">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}</span></span><span class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm primary" data-act="memberSet" data-uid="${esc(m.uid)}" data-status="approved">Approve</button><button class="btn sm" data-act="memberSet" data-uid="${esc(m.uid)}" data-status="denied">Deny</button></span></div>`).join('')}</div>`;
-    if (others.length) h += `<div class="card roster">${others.map((m) => { const own = m.uid === X.owner; const chip = own ? 'Owner' : m.status === 'denied' ? 'Declined' : m.role === 'admin' ? 'Coach' : m.role === 'camera' ? 'Camera' : m.role === 'scorer' ? 'Scorer' : 'Family'; return `<button class="player" data-act="member" data-uid="${esc(m.uid)}"><span class="no" style="font-size:14px">${{ Family: 'FAM', Declined: '—', Camera: 'CAM', Scorer: 'SCR' }[chip] || 'CO'}</span><span style="min-width:0"><span class="nm">${esc(memberLabel(m))}</span><span class="meta">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}</span></span><span class="chip">${chip}</span></button>`; }).join('')}</div>`;
+    const memberRow = (m) => { const own = m.uid === X.owner; const chip = own ? 'Owner' : m.status === 'denied' ? 'Declined' : m.role === 'admin' ? 'Coach' : m.role === 'camera' ? 'Camera' : m.role === 'scorer' ? 'Scorer' : 'Family'; return `<button class="player" data-act="member" data-uid="${esc(m.uid)}"><span class="no" style="font-size:14px">${{ Family: 'FAM', Declined: '—', Camera: 'CAM', Scorer: 'SCR', Owner: 'OWN' }[chip] || 'CO'}</span><span style="min-width:0"><span class="nm">${esc(memberLabel(m))}</span><span class="meta">${esc(m.email || '')}${m.note ? ' · ' + esc(m.note) : ''}</span></span><span class="chip">${chip}</span></button>`; };
+    const staff = others.filter((m) => m.status !== 'denied' && (m.uid === X.owner || ['admin', 'scorer', 'camera'].includes(m.role)));
+    const fams = others.filter((m) => !staff.includes(m));
+    if (staff.length) h += `<h2 class="sec" id="sec-coaches"><span class="sec-l">Coaches &amp; staff<span class="cnt">${staff.length}</span></span></h2><div class="card roster">${expandList('coaches', staff, memberRow)}</div>`;
+    h += `<h2 class="sec" id="sec-families"><span class="sec-l">Families<span class="cnt">${fams.length}</span></span></h2>`;
+    h += fams.length ? `<div class="card roster">${expandList('families', fams, memberRow)}</div>` : '<div class="card empty" style="padding:16px"><p class="small" style="margin:0">No families yet. Approved families show up here.</p></div>';
     return h;
   }
 
@@ -3868,6 +3881,14 @@ body.viewer-on { overflow: hidden; }
   }
 
   // ----- team -----
+  // Long lists show the first few names; "Show all" opens the whole list, "Show less" folds it back.
+  UI.expand = {};
+  function expandList(key, items, row, limit) {
+    const lim = limit || 5, n = items.length, open = !!UI.expand[key];
+    if (n <= lim + 1) return items.map(row).join('');
+    return (open ? items : items.slice(0, lim)).map(row).join('')
+      + `<div class="more-row"><button data-act="expandToggle" data-key="${esc(key)}" aria-expanded="${open}">${open ? 'Show less' : 'Show all ' + n}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></div>`;
+  }
   function renderTeam() {
     const t = Data.team;
     if (UI.feeId && Fees.list[UI.feeId] && feeAccess()) return feeDetailHTML(Fees.list[UI.feeId]);
@@ -3875,14 +3896,14 @@ body.viewer-on { overflow: hidden; }
     let h = sampleBanner() + yourFeesHTML();
     h += `<section class="card brand-card"><div class="logo-tile"><img src="${LOGO}" alt="GS logo"></div><div class="stack" style="gap:4px;min-width:0"><h3>${esc(t.name)}</h3><span class="muted small">${t.players.length} player${t.players.length === 1 ? '' : 's'} · ${t.innings}-inning games · ${t.pitchLimit ? t.pitchLimit + '-pitch limit' : 'no pitch limit'}</span>${canManage() ? '<div><button class="btn sm" data-act="teamEdit">Edit team settings</button></div>' : ''}</div></section>`;
     h += feesHTML();
-    h += `<h2 class="sec">Roster ${canManage() ? '<button class="btn ghost sm" data-act="player">+ Add player</button>' : ''}</h2>`;
+    h += `<h2 class="sec" id="sec-roster"><span class="sec-l">Roster${t.players.length ? `<span class="cnt">${t.players.length}</span>` : ''}</span>${canManage() ? '<button class="btn ghost sm" data-act="player">+ Add player</button>' : ''}</h2>`;
     if (!t.players.length) h += `<div class="card empty"><h3>Add your players</h3><p>Numbers, positions, and which side they hit from. Lineups and stats use this roster.</p>${canManage() ? '<button class="btn primary" data-act="player">+ Add player</button>' : ''}</div>`;
-    else h += `<div class="card roster">${sortedRoster().map((p) => `<button class="player" data-act="${canManage() ? 'player' : 'playerCard'}" data-id="${esc(p.id)}"><span class="no">${esc(p.num || '–')}</span><span style="min-width:0"><span class="nm">${esc(p.name)}</span> ${p.sample ? '<span class="chip sample">Sample</span>' : ''}<span class="meta">${esc(p.pos || 'Position not set')} · B/T ${esc(p.bats || '?')}/${esc(p.throws || '?')}${canManage() && bdayOk(Bday.dates[p.id]) ? ' · 🎂 ' + esc(bdayShort(Bday.dates[p.id])) : ''}</span></span><span class="meta">${canManage() ? 'Edit' : ''}</span></button>`).join('')}</div>`;
+    else h += `<div class="card roster">${expandList('roster', sortedRoster(), (p) => `<button class="player" data-act="${canManage() ? 'player' : 'playerCard'}" data-id="${esc(p.id)}"><span class="no">${esc(p.num || '–')}</span><span style="min-width:0"><span class="nm">${esc(p.name)}</span> ${p.sample ? '<span class="chip sample">Sample</span>' : ''}<span class="meta">${esc(p.pos || 'Position not set')} · B/T ${esc(p.bats || '?')}/${esc(p.throws || '?')}${canManage() && bdayOk(Bday.dates[p.id]) ? ' · 🎂 ' + esc(bdayShort(Bday.dates[p.id])) : ''}</span></span><span class="meta">${canManage() ? 'Edit' : ''}</span></button>`, 8)}</div>`;
     if (canManage()) {
       const rs = Object.entries(Data.opponents).sort((a, b) => a[1].name.localeCompare(b[1].name));
-      h += `<h2 class="sec">Opponent rosters <button class="btn ghost sm" data-act="roster">+ Add roster</button></h2>`;
+      h += `<h2 class="sec" id="sec-opponents"><span class="sec-l">Opponent rosters${rs.length ? `<span class="cnt">${rs.length}</span>` : ''}</span><button class="btn ghost sm" data-act="roster">+ Add roster</button></h2>`;
       if (!rs.length) h += `<div class="card empty" style="padding:20px"><p>${Caps.sample ? 'Take a photo or screenshot of another team\'s roster and GS Baseball reads the names and numbers into it.' : 'Save each opponent\'s roster so lineups and scouting show names, not just numbers.'}</p><button class="btn primary" data-act="roster">+ Add roster</button></div>`;
-      else h += `<div class="card roster">${rs.map(([k, r]) => `<button class="player" data-act="roster" data-key="${esc(k)}"><span class="no" style="font-size:16px">${esc((r.name || '?').slice(0, 3).toUpperCase())}</span><span style="min-width:0"><span class="nm">${esc(r.name)}</span><span class="meta">${r.players.length} player${r.players.length === 1 ? '' : 's'}${r.spray && r.spray.players && r.spray.players.length ? ' · spray chart' : ''}${r.updatedAt ? ' · updated ' + esc(new Date(r.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) : ''}</span></span><span class="meta">Edit</span></button>`).join('')}</div>`;
+      else h += `<div class="card roster">${expandList('opponents', rs, ([k, r]) => `<button class="player" data-act="roster" data-key="${esc(k)}"><span class="no" style="font-size:16px">${esc((r.name || '?').slice(0, 3).toUpperCase())}</span><span style="min-width:0"><span class="nm">${esc(r.name)}</span><span class="meta">${r.players.length} player${r.players.length === 1 ? '' : 's'}${r.spray && r.spray.players && r.spray.players.length ? ' · spray chart' : ''}${r.updatedAt ? ' · updated ' + esc(new Date(r.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) : ''}</span></span><span class="meta">Edit</span></button>`)}</div>`;
     }
     h += invitesHTML() + accountHTML() + familiesHTML();
     if (canManage()) {
@@ -5787,6 +5808,11 @@ body.viewer-on { overflow: hidden; }
       saveTeam();
       closeSheet();
       render();
+    },
+    expandToggle(d) {
+      const k = d.key, open = !UI.expand[k];
+      UI.expand[k] = open; render();
+      if (!open) { const h = document.getElementById('sec-' + k); if (h && h.getBoundingClientRect().top < 0) h.scrollIntoView({ block: 'start' }); }
     },
     clearSample() {
       confirmSheet('Clear sample data?', 'This removes the sample games and sample players. Anything you added yourself stays.', 'Clear sample data', () => {
