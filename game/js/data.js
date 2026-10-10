@@ -108,7 +108,22 @@ export function defaultLineup(meId) {
   const all = nine.concat(GS_ROSTER.filter(p => !nine.some(e => e.id === p.id)).map(p => ({ id: p.id, pos: 'EH' })));
   const order = GS_ROSTER.map(p => p.id);
   const at = id => { const i = order.indexOf(id); return i < 0 ? 99 : i; };
-  return all.sort((a, b) => at(a.id) - at(b.id));
+  return meInField(all.sort((a, b) => at(a.id) - at(b.id)), meId);
+}
+// The kid playing on this phone never sits as an extra hitter: if he's bat-only, he takes an
+// outfield spot (his own outfield position if he has one, else RF, LF, CF) and that outfielder
+// bats as the extra hitter instead. Batting order doesn't change.
+export const OUTFIELD = ['RF', 'LF', 'CF'];
+export function meInField(entries, meId) {
+  const me = (entries || []).find(e => e.id === meId);
+  if (!me || me.pos !== 'EH') return entries;
+  const want = card(meId).pos;
+  const spots = OUTFIELD.includes(want) ? [want, ...OUTFIELD.filter(p => p !== want)] : OUTFIELD;
+  for (const pos of spots) {
+    const other = entries.find(e => e.pos === pos);
+    if (other && other.id !== meId) { other.pos = 'EH'; me.pos = pos; return entries; }
+  }
+  return entries;
 }
 export const prefPos = id => { const c = card(id); return POSITIONS.includes(c.pos) ? c.pos : 'CF'; };
 export function fixLineup(entries) {

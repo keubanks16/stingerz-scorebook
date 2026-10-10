@@ -291,7 +291,8 @@ $('#runUI').addEventListener('pointerdown', e => {
 // Batting order + positions before Play Ball / My Player. Saved on the device for next time.
 let LU = null, luMode = 'team', luOpen = -1, hubLineup = null;
 function openLineup(mode) {
-  luMode = mode; LU = D.savedLineup(S.me); luOpen = -1;
+  luMode = mode; LU = D.meInField(D.savedLineup(S.me), S.me); luOpen = -1;
+  D.saveLineup(LU);
   renderLineup(); screen('sLineup');
 }
 // who takes over a position: an extra hitter (one who plays it first), else a bench player
@@ -325,7 +326,7 @@ function renderLineup() {
   $('#luBench').innerHTML = bench.length ? bench.map(p => `<button data-add="${p.id}"><b>+</b>#${p.num} ${p.name}</button>`).join('') : '<span class="none">Everyone is in the lineup.</span>';
   const meIn = LU.some(e => e.id === S.me);
   const w = $('#luWarn');
-  if (luMode === 'me' && !meIn) { w.classList.remove('hidden'); w.innerHTML = `<span>You're on the bench. Put yourself in the lineup to play My Player.</span><button id="luMeIn">PUT ME IN</button>`; $('#luMeIn').onclick = () => { sfx.click(); LU.push({ id: S.me, pos: 'EH' }); luCommit(); }; }
+  if (luMode === 'me' && !meIn) { w.classList.remove('hidden'); w.innerHTML = `<span>You're on the bench. Put yourself in the lineup to play My Player.</span><button id="luMeIn">PUT ME IN</button>`; $('#luMeIn').onclick = () => { sfx.click(); LU.push({ id: S.me, pos: 'EH' }); D.meInField(LU, S.me); luCommit(); }; }
   else w.classList.add('hidden');
   $('#luGo').disabled = luMode === 'me' && !meIn; $('#luGo').style.opacity = $('#luGo').disabled ? 0.45 : 1;
   const hb = $('#luHub');
