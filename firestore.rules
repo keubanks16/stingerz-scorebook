@@ -12,6 +12,8 @@ rules_version = '2';
 //           plus create and score games and save opponent rosters. Can't delete games or change
 //           the team, its roster, members or settings.
 //   Family  members/{uid} with role 'parent' and status 'approved'; view only.
+//   Player  members/{uid} with role 'player' and status 'approved'; a kid's login. Only reads the
+//           team roster (for GS Baseball: The Game). No games, chat, fees or anything else.
 // Fees
 //   Only the owner, and anyone the owner turns on (members/{uid}.fees == true), can see the
 //   fee list and who has paid. Coaches don't get it automatically. A family sees only the pay
@@ -31,8 +33,14 @@ service cloud.firestore {
         && get(docPath('config', 'setup')).data.owner == request.auth.uid;
     }
     function myMember() { return get(docPath('members', request.auth.uid)).data; }
+    // Approved family or staff. Player logins are not included; they get isPlayer() only.
     function isApproved() {
-      return signedIn() && exists(docPath('members', request.auth.uid)) && myMember().status == 'approved';
+      return signedIn() && exists(docPath('members', request.auth.uid)) && myMember().status == 'approved'
+        && myMember().get('role', 'parent') != 'player';
+    }
+    function isPlayer() {
+      return signedIn() && exists(docPath('members', request.auth.uid)) && myMember().status == 'approved'
+        && myMember().get('role', 'parent') == 'player';
     }
     function isAdmin() { return isOwner() || (isApproved() && myMember().role == 'admin'); }
     function isCamera() { return isApproved() && myMember().role == 'camera'; }
@@ -117,7 +125,7 @@ service cloud.firestore {
 
     // Team data: roster and settings, games, opponent rosters.
     match /team/{id} {
-      allow read: if canView();
+      allow read: if canView() || isPlayer();
       allow write: if isAdmin();
     }
     // Which game is streaming from the built-in camera. Camera operators may update it too.

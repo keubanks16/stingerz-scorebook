@@ -25,6 +25,17 @@ The team's hub: score games pitch by pitch, keep box scores and season stats, ch
 - **Who can watch** (same screen): **Approved families**, where parents create an account and a coach approves it, or **Anyone with the link**, with no sign-in needed to watch.
 - The database itself enforces these rules (`firestore.rules`). Hiding buttons isn't the only protection. After updating `firestore.rules` here, paste it into Firebase again and **Publish**.
 
+## Player logins
+
+The kids get their own logins that only open the **Instincts** tab: **GS Baseball: The Game**, Defense Drills and the Instincts quizzes. They can't see games, scores, stats, the chat, the roster, fees or anything else, and the database blocks those reads too (`firestore.rules`).
+
+- **Set up:** Team tab → **Player logins** → **Create logins for every player**. A coach does this once from their phone; it makes a login for each player on the roster. Players added later show **Not set up**, and the same button creates just those.
+- **Signing in:** **Sign in**, then type the player's **first name** in the email box and **first name + number** as the password, like `Wyatt` / `Wyatt7`. Capital letters don't matter. If two players share a first name, the username adds the last initial (`Jackson B`). A player with no number uses just their first name as the password.
+- The game starts each kid on his own player card.
+- **Copy the list** copies every username and password to send to families. **Turn off** signs that player out and blocks the login; **Create** turns it back on. If a player's number changes, turn their login off and create it again so the password matches.
+- These passwords are easy to guess for anyone who knows the roster, so player logins can't open anything but the Instincts tab.
+- Behind the scenes each login is an account like `wyatt@players.stingerz-baseball.com` in Firebase Authentication. No email is ever sent there.
+
 ## Player birthdays
 
 Coaches add a birthday to each player: Team tab → tap the player → **Birthday** → **Save**. Only coaches see birthdays (the roster shows 🎂 and the date). They're stored in `config/birthdays`, which only coaches can read, never with the roster that families and guests load.

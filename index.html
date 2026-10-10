@@ -173,6 +173,13 @@ h2.sec .sec-l { display: inline-flex; align-items: center; gap: 2px; }
 .chip.l { background: var(--bad); color: var(--on-signal); border-color: transparent; }
 .chip.live { background: var(--strike); color: var(--on-signal); border-color: transparent; }
 .chip.sample { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.kid-list { display: flex; flex-direction: column; }
+.kid-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+.kid-row:first-child { border-top: 0; }
+.kid-row .no { flex: 0 0 34px; text-align: center; font-family: Graduate, serif; font-size: 16px; color: var(--ink-2); }
+.kid-row .grow { display: flex; flex-direction: column; gap: 2px; }
+.kid-cred code { white-space: nowrap; font-family: inherit; font-weight: 700; color: var(--ink); background: var(--surface-2); border-radius: 4px; padding: 0 4px; }
+.chip.kid-on { background: var(--good); color: var(--on-signal); border-color: transparent; }
 .guest-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
 .invite-list { display: flex; flex-direction: column; }
 .invite-row { padding: 10px 0; border-top: 1px solid var(--line); gap: 8px; flex-wrap: nowrap; }
@@ -1277,9 +1284,9 @@ body.viewer-on { overflow: hidden; }
   // ---------- Firebase: logins, roles and cloud sync (website copy) ----------
   const FB_VERSION = '12.19.0';
   const FB = { A: null, F: null, auth: null, fs: null, app: null, cfg: null };
-  const Access = { evaluated: false, authKnown: false, setupLoaded: false, accessLoaded: false, memberLoaded: true, guestLoaded: true, guest: null, guestInvite: null, isGuest: false, guestErr: '', claiming: false, rulesError: false, user: null, member: null, owner: null, publicView: false, members: [], isOwner: false, isApproved: false, isAdmin: false, isCamera: false, canView: false, worker: null };
+  const Access = { evaluated: false, authKnown: false, setupLoaded: false, accessLoaded: false, memberLoaded: true, guestLoaded: true, guest: null, guestInvite: null, isGuest: false, guestErr: '', claiming: false, rulesError: false, user: null, member: null, owner: null, publicView: false, members: [], isOwner: false, isApproved: false, isAdmin: false, isCamera: false, isPlayer: false, canView: false, worker: null };
   let WorkerSub = null;
-  let DataSubs = null, MemberSub = null, MembersSub = null;
+  let DataSubs = null, DataSubsMode = '', MemberSub = null, MembersSub = null;
   function fsErr(e) {
     const c = e && e.code;
     if (c === 'permission-denied') return { code: 'permission_denied', message: e.message };
@@ -1309,19 +1316,24 @@ body.viewer-on { overflow: hidden; }
     if (!X.authKnown || !X.setupLoaded || !X.accessLoaded || !X.memberLoaded || !X.guestLoaded) { X.evaluated = false; scheduleRender(); return; }
     const uid = X.user ? X.user.uid : null;
     X.isOwner = !!uid && X.owner === uid;
-    X.isApproved = !!(uid && X.member && X.member.status === 'approved');
+    // Player logins (the kids) are approved accounts that only get the Instincts tab and the game.
+    X.isPlayer = !!(uid && !X.isOwner && X.member && X.member.status === 'approved' && X.member.role === 'player');
+    X.isApproved = !!(uid && X.member && X.member.status === 'approved') && !X.isPlayer;
     X.isAdmin = X.isOwner || (X.isApproved && X.member.role === 'admin');
     X.isCamera = X.isApproved && !X.isAdmin && X.member.role === 'camera';
     X.isScorer = X.isApproved && !X.isAdmin && X.member.role === 'scorer';
     X.isGuest = !!(X.user && X.user.isAnonymous && X.guest && X.guestInvite);
-    X.canView = X.publicView || X.isApproved || X.isAdmin || X.isGuest;
+    X.canView = X.publicView || X.isApproved || X.isAdmin || X.isGuest || X.isPlayer;
     X.evaluated = true;
     UI.readOnly = !(X.isAdmin || X.isScorer);
     UI.canWrite = X.isAdmin || X.isScorer;
+    const subMode = X.isPlayer ? 'player' : 'full';
+    if (X.canView && DataSubs && DataSubsMode !== subMode) { DataSubs.forEach((u) => u()); DataSubs = null; Data.games = {}; Data.opponents = {}; }
     if (X.canView && !DataSubs) {
       Data.loaded = { team: false, games: false, opps: false };
       UI.ready = false;
-      DataSubs = subscribe(Backend.db);
+      DataSubsMode = subMode;
+      DataSubs = subscribe(Backend.db, subMode === 'player');
     } else if (!X.canView && DataSubs) {
       DataSubs.forEach((u) => u());
       DataSubs = null;
@@ -1517,7 +1529,7 @@ body.viewer-on { overflow: hidden; }
       return;
     }
     const app = appMod.initializeApp(cfg);
-    FB.app = app; FB.cfg = cfg;
+    FB.app = app; FB.cfg = cfg; FB.appMod = appMod;
     FB.auth = FB.A.getAuth(app);
     try { FB.fs = FB.F.initializeFirestore(app, { localCache: FB.F.persistentLocalCache({ tabManager: FB.F.persistentMultipleTabManager() }) }); }
     catch (e) { FB.fs = FB.F.getFirestore(app); }
@@ -1599,11 +1611,14 @@ body.viewer-on { overflow: hidden; }
     } else if (X.member && X.member.status === 'denied') {
       body = 'Your access request wasn’t approved. If that’s a mistake, talk to a coach.';
       actions = '<button class="btn" data-act="signOut">Sign out</button>';
+    } else if (X.user && isKidEmail(X.user.email)) {
+      body = 'This player login is turned off. Ask your coach to turn it back on.';
+      actions = '<button class="btn" data-act="signOut">Sign out</button>';
     } else {
       body = 'This account doesn’t have access yet.';
       actions = '<button class="btn primary" data-act="requestAccess">Request access</button><button class="btn" data-act="signOut">Sign out</button>';
     }
-    return `<div class="card empty gate"><div class="logo-tile"><img src="${LOGO}" alt="GS"></div><h3>${esc(Data.team.name || 'GS Baseball')} Hub</h3><p>${esc(body)}</p><div class="row" style="justify-content:center">${actions}</div>${X.user && !anon ? `<p class="small muted">Signed in as ${esc(X.user.email || '')}</p>` : ''}</div>`;
+    return `<div class="card empty gate"><div class="logo-tile"><img src="${LOGO}" alt="GS"></div><h3>${esc(Data.team.name || 'GS Baseball')} Hub</h3><p>${esc(body)}</p><div class="row" style="justify-content:center">${actions}</div>${X.user && !anon ? `<p class="small muted">Signed in as ${esc(isKidEmail(X.user.email) ? kidFirst(X.user.displayName || X.user.email.split('@')[0]) + ' (player)' : X.user.email || '')}</p>` : ''}</div>`;
   }
   function accountHTML() {
     if (Backend.kind !== 'fb') return '';
@@ -1625,11 +1640,69 @@ body.viewer-on { overflow: hidden; }
     }
     return h + '</section>';
   }
+  // ---------- Player logins (the kids) ----------
+  // Username = first name (plus last initial if two players share a first name), password = first
+  // name + number, both typed any case. Behind the scenes that's an email at a domain the team owns
+  // and a padded password, because Firebase needs an email and at least 6 characters.
+  const PLAYER_DOMAIN = 'players.stingerz-baseball.com';
+  const kidSlug = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const kidFirst = (name) => String(name || '').trim().split(/\s+/)[0] || '';
+  const kidEmail = (user) => kidSlug(user) + '@' + PLAYER_DOMAIN;
+  const kidSecret = (typed) => ('gs-' + kidSlug(typed)).padEnd(6, '0');
+  const isKidEmail = (e) => String(e || '').toLowerCase().endsWith('@' + PLAYER_DOMAIN);
+  function kidLogins() {
+    const roster = sortedRoster().filter((p) => kidSlug(kidFirst(p.name)));
+    const seen = {};
+    for (const p of roster) { const f = kidSlug(kidFirst(p.name)); seen[f] = (seen[f] || 0) + 1; }
+    return roster.map((p) => {
+      const parts = String(p.name).trim().split(/\s+/), first = parts[0], f = kidSlug(first);
+      const lastI = parts.length > 1 ? kidSlug(parts[parts.length - 1]).slice(0, 1) : '';
+      const dup = seen[f] > 1 && lastI;
+      const num = String(p.num || '').replace(/[^0-9]/g, '');
+      const acct = Access.members.find((m) => m.role === 'player' && m.status === 'approved' && Array.isArray(m.players) && m.players.includes(p.id));
+      return { p, user: dup ? f + lastI : f, shown: dup ? first + ' ' + lastI.toUpperCase() : first, pass: first + num, acct };
+    });
+  }
+  const KidUI = { busy: false, note: '' };
+  function kidLoginsHTML() {
+    if (Backend.kind !== 'fb' || !Access.isAdmin) return '';
+    const list = kidLogins();
+    const on = list.filter((k) => k.acct), off = list.filter((k) => !k.acct);
+    let h = `<h2 class="sec" id="sec-kids"><span class="sec-l">Player logins${on.length ? `<span class="cnt">${on.length}</span>` : ''}</span></h2><section class="card stack" style="padding:14px">
+      <p style="margin:0">Players sign in with their <b>first name</b> and a password of <b>first name + number</b> (capital letters don’t matter). They only get the <b>Instincts</b> tab: GS Baseball: The Game, Defense Drills and the Instincts quizzes. No scores, chat, roster or fees.</p>`;
+    if (!list.length) h += '<p class="small muted" style="margin:0">Add players to the roster first.</p>';
+    else {
+      h += `<div class="kid-list">${list.map((k) => `<div class="kid-row"><span class="no">${esc(k.p.num || '–')}</span><span class="grow" style="min-width:0"><b>${esc(k.p.name)}</b><span class="small muted kid-cred">Username <code>${esc(k.shown)}</code> · Password <code>${esc(k.pass)}</code></span></span>${k.acct ? `<span class="chip kid-on">On</span><button class="btn ghost sm" data-act="kidOff" data-uid="${esc(k.acct.uid)}" aria-label="Turn off ${esc(k.p.name)}’s login">Turn off</button>` : '<span class="chip">Not set up</span>'}</div>`).join('')}</div>`;
+      if (KidUI.note) h += `<p class="small warn-text" style="margin:0">${esc(KidUI.note)}</p>`;
+      h += `<div class="row">${off.length ? `<button class="btn primary" data-act="kidCreate" ${KidUI.busy ? 'disabled' : ''}>${KidUI.busy ? 'Creating logins…' : `Create ${off.length === list.length ? '' : off.length + ' '}login${off.length === 1 ? '' : 's'}${off.length === list.length ? ' for every player' : ''}`}</button>` : ''}${on.length ? '<button class="btn sm" data-act="kidCopy">Copy the list</button>' : ''}</div>`;
+      h += '<p class="small muted" style="margin:0">If a player’s number changes, turn their login off and create it again so the password matches.</p>';
+    }
+    return h + '</section>';
+  }
+  async function kidMake(list) {
+    const appMod = FB.appMod;
+    const sec = (appMod.getApps ? appMod.getApps() : []).find((a) => a.name === 'gs-player-logins') || appMod.initializeApp(FB.cfg, 'gs-player-logins');
+    const auth2 = FB.A.getAuth(sec);
+    const failed = [];
+    for (const k of list) {
+      const email = kidEmail(k.user), secret = kidSecret(k.pass);
+      try {
+        let user;
+        try { user = (await FB.A.createUserWithEmailAndPassword(auth2, email, secret)).user; }
+        catch (e) { if (e && String(e.code || '').includes('email-already-in-use')) user = (await FB.A.signInWithEmailAndPassword(auth2, email, secret)).user; else throw e; }
+        try { await FB.A.updateProfile(user, { displayName: k.p.name }); } catch (e) { /* the name is also on the member record */ }
+        await FB.F.setDoc(FB.F.doc(FB.fs, 'members', user.uid), { name: k.p.name, email, note: '', login: k.shown, role: 'player', status: 'approved', players: [k.p.id], createdAt: Date.now() });
+      } catch (e) { console.error(e); failed.push(k.shown); }
+      try { await FB.A.signOut(auth2); } catch (e) { /* fine */ }
+    }
+    return failed;
+  }
+
   function familiesHTML() {
     if (Backend.kind !== 'fb' || !Access.isAdmin) return '';
     const X = Access;
     const pending = X.members.filter((m) => m.status === 'pending').sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-    const others = X.members.filter((m) => m.status !== 'pending').sort((a, b) => (a.uid === X.owner ? -1 : b.uid === X.owner ? 1 : a.role === b.role ? memberLabel(a).localeCompare(memberLabel(b)) : a.role === 'admin' ? -1 : b.role === 'admin' ? 1 : memberLabel(a).localeCompare(memberLabel(b))));
+    const others = X.members.filter((m) => m.status !== 'pending' && m.role !== 'player').sort((a, b) => (a.uid === X.owner ? -1 : b.uid === X.owner ? 1 : a.role === b.role ? memberLabel(a).localeCompare(memberLabel(b)) : a.role === 'admin' ? -1 : b.role === 'admin' ? 1 : memberLabel(a).localeCompare(memberLabel(b))));
     let h = `<h2 class="sec">Families &amp; coaches</h2><section class="card stack" style="padding:14px">
       <div><span class="field-lbl">Who can watch games</span>${segB('setWatch', X.publicView ? 'public' : 'approved', [['approved', 'Approved families'], ['public', 'Anyone with the link']])}</div>
       <p class="small muted" style="margin:0">${X.publicView ? 'Anyone who opens the address can follow games and stats without signing in. Only coaches can change anything.' : 'Parents create an account and wait for a coach to approve it. Only approved families see games and stats.'}</p></section>`;
@@ -1944,7 +2017,7 @@ body.viewer-on { overflow: hidden; }
     return { order: g.lineup.slice(), label: ['vs ' + (g.opponent || 'Opponent'), when].filter(Boolean).join(' · ') };
   }
   function gameRoster() {
-    return { source: 'gs-hub', type: 'roster', team: Data.team.name || 'GS Baseball', mine: myPlayers(), lineup: gameLineup(),
+    return { source: 'gs-hub', type: 'roster', team: Data.team.name || 'GS Baseball', mine: Access.isPlayer ? ((Access.member && Array.isArray(Access.member.players)) ? Access.member.players : []) : myPlayers(), lineup: gameLineup(),
       players: sortedRoster().map((p) => ({ id: p.id, num: p.num || '', name: p.name, pos: p.pos || '', bats: p.bats || '', throws: p.throws || '' })) };
   }
   function gameOpen() {
@@ -3083,10 +3156,11 @@ body.viewer-on { overflow: hidden; }
     const counts = {};
     for (const c of IQ_CARDS) counts[c.g] = (counts[c.g] || 0) + 1;
     let h = `<section class="iq-hero"><img src="${LOGO}" alt=""><div><div class="iq-kicker">${esc(Data.team.name || 'GS Baseball')}</div><h2>Baseball Instincts</h2><p>Great players know what to do <b>before</b> the ball is hit.</p></div></section>`;
-    h += gameCardHTML() + swingCardHTML() + drillsCardHTML();
+    h += gameCardHTML() + (Access.isPlayer ? '' : swingCardHTML()) + drillsCardHTML();
     h += `<h2 class="sec">Before every pitch</h2><section class="card iq-check">${['How many outs?', 'Where are the runners?', 'If it comes to me, where do I throw?', 'Get low and get ready!'].map((t, i) => `<div><span class="iq-num">${i + 1}</span><span>${esc(t)}</span></div>`).join('')}</section>`;
     h += `<h2 class="sec">Practice</h2><div class="iq-tiles">${Object.entries(IQ_GROUPS).map(([k, g]) => tile(k, g.name, g.sub, g.icon, counts[k] + ' plays')).join('')}${tile('all', 'All-Star challenge', '10 plays from everything. Can you get 3 stars?', '<path d="m12 3 2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>', '10 plays')}</div>`;
     h += `<h2 class="sec">Know these words</h2><section class="card iq-words">${IQ_WORDS.map(([w, d]) => `<div><b>${esc(w)}</b><span>${esc(d)}</span></div>`).join('')}</section>`;
+    if (Backend.kind === 'fb' && Access.isPlayer) h += `<div class="guest-foot small muted"><span class="grow">Signed in as ${esc(kidFirst((Access.member && Access.member.name) || 'Player'))} (player).</span><button class="btn ghost sm" data-act="signOut">Sign out</button></div>`;
     return h;
   }
   function iqQuestionHTML(R) {
@@ -3121,6 +3195,8 @@ body.viewer-on { overflow: hidden; }
     $('#team-name').textContent = Data.team.name || 'GS Baseball';
     syncPill();
     if (Backend.kind === 'fb' && Access.isGuest && !['games', 'live'].includes(UI.tab)) UI.tab = 'live';
+    const kid = Backend.kind === 'fb' && Access.isPlayer;
+    if (kid && !['iq', 'drills'].includes(UI.tab)) UI.tab = 'iq';
     for (const b of document.querySelectorAll('#tabs button')) {
       const cur = UI.tab === 'news' || UI.tab === 'photos' ? 'chat' : UI.tab === 'swing' ? (UI.swingFrom || 'stats') : UI.tab === 'drills' ? 'iq' : UI.tab;
       if (b.dataset.tab === cur) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
@@ -3131,6 +3207,9 @@ body.viewer-on { overflow: hidden; }
     // Guests (watch links) only get Games and Live.
     const guest = Backend.kind === 'fb' && Access.isGuest;
     for (const t of ['practice', 'stats', 'scout', 'iq', 'team']) { const b = document.querySelector(`#tabs button[data-tab="${t}"]`); if (b) b.hidden = guest; }
+    // Player logins: the Instincts tab only.
+    for (const b of document.querySelectorAll('#tabs button')) if (kid && b.dataset.tab !== 'iq') b.hidden = true; else if (!kid && ['games', 'live'].includes(b.dataset.tab)) b.hidden = false;
+    document.body.classList.toggle('kid-login', kid);
     $('#chat-dot').hidden = !(UI.tab !== 'chat' && UI.tab !== 'news' && UI.tab !== 'photos' && (chatUnread() || newsUnread()));
     const bar = document.querySelector('.bar');
     if (bar) document.documentElement.style.setProperty('--bar-h', bar.offsetHeight + 'px');
@@ -3905,7 +3984,7 @@ body.viewer-on { overflow: hidden; }
       if (!rs.length) h += `<div class="card empty" style="padding:20px"><p>${Caps.sample ? 'Take a photo or screenshot of another team\'s roster and GS Baseball reads the names and numbers into it.' : 'Save each opponent\'s roster so lineups and scouting show names, not just numbers.'}</p><button class="btn primary" data-act="roster">+ Add roster</button></div>`;
       else h += `<div class="card roster">${expandList('opponents', rs, ([k, r]) => `<button class="player" data-act="roster" data-key="${esc(k)}"><span class="no" style="font-size:16px">${esc((r.name || '?').slice(0, 3).toUpperCase())}</span><span style="min-width:0"><span class="nm">${esc(r.name)}</span><span class="meta">${r.players.length} player${r.players.length === 1 ? '' : 's'}${r.spray && r.spray.players && r.spray.players.length ? ' · spray chart' : ''}${r.updatedAt ? ' · updated ' + esc(new Date(r.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) : ''}</span></span><span class="meta">Edit</span></button>`, 2)}</div>`;
     }
-    h += invitesHTML() + accountHTML() + familiesHTML();
+    h += invitesHTML() + accountHTML() + familiesHTML() + kidLoginsHTML();
     if (canManage()) {
       const vid = videoEmbed(Data.team.video);
       h += `<h2 class="sec">Live video</h2><section class="card stack" style="padding:14px"><p style="margin:0">${!Data.team.video ? 'Not set up. Add your YouTube channel and every live game shows the stream with the scoreboard on top.' : vid && vid.channel ? 'Your YouTube channel is connected. Whatever you stream publicly shows up on the Live tab during games.' : 'A video link is set for the team.'}</p><div><button class="btn${Data.team.video ? '' : ' primary'}" data-act="videoSetup">${Data.team.video ? 'Change video link' : 'Set up live video'}</button></div></section>`;
@@ -4256,7 +4335,9 @@ body.viewer-on { overflow: hidden; }
       const titles = { signin: 'Sign in', signup: 'Request access', setup: 'Create the admin account', reset: 'Reset your password' };
       let f = '';
       if (sh.mode === 'signup' || sh.mode === 'setup') f += `<label><span class="field-lbl">Your name</span>${inp('name', sh.name, 'autocomplete="name" placeholder="First and last name"')}</label>`;
-      f += `<label><span class="field-lbl">Email</span>${inp('email', sh.email, 'type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false"')}</label>`;
+      f += sh.mode === 'signin'
+        ? `<label><span class="field-lbl">Email (players: your first name)</span>${inp('email', sh.email, 'type="text" inputmode="email" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false"')}</label>`
+        : `<label><span class="field-lbl">Email</span>${inp('email', sh.email, 'type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false"')}</label>`;
       if (sh.mode !== 'reset') f += `<label><span class="field-lbl">Password</span>${inp('password', sh.password, `type="password" autocomplete="${sh.mode === 'signin' ? 'current-password' : 'new-password'}" ${sh.mode === 'signin' ? '' : 'placeholder="At least 6 characters"'}`)}</label>`;
       if (sh.mode === 'signup') f += `<label><span class="field-lbl">Your player</span>${inp('note', sh.note, 'placeholder="e.g. Wyatt Kell #7 (helps the coach approve you)"')}</label>`;
       const intro = { signin: '', signup: '<p class="small muted" style="margin:0">A coach approves new accounts before they can see games.</p>', setup: '<p class="small muted" style="margin:0">This account gets admin rights: scoring, rosters and approving families.</p>', reset: '<p class="small muted" style="margin:0">We’ll email you a link to choose a new password.</p>' }[sh.mode];
@@ -5693,13 +5774,15 @@ body.viewer-on { overflow: hidden; }
       const sh = UI.sheet;
       if (!sh || sh.busy || !FB.auth) return;
       const email = String(sh.email || '').trim(), pw = String(sh.password || ''), name = String(sh.name || '').trim(), note = String(sh.note || '').trim().slice(0, 80);
-      if (!email) { sh.err = 'Enter your email.'; return renderSheet(); }
+      if (!email) { sh.err = sh.mode === 'signin' ? 'Enter your email (players: your first name).' : 'Enter your email.'; return renderSheet(); }
+      const kidName = sh.mode === 'signin' && !email.includes('@');
       if (sh.mode !== 'reset' && !pw) { sh.err = 'Enter a password.'; return renderSheet(); }
       if ((sh.mode === 'signup' || sh.mode === 'setup') && !name) { sh.err = 'Enter your name.'; return renderSheet(); }
       sh.busy = true; sh.err = ''; sh.msg = ''; renderSheet();
       try {
         if (sh.mode === 'signin') {
-          await FB.A.signInWithEmailAndPassword(FB.auth, email, pw);
+          await FB.A.signInWithEmailAndPassword(FB.auth, kidName ? kidEmail(email) : email, kidName ? kidSecret(pw) : pw);
+          if (kidName) UI.tab = 'iq';
           if (UI.sheet === sh) closeSheet();
           toast('Signed in');
           return;
@@ -5717,7 +5800,9 @@ body.viewer-on { overflow: hidden; }
         toast(sh.mode === 'setup' ? 'Admin account ready' : 'Request sent to the coaches');
       } catch (e) {
         sh.busy = false;
-        sh.err = e && e.code === 'already-claimed' ? 'This hub already has an admin. Sign in instead.' : authErrorText(e);
+        sh.err = e && e.code === 'already-claimed' ? 'This hub already has an admin. Sign in instead.'
+          : kidName && /invalid-credential|wrong-password|user-not-found|invalid-login|invalid-email/.test((e && e.code) || '') ? 'That name and password don’t match. Players: your first name, then your first name and number as the password (like Wyatt7). Ask your coach if it still won’t work.'
+          : authErrorText(e);
         if (UI.sheet === sh) renderSheet();
       }
     },
@@ -5738,6 +5823,30 @@ body.viewer-on { overflow: hidden; }
       catch (e) { toast(authErrorText(e)); }
     },
     member(d) { openSheet({ type: 'member', uid: d.uid }); },
+    async kidCreate() {
+      if (KidUI.busy || !Access.isAdmin) return;
+      const todo = kidLogins().filter((k) => !k.acct);
+      if (!todo.length) return;
+      KidUI.busy = true; KidUI.note = ''; render();
+      let failed = [];
+      try { failed = await kidMake(todo); } catch (e) { console.error(e); failed = todo.map((k) => k.shown); }
+      KidUI.busy = false;
+      KidUI.note = failed.length ? 'Couldn’t set up: ' + failed.join(', ') + '. Tap Create again. If it keeps failing, that name may already have a login with a different password (an old number).' : '';
+      render();
+      const made = todo.length - failed.length;
+      if (made) toast(made === 1 ? 'Player login ready' : made + ' player logins ready');
+    },
+    kidOff(d) {
+      const m = Access.members.find((x) => x.uid === d.uid);
+      confirmSheet('Turn off ' + (m ? kidFirst(m.name) : 'this player') + '’s login?', 'They’re signed out of the Hub right away. You can turn it back on with Create.', 'Turn off', async () => {
+        try { await FB.F.deleteDoc(FB.F.doc(FB.fs, 'members', d.uid)); toast('Login turned off'); } catch (e) { toast(authErrorText(e)); }
+      }, true);
+    },
+    async kidCopy() {
+      const lines = kidLogins().filter((k) => k.acct).map((k) => `${k.p.name}${k.p.num ? ' #' + k.p.num : ''}: username ${k.shown}, password ${k.pass}`);
+      const text = `${Data.team.name || 'GS Baseball'} Hub player logins (${location.origin})\n` + lines.join('\n');
+      try { await navigator.clipboard.writeText(text); toast('Copied'); } catch (e) { toast('Couldn’t copy on this phone'); }
+    },
     async memberSet(d) {
       try { await FB.F.updateDoc(FB.F.doc(FB.fs, 'members', d.uid), { status: d.status }); toast(d.status === 'approved' ? 'Approved' : 'Request declined'); }
       catch (e) { toast(authErrorText(e)); }
@@ -6503,7 +6612,8 @@ body.viewer-on { overflow: hidden; }
   document.addEventListener('input', (ev) => { if (ev.target && ev.target.id === 'chat-input') chatGrow(); });
 
   // ---------- boot ----------
-  function subscribe(db) {
+  // teamOnly: player logins only load the roster (for the game), not games or opponents.
+  function subscribe(db, teamOnly) {
     const subs = [];
     subs.push(db.doc('team/stream').onSnapshot((snap) => {
       if (!Saver.busy('team/stream')) Data.stream = snap.exists ? clone(snap.data()) : null;
@@ -6514,6 +6624,7 @@ body.viewer-on { overflow: hidden; }
       Data.loaded.team = true;
       maybeReady();
     }, onDbError));
+    if (teamOnly) { Data.loaded.games = true; Data.loaded.opps = true; return subs; }
     subs.push(db.collection('games').onSnapshot((snap) => {
       const next = {};
       for (const doc of snap.docs) if (doc.exists) next[doc.id] = normGame(clone(doc.data()));
