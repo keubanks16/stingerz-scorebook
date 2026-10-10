@@ -1,5 +1,5 @@
 // GS Baseball offline support. Bump VERSION whenever files change.
-const VERSION = 'gsb-v3.3.0';
+const VERSION = 'gsb-v3.3.1';
 const CORE = [
   './', 'index.html', 'style.css', 'manifest.webmanifest',
   'js/main.js', 'js/engine.js', 'js/physics.js', 'js/player.js', 'js/field.js', 'js/data.js', 'js/audio.js', 'js/ui.js', 'js/assets.js', 'js/crowd.js', 'js/crowd-worker.js', 'js/vendor/three.module.min.js', 'img/gs-logo-light.png', 'img/gs-logo-navy.png',

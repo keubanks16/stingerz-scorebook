@@ -101,7 +101,15 @@ export function avg(h, ab) { if (!ab) return '.000'; const v = (h / ab).toFixed(
 // ---------- lineups ----------
 // A lineup is the batting order: [{ id, pos }]. pos is a field position, or 'EH' for an extra
 // hitter who bats but doesn't play the field (so a whole youth roster can hit).
-export function defaultLineup(meId) { return buildGSLineup(meId).map(p => ({ id: p.id, pos: p.pos })); }
+// Default: everyone on the roster bats. The best nine take the field and the rest are extra
+// hitters, all in roster order.
+export function defaultLineup(meId) {
+  const nine = buildGSLineup(meId).map(p => ({ id: p.id, pos: p.pos }));
+  const all = nine.concat(GS_ROSTER.filter(p => !nine.some(e => e.id === p.id)).map(p => ({ id: p.id, pos: 'EH' })));
+  const order = GS_ROSTER.map(p => p.id);
+  const at = id => { const i = order.indexOf(id); return i < 0 ? 99 : i; };
+  return all.sort((a, b) => at(a.id) - at(b.id));
+}
 export const prefPos = id => { const c = card(id); return POSITIONS.includes(c.pos) ? c.pos : 'CF'; };
 export function fixLineup(entries) {
   const known = new Set(GS_ROSTER.map(p => p.id));
@@ -127,8 +135,25 @@ export function fixLineup(entries) {
   }
   return out;
 }
-export function savedLineup(meId) { const s = load(); return fixLineup(s.lineup && s.lineup.length ? s.lineup : defaultLineup(meId)); }
-export function saveLineup(entries) { const s = load(); s.lineup = entries.map(e => ({ id: e.id, pos: e.pos })); save(); }
+// v2 lineups: everyone bats by default. Older saved lineups (nine only) start over once.
+// Players added to the roster after the lineup was saved join at the bottom as extra hitters;
+// only players someone took out on the lineup screen stay on the bench.
+const LINEUP_V = 2;
+export function savedLineup(meId) {
+  const s = load();
+  if (s.lineupV !== LINEUP_V || !s.lineup || !s.lineup.length) return fixLineup(defaultLineup(meId));
+  const benched = new Set(s.benched || []);
+  const lu = s.lineup.map(e => ({ id: e.id, pos: e.pos }));
+  for (const p of GS_ROSTER) if (!benched.has(p.id) && !lu.some(e => e.id === p.id)) lu.push({ id: p.id, pos: 'EH' });
+  return fixLineup(lu);
+}
+export function saveLineup(entries) {
+  const s = load();
+  s.lineup = entries.map(e => ({ id: e.id, pos: e.pos }));
+  s.benched = GS_ROSTER.filter(p => !entries.some(e => e.id === p.id)).map(p => p.id);
+  s.lineupV = LINEUP_V;
+  save();
+}
 // The Hub's batting order for a game (ids from the Hub roster)
 export function lineupFromHub(order) {
   return fixLineup((order || []).map(id => 'h_' + id).filter(id => GS_ROSTER.some(p => p.id === id)).map(id => ({ id, pos: prefPos(id) })));
