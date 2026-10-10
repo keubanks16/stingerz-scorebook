@@ -129,6 +129,16 @@ A full 3D baseball game, opened from the top card on the **Instincts** tab (or g
 
 Everyone who has the Instincts tab can play (watch-link guests don't). The game lives in `game/` and keeps its own offline copy (`game/sw.js`; bump `VERSION` there after changing game files). The Hub's service worker leaves `game/` alone.
 
+### Preview: new player look (MJ only)
+
+`game-beta/` is a preview copy of the game with the new look. The Hub opens it instead of `game/` only for **MJ Eubanks**: his player login, any account linked to him, and the team owner. Everyone else keeps the regular game until it's released.
+
+- **Cartoon players:** ink outlines and cel shading, flow hair, pinstripe knickers, light blue cleats, a tan glove, catcher's gear and an umpire's mask. The catcher and umpire turn see-through in the batting view so they don't hide the pitch.
+- **Shades and jewelry:** each kid picks them on his player card: shades (blue, red, black, gold), a chain (gold, silver, iced out), earrings and a bracelet.
+- **MJ's custom player:** a Tripo model rigged with Tripo's Mixamo skeleton, folded onto the game's player joints so it uses the same animations. The files are in `game-beta/hero/`. His bat is a little longer to make up for his shorter arms, and "EUBANKS 1" is added on his back.
+- The team songs are shared with `game/music/`. The preview has its own offline copy (`game-beta/sw.js`); bump its `VERSION` after changing files there.
+- **To release it to everyone:** copy `game-beta/` over `game/` (keep `game/music/`, point `js/audio.js` and `sw.js` back to `music/`), bump `game/sw.js`, and make `gameBeta()` in `index.html` return false or remove it.
+
 ## Baseball Instincts
 
 The **Instincts** tab is for the players: game situations they solve on a field diagram that shows the runners, the outs, where the ball is hit and where **YOU** are. They pick what they'd do, then see the play drawn on the field and a short reason why.

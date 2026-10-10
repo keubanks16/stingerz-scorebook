@@ -1,18 +1,19 @@
-// GS Baseball offline support. Bump VERSION whenever files change.
-const VERSION = 'gsb-v3.3.3';
+// GS Baseball offline support (preview copy for MJ). Bump VERSION whenever files change.
+const VERSION = 'gsb-beta-1';
 const CORE = [
   './', 'index.html', 'style.css', 'manifest.webmanifest',
   'js/main.js', 'js/engine.js', 'js/physics.js', 'js/player.js', 'js/field.js', 'js/data.js', 'js/audio.js', 'js/ui.js', 'js/assets.js', 'js/crowd.js', 'js/crowd-worker.js', 'js/vendor/three.module.min.js', 'img/gs-logo-light.png', 'img/gs-logo-navy.png',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
+  'hero/mj.json', 'hero/mj.bin', 'hero/mj_color.jpg', 'hero/mj_normal.jpg',
 ];
-const MUSIC = ['music/bring-that-sting.mp3', 'music/built-different.mp3', 'music/buzzin.mp3', 'music/one-shot.mp3'];
+const MUSIC = ['../game/music/bring-that-sting.mp3', '../game/music/built-different.mp3', '../game/music/buzzin.mp3', '../game/music/one-shot.mp3'];   // shared with the main game
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil((async () => {
-    for (const k of await caches.keys()) if (k.startsWith('gsb-v') && k !== VERSION) await caches.delete(k);   // only this game's old copies
+    for (const k of await caches.keys()) if (k.startsWith('gsb-beta-') && k !== VERSION) await caches.delete(k);
     await self.clients.claim();
     // download the team songs in the background so music works offline too
     const c = await caches.open(VERSION);

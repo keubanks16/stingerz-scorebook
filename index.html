@@ -2020,11 +2020,20 @@ body.viewer-on { overflow: hidden; }
     return { source: 'gs-hub', type: 'roster', team: Data.team.name || 'GS Baseball', mine: Access.isPlayer ? ((Access.member && Array.isArray(Access.member.players)) ? Access.member.players : []) : myPlayers(), lineup: gameLineup(),
       players: sortedRoster().map((p) => ({ id: p.id, num: p.num || '', name: p.name, pos: p.pos || '', bats: p.bats || '', throws: p.throws || '' })) };
   }
+  // Preview of the new player look (game-beta/): only MJ Eubanks (his player login and accounts
+  // linked to him) and the team owner get it until it's released to everyone.
+  function gameBeta() {
+    if (Backend.kind !== 'fb' || !Access.user || Access.user.isAnonymous) return false;
+    if (Access.isOwner) return true;
+    const mj = (Data.team.players || []).find((p) => /^m\.?\s*j\.?\s+eubanks$/i.test(String(p.name || '').trim()));
+    const linked = Access.member && Array.isArray(Access.member.players) ? Access.member.players : [];
+    return !!mj && linked.includes(mj.id);
+  }
   function gameOpen() {
     if (GameUI.el || !drillsAllowed()) return;
     const wrap = document.createElement('div');
     wrap.id = 'game-layer';
-    wrap.innerHTML = '<iframe src="game/index.html?embed=1" title="GS Baseball: The Game" allow="autoplay; fullscreen; screen-wake-lock"></iframe>';
+    wrap.innerHTML = `<iframe src="${gameBeta() ? 'game-beta' : 'game'}/index.html?embed=1" title="GS Baseball: The Game" allow="autoplay; fullscreen; screen-wake-lock"></iframe>`;
     document.body.appendChild(wrap); document.body.classList.add('game-open');
     GameUI.el = wrap; GameUI.frame = wrap.firstElementChild;
     try { history.pushState({ gsGame: 1 }, '', location.href); } catch (e) { /* fine */ }

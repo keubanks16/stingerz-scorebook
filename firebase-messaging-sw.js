@@ -21,7 +21,7 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
-    for (const k of await caches.keys()) if (k !== CACHE) await caches.delete(k);
+    for (const k of await caches.keys()) if (k.startsWith('gs-hub-') && k !== CACHE) await caches.delete(k);   // only the Hub's old copies
     await self.clients.claim();
   })());
 });
@@ -80,8 +80,8 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  // The baseball game (game/) has its own offline copy; leave it alone.
-  if (url.origin === self.location.origin && url.pathname.includes('/game/')) return;
+  // The baseball game (game/, and the game-beta/ preview) has its own offline copy; leave it alone.
+  if (url.origin === self.location.origin && (url.pathname.includes('/game/') || url.pathname.includes('/game-beta/'))) return;
   if (req.mode === 'navigate' && url.origin === self.location.origin) { event.respondWith(page(req)); return; }
   if (url.href.startsWith(FB) || TF_URL.test(url.href)) { event.respondWith(savedFirst(req)); return; }
   if (url.origin === self.location.origin && url.pathname.includes('/swing/model/')) { event.respondWith(savedFirst(req)); return; }
